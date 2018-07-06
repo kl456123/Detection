@@ -17,6 +17,7 @@
 
 ### Prepare the data
 * data structure should be like this:
+
 ```
 Kitti
     object
@@ -26,6 +27,7 @@ Kitti
             train.txt
             val.txt
 ```
+
 * then modify data_root_path = 'path/to/training' in trainval_net.py
 
 ### Training
