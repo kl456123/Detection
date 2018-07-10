@@ -126,7 +126,8 @@ MODEL_CONFIG = {
     'input_shape': (1280, 384),
 }
 
-data_root_path = '/home/duan/Kitti/object/training'
+#data_root_path = '/home/duan/Kitti/object/training'
+data_root_path = '/data/object/training'
 save_path = './weights'
 eval_out = './eval'
 test_fig = './toy.png'
