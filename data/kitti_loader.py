@@ -21,6 +21,7 @@ class KittiLoader(DetDataLoader):
         self.labels = self.make_label_list()
         self.imgs = self.make_image_list()
         self.transforms = transforms
+        self.max_num = 40
 
     def __getitem__(self, index):
         img_file = self.imgs[index]
@@ -35,8 +36,16 @@ class KittiLoader(DetDataLoader):
         if self.transforms is not None:
             img, bbox, lbl = self.transforms(img, bbox, lbl)
 
+        # num of bboxes
+        num_bboxes = bbox.size()[0]
+
         # For car, the label is one
         bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
+
+        # pad it with zeros if num is less than max_num
+        num_remain = self.max_num-num_bboxes
+        bbox = torch.cat((bbox, torch.ones(num_remain, 5)), dim=0)
+
         img_info = torch.FloatTensor([img_width, img_height, ratio])
 
         return img, img_info, bbox, torch.LongTensor([bbox.size()[0]])
@@ -112,7 +121,8 @@ class KittiLoader(DetDataLoader):
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]
-            labels = [os.path.join(self.root_path, 'label_2/{}.txt'.format(label)) for label in labels]
+            labels = [os.path.join(
+                self.root_path, 'label_2/{}.txt'.format(label)) for label in labels]
             labels = [label for label in labels if self.__check_has_car(label)]
         return labels
 
@@ -123,7 +133,8 @@ class KittiLoader(DetDataLoader):
             lab = lab[:-4]
             img_name = lab + '.png'
 
-            read_path = os.path.join(self.root_path, 'image_2/{}'.format(img_name))
+            read_path = os.path.join(
+                self.root_path, 'image_2/{}'.format(img_name))
             images.append(read_path)
         return images
 
@@ -170,4 +181,3 @@ class KittiLoader(DetDataLoader):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cv2.imshow("test", img)
         cv2.waitKey(0)
-
