@@ -44,7 +44,7 @@ class KittiLoader(DetDataLoader):
 
         # pad it with zeros if num is less than max_num
         num_remain = self.max_num-num_bboxes
-        bbox = torch.cat((bbox, torch.ones(num_remain, 5)), dim=0)
+        bbox = torch.cat((bbox, torch.zeros(num_remain, 5)), dim=0)
 
         img_info = torch.FloatTensor([img_width, img_height, ratio])
 
