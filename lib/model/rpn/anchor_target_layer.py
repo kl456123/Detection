@@ -54,9 +54,16 @@ class _AnchorTargetLayer(nn.Module):
         # filter out-of-image anchors
 
         rpn_cls_score = input[0]
+        # x1,y1,x2,y2
         gt_boxes = input[1]
         im_info = input[2]
         num_boxes = input[3]
+
+        gt_boxes[:,0] *= im_info[0][1]
+        gt_boxes[:,1] *= im_info[0][0]
+        gt_boxes[:,2] *= im_info[0][1]
+        gt_boxes[:,3] *= im_info[0][0]
+
 
         # map of shape (..., H, W)
         height, width = rpn_cls_score.size(2), rpn_cls_score.size(3)
