@@ -123,7 +123,7 @@ MODEL_CONFIG = {
     'num_classes': 2,
 
     'output_stride': [8., 16., 32., 64., 128., 192., 384.],
-    'input_shape': (1280, 384),
+    'input_shape': (384,1300),
 }
 
 data_root_path = '/home/duan/Kitti/object/training'
@@ -139,6 +139,7 @@ DATA_AUG_CFG = {
     'random_brightness': 10,
     'crop_size': MODEL_CONFIG['input_shape'],
     'random_blur': 0,
+    'dataset_file':'new.txt'
 }
 
 def __change_into_variable(elems, use_gpu=True):

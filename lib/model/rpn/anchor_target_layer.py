@@ -121,7 +121,7 @@ class _AnchorTargetLayer(nn.Module):
 
         sum_fg = torch.sum((labels == 1).int(), 1)
         sum_bg = torch.sum((labels == 0).int(), 1)
-        print('sum_fg is', sum_fg)
+        # print('sum_fg is', sum_fg)
 
         for i in range(batch_size):
             # subsample positive labels if we have too many

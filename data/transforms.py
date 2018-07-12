@@ -4,6 +4,7 @@ import numpy as np
 
 import matplotlib
 from PIL import Image, ImageFilter
+import pdb
 
 
 def intersect(box_a, box_b):
@@ -49,7 +50,7 @@ class RandomHSV(object):
     def __call__(self, img, boxes=None, labels=None,im_scale=None):
         rand_value = random.randint(1, 100)
         if rand_value > 100 * self.ratio:
-            return img, boxes, labels
+            return img, boxes, labels,im_scale
 
         img = np.array(img)
         img_hsv = matplotlib.colors.rgb_to_hsv(img)
@@ -63,7 +64,7 @@ class RandomHSV(object):
         img_hsv = np.stack([img_h, img_s, img_v], axis=2)
         img_new = matplotlib.colors.hsv_to_rgb(img_hsv)
 
-        return img_new, boxes, labels
+        return img_new, boxes, labels,im_scale
 
 
 class RandomSampleCrop(object):
@@ -103,7 +104,7 @@ class RandomSampleCrop(object):
             # Randomly choose a mode.
             mode = random.choice(self.sample_options)
             if mode is None:
-                return image, boxes, labels
+                return image, boxes, labels,im_scale
 
             if mode is 'zoom_out':
                 # place the image on a 1.5X mean pic
@@ -127,7 +128,7 @@ class RandomSampleCrop(object):
                 current_boxes[:, :2] += rect[:2]
                 current_boxes[:, 2:] += rect[:2]
 
-                return Image.fromarray(mean_img.astype(np.uint8)), current_boxes, current_labels
+                return Image.fromarray(mean_img.astype(np.uint8)), current_boxes, current_labels,im_scale
 
             min_iou, max_iou = mode
             if min_iou is None:
@@ -190,7 +191,7 @@ class RandomSampleCrop(object):
                 # adjust to crop (by substracting crop's left,top)
                 current_boxes[:, 2:] -= rect[:2]
 
-                return Image.fromarray(current_image), current_boxes, current_labels
+                return Image.fromarray(current_image), current_boxes, current_labels,im_scale
 
 
 class Normalize(object):
@@ -216,7 +217,7 @@ class Normalize(object):
         # TODO: make efficient
         for t, m, s in zip(tensor, self.mean, self.std):
             t.sub_(m).div_(s)
-        return tensor, bbox, label
+        return tensor, bbox, label,im_scale
 
 
 class RandomBrightness(object):
@@ -231,17 +232,17 @@ class RandomBrightness(object):
         image = np.clip(image, 0, 255)
         image = image.astype(np.uint8)
         image = Image.fromarray(image)
-        return image, bbox, label
+        return image, bbox, label,im_scale
 
 
 class RandomGaussBlur(object):
     def __init__(self, max_blur=4):
         self.max_blur = max_blur
 
-    def __call__(self, img, bbox, label):
+    def __call__(self, img, bbox, label,im_scale=None):
         blur_value = np.random.uniform(0, self.max_blur)
         img = img.filter(ImageFilter.GaussianBlur(radius=blur_value))
-        return img, bbox, label
+        return img, bbox, label,im_scale
 
 
 class RandomHorizontalFlip(object):
@@ -262,9 +263,9 @@ class RandomHorizontalFlip(object):
             xmax = w - bbox[:, 0]
             bbox[:, 0] = xmin
             bbox[:, 2] = xmax
-            return img.transpose(Image.FLIP_LEFT_RIGHT), bbox, label
+            return img.transpose(Image.FLIP_LEFT_RIGHT), bbox, label,im_scale
         else:
-            return img, bbox, label
+            return img, bbox, label,im_scale
 
 
 class Resize(object):
@@ -286,7 +287,7 @@ class Resize(object):
         self.max_size = _size[1]
         self.interpolation = interpolation
 
-    def __call__(self, img, bbox, label):
+    def __call__(self, img, bbox, label,im_scale=None):
         """
         Args:
             img (PIL.Image): Image to be scaled.
@@ -305,6 +306,7 @@ class Resize(object):
         else:
             im_scale = float(self.target_size)/w
             target_shape = (self.target_size,im_scale*h)
+        target_shape = (int(target_shape[0]),int(target_shape[1]))
 
         # return img.resize((self.new_size[0], self.new_size[1]), self.interpolation), bbox, label
         return img.resize(target_shape,self.interpolation),bbox,label,im_scale
@@ -327,7 +329,7 @@ class ToTensor(object):
         lbl = torch.from_numpy(label).long()
         bbox = torch.from_numpy(bbox).float()
 
-        return img.float().div(255), bbox, lbl
+        return img.float().div(255), bbox, lbl,im_scale
 
 
 class Compose(object):
@@ -338,7 +340,7 @@ class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms
 
-    def __call__(self, img, bbox, label):
+    def __call__(self, img, bbox, label,im_scale=None):
         for t in self.transforms:
-            img, bbox, label = t(img, bbox, label)
-        return img, bbox, label
+	    img, bbox, label,im_scale = t(img, bbox, label,im_scale)
+        return img, bbox, label,im_scale

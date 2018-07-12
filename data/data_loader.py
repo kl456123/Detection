@@ -20,7 +20,7 @@ def load_data(data_root_path, batch_size, data_cfg, data_loader):
         trans.Normalize(data_cfg['normal_mean'], data_cfg['normal_van'])
     ])
 
-    dsets = data_loader(data_root_path, transforms=data_transfer)
+    dsets = data_loader(data_root_path, data_cfg['dataset_file'], transforms=data_transfer)
     dset_loaders = torch.utils.data.DataLoader(dsets, batch_size=batch_size, shuffle=True, num_workers=8)
     dset_sizes = dsets.__len__()
     print "Total data num: %d" % dset_sizes

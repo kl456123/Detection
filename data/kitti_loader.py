@@ -15,10 +15,10 @@ OBJ_CLASSES = ['Car']
 
 class KittiLoader(DetDataLoader):
 
-    def __init__(self, root_path, transforms=None):
+    def __init__(self, root_path,dataset_file=None, transforms=None):
         super(KittiLoader, self).__init__()
         self.root_path = root_path
-        self.labels = self.make_label_list()
+        self.labels = self.make_label_list(dataset_file)
         self.imgs = self.make_image_list()
         self.transforms = transforms
 
@@ -28,11 +28,10 @@ class KittiLoader(DetDataLoader):
 
         # load image and label
         img = Image.open(img_file)
-        img_shape_orig = img.shape
         bbox, lbl = self.read_annotation(lbl_file)
 
         if self.transforms is not None:
-            img, bbox, lbl = self.transforms(img, bbox, lbl)
+            img, bbox, lbl,im_scale = self.transforms(img, bbox, lbl)
 
         w = img.size()[2]
         h = img.size()[1]
@@ -42,8 +41,6 @@ class KittiLoader(DetDataLoader):
         bbox[:, 3] *= h
 
         # ratio = float(w)/float(h)
-        img_shape = img.shape
-        im_scale = float(img_shape[0])/img_shape_orig[0]
         # For car, the label is one
         bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
         img_info = torch.FloatTensor([h, w, im_scale])
@@ -116,8 +113,8 @@ class KittiLoader(DetDataLoader):
     def is_annotation(_name):
         return any(category == _name for category in OBJ_CLASSES)
 
-    def make_label_list(self):
-        train_list_path = os.path.join(self.root_path, 'train.txt')
+    def make_label_list(self,dataset_file):
+        train_list_path = os.path.join(self.root_path, dataset_file)
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]
