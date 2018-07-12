@@ -126,8 +126,7 @@ MODEL_CONFIG = {
     'input_shape': (1280, 384),
 }
 
-#data_root_path = '/home/duan/Kitti/object/training'
-data_root_path = '/data/object/training'
+data_root_path = '/home/duan/Kitti/object/training'
 save_path = './weights'
 eval_out = './eval'
 test_fig = './toy.png'
@@ -160,9 +159,10 @@ if __name__ == '__main__':
 
     # train set
     # -- Note: Use validation set and disable the flipped to enable faster loading.
-    cfg.TRAIN.USE_FLIPPED = True
-    cfg.USE_GPU_NMS = args.cuda
-
+    args.set_cfgs = ['ANCHOR_SCALES', '[2, 3, 4]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '40']
+    cfg_from_file('./configs/vgg16.yml')
+    if args.set_cfgs is not None:
+        cfg_from_list(args.set_cfgs)
 
     output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
     if not os.path.exists(output_dir):

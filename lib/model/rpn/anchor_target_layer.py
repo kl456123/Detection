@@ -54,16 +54,9 @@ class _AnchorTargetLayer(nn.Module):
         # filter out-of-image anchors
 
         rpn_cls_score = input[0]
-        # x1,y1,x2,y2
         gt_boxes = input[1]
         im_info = input[2]
         num_boxes = input[3]
-
-        gt_boxes[:,0] *= im_info[0][1]
-        gt_boxes[:,1] *= im_info[0][0]
-        gt_boxes[:,2] *= im_info[0][1]
-        gt_boxes[:,3] *= im_info[0][0]
-
 
         # map of shape (..., H, W)
         height, width = rpn_cls_score.size(2), rpn_cls_score.size(3)
@@ -84,6 +77,7 @@ class _AnchorTargetLayer(nn.Module):
         self._anchors = self._anchors.type_as(gt_boxes) # move to specific gpu.
         all_anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)
         all_anchors = all_anchors.view(K * A, 4)
+        all_anchors_array = all_anchors.cpu().numpy()
 
         total_anchors = int(K * A)
 
@@ -106,6 +100,7 @@ class _AnchorTargetLayer(nn.Module):
 
         max_overlaps, argmax_overlaps = torch.max(overlaps, 2)
         gt_max_overlaps, _ = torch.max(overlaps, 1)
+        max_overlaps_array = max_overlaps.cpu().numpy()
 
         if not cfg.TRAIN.RPN_CLOBBER_POSITIVES:
             labels[max_overlaps < cfg.TRAIN.RPN_NEGATIVE_OVERLAP] = 0
@@ -126,6 +121,7 @@ class _AnchorTargetLayer(nn.Module):
 
         sum_fg = torch.sum((labels == 1).int(), 1)
         sum_bg = torch.sum((labels == 0).int(), 1)
+        print('sum_fg is', sum_fg)
 
         for i in range(batch_size):
             # subsample positive labels if we have too many

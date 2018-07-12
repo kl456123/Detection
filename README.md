@@ -34,5 +34,5 @@ Kitti
 * To train KITTI dataset, simply run:
 
 ```bash
-python main.py  trainval_net.py  --bs 4 --cuda
+python trainval_net.py  --bs 4 --cuda
 ```

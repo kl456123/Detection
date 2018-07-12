@@ -46,7 +46,7 @@ class RandomHSV(object):
         self.v_range = v_range
         self.ratio = ratio
 
-    def __call__(self, img, boxes=None, labels=None):
+    def __call__(self, img, boxes=None, labels=None,im_scale=None):
         rand_value = random.randint(1, 100)
         if rand_value > 100 * self.ratio:
             return img, boxes, labels
@@ -97,7 +97,7 @@ class RandomSampleCrop(object):
             'zoom_out',
         )
 
-    def __call__(self, image, boxes=None, labels=None):
+    def __call__(self, image, boxes=None, labels=None,im_scale=None):
         width, height, = image.size
         while True:
             # Randomly choose a mode.
@@ -206,7 +206,7 @@ class Normalize(object):
         self.mean = mean
         self.std = std
 
-    def __call__(self, tensor, bbox, label):
+    def __call__(self, tensor, bbox, label,im_scale=None):
         """
         Args:
             tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
@@ -223,7 +223,7 @@ class RandomBrightness(object):
     def __init__(self, shift_value=30):
         self.shift_value = shift_value
 
-    def __call__(self, img, bbox, label):
+    def __call__(self, img, bbox, label,im_scale=None):
         shift = np.random.uniform(-self.shift_value, self.shift_value, size=1)
         image = np.array(img, dtype=float)
         image[:, :, :] += shift
@@ -247,7 +247,7 @@ class RandomGaussBlur(object):
 class RandomHorizontalFlip(object):
     """Horizontally flip the given PIL.Image randomly with a probability of 0.5."""
 
-    def __call__(self, img, bbox, label):
+    def __call__(self, img, bbox, label,im_scale=None):
         """
         Args:
             img (PIL.Image): Image to be flipped.
@@ -282,7 +282,8 @@ class Resize(object):
 
     def __init__(self, _size, interpolation=Image.BICUBIC):
         # assert isinstance(_size, int)
-        self.new_size = _size
+        self.target_size = _size[0]
+        self.max_size = _size[1]
         self.interpolation = interpolation
 
     def __call__(self, img, bbox, label):
@@ -298,8 +299,15 @@ class Resize(object):
         bbox[:, 0] /= w
         bbox[:, 1] /= h
         bbox[:, 3] /= h
+        if w>h:
+            im_scale = float(self.target_size)/h
+            target_shape = (im_scale*w,self.target_size)
+        else:
+            im_scale = float(self.target_size)/w
+            target_shape = (self.target_size,im_scale*h)
 
-        return img.resize((self.new_size[0], self.new_size[1]), self.interpolation), bbox, label
+        # return img.resize((self.new_size[0], self.new_size[1]), self.interpolation), bbox, label
+        return img.resize(target_shape,self.interpolation),bbox,label,im_scale
 
 
 class ToTensor(object):
@@ -307,7 +315,7 @@ class ToTensor(object):
     Converts a PIL.Image in the range [0, 255] to a torch.FloatTensor
     of shape (C x H x W) in the range [0.0, 1.0].
     """
-    def __call__(self, pic, bbox, label):
+    def __call__(self, pic, bbox, label,im_scale=None):
         """
         Args:
             pic (PIL.Image): Image to be converted to tensor.
