@@ -9,6 +9,11 @@ from __future__ import print_function
 
 import _init_paths
 import os
+
+
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+
 import sys
 import numpy as np
 import argparse
@@ -31,6 +36,7 @@ from model.utils.net_utils import weights_normal_init, save_net, load_net, \
     adjust_learning_rate, save_checkpoint, clip_gradient
 
 from model.faster_rcnn.vgg16 import vgg16
+from visualize import visualize_bbox
 
 def parse_args():
     """
@@ -114,6 +120,9 @@ def parse_args():
     parser.add_argument('--use_tfboard', dest='use_tfboard',
                         help='whether use tensorflow tensorboard',
                         default=False, type=bool)
+    parser.add_argument('--dataset_file', dest='dataset_file',
+                        help='which dataset file to used', type=str,
+                        default='train.txt')
 
     args = parser.parse_args()
     return args
@@ -126,7 +135,7 @@ MODEL_CONFIG = {
     'input_shape': (384,1300),
 }
 
-data_root_path = '/home/duan/Kitti/object/training'
+data_root_path = '/home/liangxiong/data/kitti/training'
 save_path = './weights'
 eval_out = './eval'
 test_fig = './toy.png'
@@ -142,13 +151,22 @@ DATA_AUG_CFG = {
     'dataset_file':'new.txt'
 }
 
+
 def __change_into_variable(elems, use_gpu=True):
     if use_gpu:
         return [Variable(elem.cuda()) for elem in elems]
     else:
         return [Variable(elem) for elem in elems]
 
+def visualize(img,bbox):
+    """visualize the augumentated image for validate the correction"""
+    # recover img
+    img = img*DATA_AUG_CFG['normal_van']+DATA_AUG_CFG['normal_mean']
+    img *= 255
+    visualize_bbox(img, bbox)
+
 if __name__ == '__main__':
+
 
     args = parse_args()
 
@@ -160,12 +178,11 @@ if __name__ == '__main__':
 
     # train set
     # -- Note: Use validation set and disable the flipped to enable faster loading.
-    args.set_cfgs = ['ANCHOR_SCALES', '[2, 3, 4]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '40']
-    cfg_from_file('./configs/vgg16.yml')
-    if args.set_cfgs is not None:
-        cfg_from_list(args.set_cfgs)
-
-    output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
+    if type(args.save_dir) is str:
+        save_dir =args.save_dir
+    else:
+        save_dir  = args.save_dir[0]
+    output_dir = save_dir + "/" + args.net + "/" + args.dataset
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -193,7 +210,7 @@ if __name__ == '__main__':
         cfg.CUDA = True
 
     # initilize the network here.
-    fasterRCNN = vgg16(['bg', 'Car'], pretrained=False, class_agnostic=args.class_agnostic)
+    fasterRCNN = vgg16(['bg', 'Car'], pretrained=True, class_agnostic=args.class_agnostic)
     fasterRCNN.create_architecture()
 
     lr = cfg.TRAIN.LEARNING_RATE
@@ -230,10 +247,11 @@ if __name__ == '__main__':
         print("loaded checkpoint %s" % (load_name))
 
     if args.mGPUs:
-        fasterRCNN = nn.DataParallel(fasterRCNN)
+        fasterRCNN = nn.DataParallel(fasterRCNN,device_ids=[5])
 
     if args.cuda:
         fasterRCNN.cuda()
+    DATA_AUG_CFG['dataset_file'] = args.dataset_file
 
     data_loader = data.load_data(data_root_path, args.batch_size, DATA_AUG_CFG, KittiLoader)
     train_size = len(data_loader)
@@ -251,6 +269,7 @@ if __name__ == '__main__':
 
         for step, _data in enumerate(data_loader):
             im_data, im_info, gt_boxes, num_boxes = _data
+            visualize(im_data.numpy()[0].transpose((1,2,0)), gt_boxes.numpy()[0,:,:4])
             im_data, im_info, gt_boxes, num_boxes = __change_into_variable([im_data, im_info,
                                                                             gt_boxes, num_boxes])
 

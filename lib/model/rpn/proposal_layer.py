@@ -33,7 +33,7 @@ class _ProposalLayer(nn.Module):
         super(_ProposalLayer, self).__init__()
 
         self._feat_stride = feat_stride
-        self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales), 
+        self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales),
             ratios=np.array(ratios))).float()
         self._num_anchors = self._anchors.size(0)
 
@@ -104,9 +104,10 @@ class _ProposalLayer(nn.Module):
 
         # Convert anchors into proposals via bbox transformations
         proposals = bbox_transform_inv(anchors, bbox_deltas, batch_size)
+        # if not self.training:
+            # pdb.set_trace()
 
         # 2. clip predicted boxes to image
-        proposals = clip_boxes(proposals, im_info, batch_size)
         # proposals = clip_boxes_batch(proposals, im_info, batch_size)
 
         # assign the score to 0 if it's non keep.
@@ -117,9 +118,16 @@ class _ProposalLayer(nn.Module):
 
         # scores_keep = scores.view(-1)[keep_idx].view(batch_size, trim_size)
         # proposals_keep = proposals.view(-1, 4)[keep_idx, :].contiguous().view(batch_size, trim_size, 4)
-        
+
         # _, order = torch.sort(scores_keep, 1, True)
-        
+        # pdb.set_trace()
+        # if self.training:
+            # scores_keep, proposals_keep = self._remove_invalid_anchors_and_predictions(anchors, scores, im_info)
+
+            # scores_keep = scores[inds_inside, :]
+            # proposals_keep = proposals[inds_inside, :]
+        # else:
+        proposals = clip_boxes(proposals, im_info, batch_size)
         scores_keep = scores
         proposals_keep = proposals
         _, order = torch.sort(scores_keep, 1, True)
@@ -174,3 +182,19 @@ class _ProposalLayer(nn.Module):
         hs = boxes[:, :, 3] - boxes[:, :, 1] + 1
         keep = ((ws >= min_size.view(-1,1).expand_as(ws)) & (hs >= min_size.view(-1,1).expand_as(hs)))
         return keep
+
+    def _remove_invalid_anchors_and_predictions(self, all_anchors, all_scores, clip_window):
+        """
+        Remove anchors outside the clip window
+        """
+        anchors = all_anchors[0]
+
+        keep = ((anchors[:, 0] >= 0) &
+                (anchors[:, 1] >= 0) &
+                (anchors[:, 2] < long(clip_window[0][1]) ) &
+                (anchors[:, 3] < long(clip_window[0][0]) ))
+
+        inds_inside = torch.nonzero(keep).view(-1)
+        all_scores = all_scores[:, inds_inside]
+        all_anchors = all_anchors[:, inds_inside, :]
+        return all_scores, all_anchors

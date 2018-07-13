@@ -190,6 +190,8 @@ class RandomSampleCrop(object):
                 current_boxes[:, 2:] = np.minimum(current_boxes[:, 2:], rect[2:])
                 # adjust to crop (by substracting crop's left,top)
                 current_boxes[:, 2:] -= rect[:2]
+                # print('before croped shape: ',image.size)
+                # print('after croped shape: ',current_image.shape)
 
                 return Image.fromarray(current_image), current_boxes, current_labels,im_scale
 
@@ -306,6 +308,7 @@ class Resize(object):
         else:
             im_scale = float(self.target_size)/w
             target_shape = (self.target_size,im_scale*h)
+        # print(target_shape)
         target_shape = (int(target_shape[0]),int(target_shape[1]))
 
         # return img.resize((self.new_size[0], self.new_size[1]), self.interpolation), bbox, label
@@ -342,5 +345,5 @@ class Compose(object):
 
     def __call__(self, img, bbox, label,im_scale=None):
         for t in self.transforms:
-	    img, bbox, label,im_scale = t(img, bbox, label,im_scale)
+            img, bbox, label,im_scale = t(img, bbox, label,im_scale)
         return img, bbox, label,im_scale
