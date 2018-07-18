@@ -12,16 +12,13 @@ from __future__ import absolute_import
 import torch
 import torch.nn as nn
 import numpy as np
-import math
-import yaml
 from model.utils.config import cfg
 from .generate_anchors import generate_anchors
 from .bbox_transform import bbox_transform_inv, clip_boxes, clip_boxes_batch
 from model.nms.nms_wrapper import nms
 
-import pdb
-
 DEBUG = False
+
 
 class _ProposalLayer(nn.Module):
     """
@@ -29,13 +26,21 @@ class _ProposalLayer(nn.Module):
     transformations to a set of regular boxes (called "anchors").
     """
 
-    def __init__(self, feat_stride, scales, ratios):
+    def __init__(self, layer_config):
         super(_ProposalLayer, self).__init__()
 
-        self._feat_stride = feat_stride
-        self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales),
-            ratios=np.array(ratios))).float()
+        self._feat_stride = layer_config['feat_stride']
+        scales = layer_config['anchor_scales']
+        ratios = layer_config['anchor_ratios']
+        self._anchors = torch.from_numpy(
+            generate_anchors(
+                scales=np.array(scales), ratios=np.array(ratios))).float()
         self._num_anchors = self._anchors.size(0)
+
+        self.pre_nms_topN = layer_config['pre_nms_topN']
+        self.post_nms_topN = layer_config['post_nms_topN']
+        self.nms_thresh = layer_config['nms_thresh']
+        self.min_size = layer_config['min_size']
 
         # rois blob: holds R regions of interest, each is a 5-tuple
         # (n, x1, y1, x2, y2) specifying an image batch index n and a
@@ -61,18 +66,11 @@ class _ProposalLayer(nn.Module):
         # take after_nms_topN proposals after NMS
         # return the top proposals (-> RoIs top, scores top)
 
-
         # the first set of _num_anchors channels are bg probs
         # the second set are the fg probs
         scores = input[0][:, self._num_anchors:, :, :]
         bbox_deltas = input[1]
         im_info = input[2]
-        cfg_key = input[3]
-
-        pre_nms_topN  = cfg[cfg_key].RPN_PRE_NMS_TOP_N
-        post_nms_topN = cfg[cfg_key].RPN_POST_NMS_TOP_N
-        nms_thresh    = cfg[cfg_key].RPN_NMS_THRESH
-        min_size      = cfg[cfg_key].RPN_MIN_SIZE
 
         batch_size = bbox_deltas.size(0)
 
@@ -80,8 +78,9 @@ class _ProposalLayer(nn.Module):
         shift_x = np.arange(0, feat_width) * self._feat_stride
         shift_y = np.arange(0, feat_height) * self._feat_stride
         shift_x, shift_y = np.meshgrid(shift_x, shift_y)
-        shifts = torch.from_numpy(np.vstack((shift_x.ravel(), shift_y.ravel(),
-                                  shift_x.ravel(), shift_y.ravel())).transpose())
+        shifts = torch.from_numpy(
+            np.vstack((shift_x.ravel(), shift_y.ravel(), shift_x.ravel(),
+                       shift_y.ravel())).transpose())
         shifts = shifts.contiguous().type_as(scores).float()
 
         A = self._num_anchors
@@ -105,7 +104,7 @@ class _ProposalLayer(nn.Module):
         # Convert anchors into proposals via bbox transformations
         proposals = bbox_transform_inv(anchors, bbox_deltas, batch_size)
         # if not self.training:
-            # pdb.set_trace()
+        # pdb.set_trace()
 
         # 2. clip predicted boxes to image
         # proposals = clip_boxes_batch(proposals, im_info, batch_size)
@@ -122,17 +121,17 @@ class _ProposalLayer(nn.Module):
         # _, order = torch.sort(scores_keep, 1, True)
         # pdb.set_trace()
         # if self.training:
-            # scores_keep, proposals_keep = self._remove_invalid_anchors_and_predictions(anchors, scores, im_info)
+        # scores_keep, proposals_keep = self._remove_invalid_anchors_and_predictions(anchors, scores, im_info)
 
-            # scores_keep = scores[inds_inside, :]
-            # proposals_keep = proposals[inds_inside, :]
+        # scores_keep = scores[inds_inside, :]
+        # proposals_keep = proposals[inds_inside, :]
         # else:
         proposals = clip_boxes(proposals, im_info, batch_size)
         scores_keep = scores
         proposals_keep = proposals
         _, order = torch.sort(scores_keep, 1, True)
 
-        output = scores.new(batch_size, post_nms_topN, 5).zero_()
+        output = scores.new(batch_size, self.post_nms_topN, 5).zero_()
         for i in range(batch_size):
             # # 3. remove predicted boxes with either height or width < threshold
             # # (NOTE: convert min_size to input image scale stored in im_info[2])
@@ -143,28 +142,31 @@ class _ProposalLayer(nn.Module):
             # # 5. take top pre_nms_topN (e.g. 6000)
             order_single = order[i]
 
-            if pre_nms_topN > 0 and pre_nms_topN < scores_keep.numel():
-                order_single = order_single[:pre_nms_topN]
+            if self.pre_nms_topN > 0 and self.pre_nms_topN < scores_keep.numel(
+            ):
+                order_single = order_single[:self.pre_nms_topN]
 
             proposals_single = proposals_single[order_single, :]
-            scores_single = scores_single[order_single].view(-1,1)
+            scores_single = scores_single[order_single].view(-1, 1)
 
             # 6. apply nms (e.g. threshold = 0.7)
             # 7. take after_nms_topN (e.g. 300)
             # 8. return the top proposals (-> RoIs top)
 
-            keep_idx_i = nms(torch.cat((proposals_single, scores_single), 1), nms_thresh)
+            keep_idx_i = nms(
+                torch.cat((proposals_single, scores_single), 1),
+                self.nms_thresh)
             keep_idx_i = keep_idx_i.long().view(-1)
 
-            if post_nms_topN > 0:
-                keep_idx_i = keep_idx_i[:post_nms_topN]
+            if self.post_nms_topN > 0:
+                keep_idx_i = keep_idx_i[:self.post_nms_topN]
             proposals_single = proposals_single[keep_idx_i, :]
             scores_single = scores_single[keep_idx_i, :]
 
             # padding 0 at the end.
             num_proposal = proposals_single.size(0)
-            output[i,:,0] = i
-            output[i,:num_proposal,1:] = proposals_single
+            output[i, :, 0] = i
+            output[i, :num_proposal, 1:] = proposals_single
 
         return output
 
@@ -180,19 +182,20 @@ class _ProposalLayer(nn.Module):
         """Remove all boxes with any side smaller than min_size."""
         ws = boxes[:, :, 2] - boxes[:, :, 0] + 1
         hs = boxes[:, :, 3] - boxes[:, :, 1] + 1
-        keep = ((ws >= min_size.view(-1,1).expand_as(ws)) & (hs >= min_size.view(-1,1).expand_as(hs)))
+        keep = ((ws >= min_size.view(-1, 1).expand_as(ws)) &
+                (hs >= min_size.view(-1, 1).expand_as(hs)))
         return keep
 
-    def _remove_invalid_anchors_and_predictions(self, all_anchors, all_scores, clip_window):
+    def _remove_invalid_anchors_and_predictions(self, all_anchors, all_scores,
+                                                clip_window):
         """
         Remove anchors outside the clip window
         """
         anchors = all_anchors[0]
 
-        keep = ((anchors[:, 0] >= 0) &
-                (anchors[:, 1] >= 0) &
-                (anchors[:, 2] < long(clip_window[0][1]) ) &
-                (anchors[:, 3] < long(clip_window[0][0]) ))
+        keep = ((anchors[:, 0] >= 0) & (anchors[:, 1] >= 0) &
+                (anchors[:, 2] < clip_window[0][1]) &
+                (anchors[:, 3] < clip_window[0][0]))
 
         inds_inside = torch.nonzero(keep).view(-1)
         all_scores = all_scores[:, inds_inside]

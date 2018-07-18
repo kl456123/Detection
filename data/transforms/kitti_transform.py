@@ -4,7 +4,6 @@ import numpy as np
 
 import matplotlib
 from PIL import Image, ImageFilter
-import pdb
 
 
 def intersect(box_a, box_b):

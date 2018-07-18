@@ -27,29 +27,68 @@ def expand_anchors(anchors, feat_size=(24, 79), feat_stride=16):
     return anchors
 
 
-def visualize_bbox(img, bboxes, size=None, save=False):
+def visualize_bbox(img, bboxes, gt_bboxes=[], size=None, save=False):
     """
     Args:
-        bbox: non-normalized
+        bboxes: non-normalized(N,4)
+        img: non-noramlized (H,W,C)(bgr)
     """
+
+    print("img shape: ", img.shape)
+    #################################
+    # Image
+    ################################
+
+    # do resize first
     if size is not None:
         img = cv2.resize(img)
-    img = np.asarray(img)
-    # copy data to another ndarray ,otherwise it will fail
-    blob = np.zeros(img.shape)
-    blob[...] = img
-    print("img shape: ", img.shape)
-    for i, box in enumerate(bboxes):
-        cv2.rectangle(
-            img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
-            color=(55, 255, 155),
-            thickness=2)
-    cv2.imshow('test', img)
-    cv2.waitKey(0)
 
-    if save:
-        img_path = 'res.jpg'
-        cv2.imwrite(img_path, img)
+    # do something visualization according to the num of channels of images
+    num_channles = img.shape[-1]
+
+    # all image in imgs_batch should be 3-channels,3-dims
+    imgs_batch = []
+    h, w = img.shape[:2]
+    if num_channles == 1 or num_channles > 3:
+        # gray image
+        for idx in range(num_channles):
+            blob = np.zeros((h, w, 3))
+            blob[:, :, 0] = img[:, :, idx]
+            imgs_batch.append(blob)
+    elif num_channles == 3:
+        # color image
+        imgs_batch.append(img)
+    # make array contiguous for used by cv2
+    imgs_batch = [
+        np.ascontiguousarray(
+            img, dtype=np.uint8) for img in imgs_batch
+    ]
+
+    #####################################
+    # BOX
+    #####################################
+    if not isinstance(bboxes, np.ndarray):
+        bboxes = np.asarray(bboxes)
+    bboxes = bboxes.astype(np.int)
+
+    # display
+    for idx, img in enumerate(imgs_batch):
+        for i, box in enumerate(bboxes):
+            cv2.rectangle(
+                img, (box[0], box[1]), (box[2], box[3]),
+                color=(55, 255, 155),
+                thickness=2)
+        for i, box in enumerate(gt_bboxes):
+            cv2.rectangle(
+                img, (box[0], box[1]), (box[2], box[3]),
+                color=(255, 255, 255),
+                thickness=2)
+        cv2.imshow('test', img)
+        cv2.waitKey(0)
+
+        if save:
+            img_path = 'res_%d.jpg' % idx
+            cv2.imwrite(img_path, img)
 
 
 def shift_bbox(bbox, translation):

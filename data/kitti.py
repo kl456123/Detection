@@ -4,21 +4,19 @@ import numpy
 import torch
 
 from PIL import Image
-from data_loader import DetDataLoader
+from data.det_dataset import DetDataset
 
 from utils.kitti_util import *
-
 
 color_map = [(0, 0, 142)]
 OBJ_CLASSES = ['Car']
 
 
-class KittiLoader(DetDataLoader):
-
-    def __init__(self, root_path,dataset_file=None, transforms=None):
-        super(KittiLoader, self).__init__()
-        self.root_path = root_path
-        self.labels = self.make_label_list(dataset_file)
+class KittiDataset(DetDataset):
+    def __init__(self, dataset_config, transforms=None):
+        super(KittiDataset, self).__init__()
+        self.root_path = dataset_config['root_path']
+        self.labels = self.make_label_list(dataset_config['dataset_file'])
         self.imgs = self.make_image_list()
         self.transforms = transforms
 
@@ -31,7 +29,7 @@ class KittiLoader(DetDataLoader):
         bbox, lbl = self.read_annotation(lbl_file)
 
         if self.transforms is not None:
-            img, bbox, lbl,im_scale = self.transforms(img, bbox, lbl)
+            img, bbox, lbl, im_scale = self.transforms(img, bbox, lbl)
 
         w = img.size()[2]
         h = img.size()[1]
@@ -44,8 +42,12 @@ class KittiLoader(DetDataLoader):
         # For car, the label is one
         bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
         img_info = torch.FloatTensor([h, w, im_scale])
+        return img, img_info, bbox, torch.LongTensor(
+            [bbox.size()[0]]), img_file
 
-        return img, img_info, bbox, torch.LongTensor([bbox.size()[0]])
+        # return a dict for extension
+        # sample = {}
+        # return sample
 
     def read_annotation(self, file_name):
         """
@@ -113,12 +115,15 @@ class KittiLoader(DetDataLoader):
     def is_annotation(_name):
         return any(category == _name for category in OBJ_CLASSES)
 
-    def make_label_list(self,dataset_file):
+    def make_label_list(self, dataset_file):
         train_list_path = os.path.join(self.root_path, dataset_file)
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]
-            labels = [os.path.join(self.root_path, 'label_2/{}.txt'.format(label)) for label in labels]
+            labels = [
+                os.path.join(self.root_path, 'label_2/{}.txt'.format(label))
+                for label in labels
+            ]
             labels = [label for label in labels if self.__check_has_car(label)]
         return labels
 
@@ -129,7 +134,8 @@ class KittiLoader(DetDataLoader):
             lab = lab[:-4]
             img_name = lab + '.png'
 
-            read_path = os.path.join(self.root_path, 'image_2/{}'.format(img_name))
+            read_path = os.path.join(self.root_path,
+                                     'image_2/{}'.format(img_name))
             images.append(read_path)
         return images
 
@@ -171,9 +177,11 @@ class KittiLoader(DetDataLoader):
         img = numpy.clip(img, a_min=0, a_max=255)
         img = img.astype(numpy.uint8)
         for i, box in enumerate(bbox):
-            img = cv2.rectangle(img, (int(box[0] * 1024), int(box[1] * 512)),
-                                (int(box[2] * 1024), int(box[3] * 512)), color=color_map[lbl[i]], thickness=2)
+            img = cv2.rectangle(
+                img, (int(box[0] * 1024), int(box[1] * 512)),
+                (int(box[2] * 1024), int(box[3] * 512)),
+                color=color_map[lbl[i]],
+                thickness=2)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cv2.imshow("test", img)
         cv2.waitKey(0)
-
