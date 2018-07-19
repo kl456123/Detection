@@ -260,10 +260,22 @@ class resnet(_fasterRCNN):
                 for k, v in state_dict.items() if k in resnet.state_dict()
             })
 
+        base_features = [
+            resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,
+            resnet.layer1, resnet.layer2, resnet.layer3
+        ]
         # Build resnet.
-        self.RCNN_base = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu,
-                                       resnet.maxpool, resnet.layer1,
-                                       resnet.layer2, resnet.layer3)
+        if not self.img_channels == 3:
+            self._first_layer = nn.Conv2d(
+                self.img_channels,
+                64,
+                kernel_size=7,
+                stride=2,
+                padding=3,
+                bias=False)
+            base_features[0] = self._first_layer
+
+        self.RCNN_base = nn.Sequential(*base_features)
 
         self.RCNN_top = nn.Sequential(resnet.layer4)
 

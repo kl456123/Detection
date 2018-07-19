@@ -18,7 +18,7 @@ class KITTIBEVDataLoaderBuilder(DataLoaderBuilder):
         """
         tranform_config can be used
         """
-        if self.train:
+        if self.training:
             all_trans = [trans.BEVRandomHorizontalFlip(), trans.BEVToTensor()]
         else:
             all_trans = [trans.BEVToTensor()]

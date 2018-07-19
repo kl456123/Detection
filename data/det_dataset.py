@@ -32,22 +32,15 @@ class DetDataset(Dataset):
         self.num_classes = None
         self.training = training
 
-        # preprocess
-        self.preprocess_load_data()
-        if not training:
-            self.preprocess_load_label()
-
     def __len__(self):
         return len(self.imgs)
 
+    @abstractmethod
     def __getitem__(self, item_idx):
         """
         return data and label directly
         """
-        data = self.provide_data(item_idx)
-        if not self.training:
-            label = self.provide_label(item_idx)
-        return data, label
+        pass
 
     @staticmethod
     def is_image_file(filename):
@@ -55,27 +48,9 @@ class DetDataset(Dataset):
             filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
     @abstractmethod
-    def provide_data(self, item_idx):
-        """
-        defined by user
-        """
+    def get_training_sample(self, transform_sample):
         pass
 
     @abstractmethod
-    def provide_label(self, item_idx):
-        """
-        defined by user
-        """
-        pass
-
-    def preprocess_load_label(self):
-        """
-        It can be overload
-        """
-        pass
-
-    def preprocess_load_data(self):
-        """
-        It can be overload
-        """
+    def get_transform_sample(self, idx):
         pass

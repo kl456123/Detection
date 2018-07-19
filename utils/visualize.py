@@ -7,7 +7,7 @@ and ratios
 import cv2
 import numpy as np
 import argparse
-import data
+import pickle
 from utils.generate_anchors import generate_anchors
 
 
@@ -116,6 +116,11 @@ def read_kitti(label_file):
     return np.asarray(boxes)
 
 
+def save_pkl(pkl_data, pkl_path):
+    with open(pkl_path, 'wb') as f:
+        pickle.dump(pkl_data, f, pickle.HIGHEST_PROTOCOL)
+
+
 def shift_bbox(bbox, translation):
     """
     Args:
@@ -130,6 +135,13 @@ def shift_bbox(bbox, translation):
 
 def read_img(img_name):
     return cv2.imread(img_name)
+
+
+def read_pkl(pkl_name):
+    with open(pkl_name) as f:
+        pkl_array = pickle.loads(f.read())
+    pkl_data = np.asarray(pkl_array)
+    return pkl_data
 
 
 def test():
@@ -151,6 +163,8 @@ def parser_args():
         description='Visualize bbox in one image from txt file')
     parser.add_argument(
         '--img_path', dest='img_path', help='path to image', type=str)
+    parser.add_argument(
+        '--pkl_path', dest='pkl_path', help='path to pkl', type=str)
     parser.add_argument(
         '--kitti_file',
         dest='kitti_file',

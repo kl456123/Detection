@@ -165,7 +165,8 @@ class _fasterRCNN(nn.Module):
                     mean)  # not a perfect approximation
             else:
                 m.weight.data.normal_(mean, stddev)
-                m.bias.data.zero_()
+                if m.bias is not None:
+                    m.bias.data.zero_()
 
         if hasattr(self, '_first_layer'):
             normal_init(self._first_layer, 0, 0.001, self.truncated)

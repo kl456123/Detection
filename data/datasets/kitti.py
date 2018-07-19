@@ -25,27 +25,43 @@ class KittiDataset(DetDataset):
             self.imgs = self.make_image_list()
         self.transforms = transforms
 
-    # def set_data(self, img_path):
-    # self.imgs = [img_path]
+    def get_training_sample(self, transform_sample):
+        # bbox and num
+        img = transform_sample['img']
+        im_scale = transform_sample['im_scale']
+        w = img.size()[2]
+        h = img.size()[1]
+        img_info = torch.FloatTensor([h, w, im_scale])
 
-    def provide_data(self, item_idx):
-        pass
+        if self.training:
+            bbox = transform_sample['bbox']
+            bbox[:, 2] *= w
+            bbox[:, 0] *= w
+            bbox[:, 1] *= h
+            bbox[:, 3] *= h
+            # For car, the label is one
+            bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
+            num = torch.LongTensor([bbox.size()[0]])
+        else:
+            # fake gt
+            bbox = torch.zeros((1, 5))
+            num = torch.Tensor(1)
 
-    def provide_label(self, item_idx):
-        pass
+        # im_info
 
-    def preprocess_load_data(self):
-        pass
+        training_sample = {}
+        training_sample['img'] = transform_sample['img']
+        training_sample['im_info'] = img_info
+        training_sample['img_name'] = transform_sample['img_name']
+        training_sample['im_scale'] = im_scale
+        training_sample['bbox'] = bbox
+        training_sample['num'] = num
+        return training_sample
 
-    def preprocess_load_label(self):
-        pass
-
-    def __getitem__(self, index):
-        # Image
+    def get_transform_sample(self, index):
         img_file = self.imgs[index]
         img = Image.open(img_file)
 
-        # label
         if self.training:
             lbl_file = self.labels[index]
             bbox, lbl = self.read_annotation(lbl_file)
@@ -56,44 +72,25 @@ class KittiDataset(DetDataset):
                 'bbox': bbox,
                 'label': lbl,
                 'im_scale': 1.0,
+                'img_name': img_file,
             }
         else:
             # make sample
             transform_sample = {
                 'img': img,
                 'im_scale': 1.0,
+                'img_name': img_file,
             }
+        return transform_sample
+
+    def __getitem__(self, index):
+
+        transform_sample = self.get_transform_sample(index)
 
         if self.transforms is not None:
-            sample = self.transforms(transform_sample)
+            transform_sample = self.transforms(transform_sample)
 
-        # bbox and num
-        img = sample['img']
-        w = img.size()[2]
-        h = img.size()[1]
-        if self.training:
-            bbox = sample['bbox']
-            bbox[:, 2] *= w
-            bbox[:, 0] *= w
-            bbox[:, 1] *= h
-            bbox[:, 3] *= h
-            # For car, the label is one
-            bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
-            sample['bbox'] = bbox
-            sample['num'] = torch.LongTensor([bbox.size()[0]])
-        else:
-            # fake gt
-            sample['bbox'] = torch.zeros((1, 5))
-            sample['num'] = torch.Tensor(1)
-
-        # im_info
-        im_scale = sample.get('im_scale')
-        img_info = torch.FloatTensor([h, w, im_scale])
-
-        sample['im_info'] = img_info
-        sample['img_name'] = img_file
-
-        return sample
+        return self.get_training_sample(transform_sample)
 
     # return img, img_info, bbox, torch.LongTensor(
 

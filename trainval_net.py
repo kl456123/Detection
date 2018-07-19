@@ -21,7 +21,9 @@ import torch.nn as nn
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
 from configs import kitti_config
+from configs import kitti_bev_config
 from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
+from builder.dataloader_builders.kitti_bev_dataloader_builder import KITTIBEVDataLoaderBuilder
 from builder.optimizer_builder import OptimizerBuilder
 from builder.scheduler_builder import SchedulerBuilder
 from core import trainer
@@ -79,18 +81,23 @@ def parse_args():
         help='whether use tensorflow tensorboard',
         default=False,
         type=bool)
+    parser.add_argument(
+        '--bev', dest='bev', help='use bev dataset', default=True, type=bool)
     args = parser.parse_args()
     return args
 
 
 if __name__ == '__main__':
-
-    data_config = kitti_config.data_config
-    model_config = kitti_config.model_config
-    train_config = kitti_config.train_config
-
     # parse config of scripts
     args = parse_args()
+
+    if args.bev:
+        config = kitti_bev_config
+    else:
+        config = kitti_config
+    data_config = config.data_config
+    model_config = config.model_config
+    train_config = config.train_config
 
     if args.resume:
         model_config['pretrained'] = False
@@ -103,6 +110,9 @@ if __name__ == '__main__':
         'net'] + "/" + data_config['name']
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    else:
+        print('output_dir is already exist')
+    print('checkpoint will be saved to {}'.format(output_dir))
 
     # model
     # fasterRCNN = vgg16(model_config=model_config)
@@ -118,7 +128,12 @@ if __name__ == '__main__':
     if args.cuda:
         fasterRCNN.cuda()
 
-    data_loader_builder = KittiDataLoaderBuilder(data_config, training=True)
+    if args.bev:
+        data_loader_builder = KITTIBEVDataLoaderBuilder(
+            data_config, training=True)
+    else:
+        data_loader_builder = KittiDataLoaderBuilder(
+            data_config, training=True)
     data_loader = data_loader_builder.build()
 
     # optimizer

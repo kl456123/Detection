@@ -434,10 +434,6 @@ class BEVToTensor(object):
         bbox = sample['bbox']
         label = sample['label']
         h, w = img.shape[:2]
-        bbox[:, 2] /= w
-        bbox[:, 0] /= w
-        bbox[:, 1] /= h
-        bbox[:, 3] /= h
         img = torch.from_numpy(img)
         img = img.permute(2, 0, 1)
         lbl = torch.from_numpy(label).long()

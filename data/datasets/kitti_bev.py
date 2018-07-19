@@ -2,81 +2,138 @@ import os
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .data_loader import DetDataLoader
+# from .data_loader import DetDataLoader
+from data.det_dataset import DetDataset
 from data.kitti_utils import Calibration
 from data.bev_generators.bev_slices import BevSlices
 from data.kitti_utils import Object3d
-from .bev_generators.box_3d_projector import *
+from data.bev_generators.box_3d_projector import *
 from utils.bev_encoder import DataEncoder
+import torch
 
 
-
-class KITTIBEVLoader(DetDataLoader):
-    def __init__(self, dataset_config, data_encoder=None, transforms=None):
-        super(KITTIBEVLoader, self).__init__()
+class KITTIBEVDataset(DetDataset):
+    def __init__(self, dataset_config, transforms=None, training=True):
+        super(KITTIBEVDataset, self).__init__(training)
         self.config = dataset_config
-        self._data_root = self.config['data_root']
+        self._data_root = self.config['root_path']
         self._set_up_directories()
         self._area_extents = self.config['bev_config']['area_extents']
-        self.imgs = self.make_image_list()
+
+        # cache bev map
+        self.cache_bev = self.config['cache_bev']
+        self.cache_dir = self.config['cache_dir']
+
+        if self.config['dataset_file'] is None:
+            print('Demo mode enabled!')
+            self.imgs = [dataset_config['demo_file']]
+        else:
+            self.imgs = self.make_image_list()
         self.camera_baseline = self.config['camera_baseline']
-        self.data_encoder = data_encoder
+        # self.data_encoder = data_encoder
         self.transforms = transforms
 
     def _set_up_directories(self):
-        training_dir = os.path.join(self._data_root, 'training')
+        training_dir = self._data_root
         self.image_dir = os.path.join(training_dir, 'image_2')
         self.depth_dir = os.path.join(training_dir, 'depth')
         self.calib_dir = os.path.join(training_dir, 'calib')
         self.label_dir = os.path.join(training_dir, 'label_2')
-        self.plane_dir = os.path.join(training_dir, 'planes')
+        self.plane_dir = os.path.join(training_dir, 'planes_org')
         self.training_dir = training_dir
 
-    def __getitem__(self, index, if_vis=False):
+    def get_transform_sample(self, index):
         sample_name = int(self.imgs[index])
         bev_map = self.get_bev(sample_name)
-        bbox, ry, labels = self.get_label(sample_name)
+        if self.cache_bev:
+            pass
+        transform_sample = {
+            'img': bev_map,
+            'im_scale': 1.0,
+            'img_name': sample_name,
+        }
+        if self.training:
+            bbox, ry, labels = self.get_label(sample_name)
 
-        # Transform the bbox to bbox format(xmin, ymin, xmax, ymax)
-        h, w = bev_map.shape[:2]
-        xrange = self._area_extents[0][1] - self._area_extents[0][0]
-        yrange = self._area_extents[2][1] - self._area_extents[2][0]
-        bbox[:, 0] *= (w / xrange)
-        bbox[:, 2] *= (w / xrange)
-        bbox[:, 1] *= (h / yrange)
-        bbox[:, 3] *= (h / yrange)
+            # Transform the bbox to bbox format(xmin, ymin, xmax, ymax)
+            h, w = bev_map.shape[:2]
+            xrange = self._area_extents[0][1] - self._area_extents[0][0]
+            yrange = self._area_extents[2][1] - self._area_extents[2][0]
+            bbox[:, 0] *= (w / xrange)
+            bbox[:, 2] *= (w / xrange)
+            bbox[:, 1] *= (h / yrange)
+            bbox[:, 3] *= (h / yrange)
 
-        if self.transforms is not None:
-            bev_map, bbox, ry, labels = self.transforms(bev_map, bbox, ry,
-                                                        labels)
+            transform_sample.update({
+                'bbox': bbox,
+                'ry': ry,
+                'label': labels,
+            })
 
-        if if_vis:
-            print(('sample_name is:', sample_name))
-            gt_boxes, pos_boxes = self.data_encoder.encode(
-                bev_map, bbox, ry, labels, if_vis=if_vis)
-            return sample_name, gt_boxes, pos_boxes
+        return transform_sample
 
-        # loc_target, ry_target, cls_target = self.data_encoder.encode(bev_map, bbox, ry, labels)
-        #####
-        # bev_map (6,800,700)
-        # bbox (1,4) non-normalized (xmin,ymin,...)
-        # ry angle
+    def get_training_sample(self, transform_sample):
+        # TODO some tranform ops can be moved to transform.py
+        # to make here clear
+
+        bev_map = transform_sample['img']
         h, w = bev_map.shape[1:]
-        im_scale = 1
-        bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
+        im_scale = transform_sample['im_scale']
         img_info = torch.FloatTensor([h, w, im_scale])
 
-        ry = torch.FloatTensor(ry)
-        ry = torch.cat(
-            [torch.cos(ry).unsqueeze(1), torch.sin(ry).unsqueeze(1)], 1)
+        if self.training:
+            bbox = transform_sample['bbox']
+            ry = transform_sample['ry']
 
-        return bev_map, img_info, bbox, torch.LongTensor(
-            [bbox.size()[0]]), ry, sample_name
+            bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
+
+            ry = torch.FloatTensor(ry)
+            ry = torch.cat(
+                [torch.cos(ry).unsqueeze(1), torch.sin(ry).unsqueeze(1)], 1)
+            num = torch.LongTensor([bbox.size()[0]])
+        else:
+            # fake labels
+            bbox = torch.zeros((1, 5))
+            num = torch.Tensor(1)
+            ry = torch.zeros((1, 2))
+
+        training_sample = {}
+        training_sample['bev_map'] = bev_map
+        training_sample['im_info'] = img_info
+        training_sample['num'] = num
+        training_sample['bbox'] = bbox
+        training_sample['ry'] = ry
+        training_sample['img_name'] = transform_sample['img_name']
+        training_sample['img'] = transform_sample['img']
+
+        return training_sample
+
+    def __getitem__(self, index, if_vis=False):
+
+        transform_sample = self.get_transform_sample(index)
+
+        if self.transforms is not None:
+            transform_sample = self.transforms(transform_sample)
+
+        return self.get_training_sample(transform_sample)
+
+    # if if_vis:
+    # print(('sample_name is:', sample_name))
+    # gt_boxes, pos_boxes = self.data_encoder.encode(
+    # bev_map, bbox, ry, labels, if_vis=if_vis)
+    # return sample_name, gt_boxes, pos_boxes
+
+    # loc_target, ry_target, cls_target = self.data_encoder.encode(bev_map, bbox, ry, labels)
+    #####
+    # bev_map (6,800,700)
+    # bbox (1,4) non-normalized (xmin,ymin,...)
+    # ry angle
+
+    # return bev_map, img_info, bbox, , ry, sample_name
 
     def make_image_list(self):
-        data_type = self.config['data_type']
         val_file_path = os.path.join(self.training_dir,
-                                     '{}.txt'.format(data_type))
+                                     self.config['dataset_file'])
         with open(val_file_path) as f:
             lines = f.readlines()
             lines = [line.strip() for line in lines]
