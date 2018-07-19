@@ -3,7 +3,7 @@
 from data.datasets.kitti_bev import KITTIBEVDataset
 
 from builder.dataloader_builder import DataLoaderBuilder
-import data.transforms.kitti_bev_transform as trans
+import data.transforms.kitti_transform as trans
 
 
 class KITTIBEVDataLoaderBuilder(DataLoaderBuilder):
@@ -19,9 +19,9 @@ class KITTIBEVDataLoaderBuilder(DataLoaderBuilder):
         tranform_config can be used
         """
         if self.train:
-            all_trans = [trans.RandomHorizontalFlip(), trans.ToTensor()]
+            all_trans = [trans.BEVRandomHorizontalFlip(), trans.BEVToTensor()]
         else:
-            all_trans = [trans.ToTensor()]
+            all_trans = [trans.BEVToTensor()]
 
         self.transform = trans.Compose(all_trans)
         return self.transform

@@ -5,12 +5,12 @@ from abc import ABCMeta, abstractmethod
 class DataLoaderBuilder(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, data_config, train=True):
+    def __init__(self, data_config, training=True):
         self.tranform_config = data_config['transform_config']
         self.dataset_config = data_config['dataset_config']
         self.dataloader_config = data_config['dataloader_config']
         # phase
-        self.train = train
+        self.training = training
 
         self.transform = None
         self.dataset = None

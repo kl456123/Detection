@@ -136,7 +136,23 @@ class _fasterRCNN(nn.Module):
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
-        return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label
+        predict = {
+
+            # pred
+            'rois': rois,
+            'rois_label': rois_label,
+            'cls_prob': cls_prob,
+            'bbox_pred': bbox_pred,
+
+            # loss
+            'rpn_loss_cls': rpn_loss_cls,
+            'rpn_loss_bbox': rpn_loss_bbox,
+            'RCNN_loss_cls': RCNN_loss_cls,
+            'RCNN_loss_bbox': RCNN_loss_bbox,
+        }
+
+        # return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label
+        return predict
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):

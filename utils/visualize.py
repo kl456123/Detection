@@ -6,7 +6,9 @@ and ratios
 
 import cv2
 import numpy as np
-from generate_anchors import generate_anchors
+import argparse
+import data
+from utils.generate_anchors import generate_anchors
 
 
 def expand_anchors(anchors, feat_size=(24, 79), feat_stride=16):
@@ -69,18 +71,24 @@ def visualize_bbox(img, bboxes, gt_bboxes=[], size=None, save=False):
     #####################################
     if not isinstance(bboxes, np.ndarray):
         bboxes = np.asarray(bboxes)
-    bboxes = bboxes.astype(np.int)
+    #  bboxes = bboxes.astype(np.int)
 
     # display
     for idx, img in enumerate(imgs_batch):
         for i, box in enumerate(bboxes):
             cv2.rectangle(
-                img, (box[0], box[1]), (box[2], box[3]),
+                img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
                 color=(55, 255, 155),
                 thickness=2)
+            #  cv2.putText(
+        #  img,
+        #  str(box[4]), (int(box[0]), int(box[1])),
+        #  fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+        #  fontScale=0.5,
+        #  color=(255, 0, 0))
         for i, box in enumerate(gt_bboxes):
             cv2.rectangle(
-                img, (box[0], box[1]), (box[2], box[3]),
+                img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
                 color=(255, 255, 255),
                 thickness=2)
         cv2.imshow('test', img)
@@ -89,6 +97,23 @@ def visualize_bbox(img, bboxes, gt_bboxes=[], size=None, save=False):
         if save:
             img_path = 'res_%d.jpg' % idx
             cv2.imwrite(img_path, img)
+
+
+def read_kitti(label_file):
+    with open(label_file, 'r') as f:
+        lines = f.readlines()
+
+    boxes = []
+    for line in lines:
+        obj = line.strip().split(' ')
+        xmin = int(float(obj[4]))
+        ymin = int(float(obj[5]))
+        xmax = int(float(obj[6]))
+        ymax = int(float(obj[7]))
+        # obj_name = obj[0]
+        conf = float(obj[-1])
+        boxes.append([xmin, ymin, xmax, ymax, conf])
+    return np.asarray(boxes)
 
 
 def shift_bbox(bbox, translation):
@@ -121,16 +146,40 @@ def analysis_boxes(boxes):
     print('w: ', w)
 
 
+def parser_args():
+    parser = argparse.ArgumentParser(
+        description='Visualize bbox in one image from txt file')
+    parser.add_argument(
+        '--img_path', dest='img_path', help='path to image', type=str)
+    parser.add_argument(
+        '--kitti_file',
+        dest='kitti_file',
+        help='path to bbox file in kitti format',
+        type=str)
+    parser.add_argument(
+        '--save',
+        dest='save',
+        help='whether image should be saved',
+        action='store_true')
+    args = parser.parse_args()
+    return args
+
+
 if __name__ == '__main__':
     # test()
-    img_name = '000000.png'
-    img = read_img(img_name)
-    scales = np.array([2, 3, 4])
-    ratios = np.array([0.5, 1, 2])
-    anchors = generate_anchors(base_size=16, scales=scales, ratios=ratios)
-    anchors = expand_anchors(anchors)
-    print(anchors)
+    #  img_name = '000000.png'
+    args = parser_args()
+    img = read_img(args.img_path)
+    # scales = np.array([2, 3, 4])
+    # ratios = np.array([0.5, 1, 2])
+    # anchors = generate_anchors(base_size=16, scales=scales, ratios=ratios)
+    # anchors = expand_anchors(anchors)
+    # print(anchors)
     # anchors = shift_bbox(anchors,translation=(200,200))
-    analysis_boxes(anchors)
+    # analysis_boxes(anchors)
     # anchors = [[100,100,300,300]]
-    visualize_bbox(img, anchors)
+    # visualize_bbox(img, anchors)
+
+    # read from kitti result file
+    boxes = read_kitti(args.kitti_file)
+    visualize_bbox(img, boxes, save=True)

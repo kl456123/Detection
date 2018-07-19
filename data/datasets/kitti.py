@@ -13,40 +13,91 @@ OBJ_CLASSES = ['Car']
 
 
 class KittiDataset(DetDataset):
-    def __init__(self,
-                 dataset_config,
-                 transforms=None):
-        super(KittiDataset, self).__init__()
+    def __init__(self, dataset_config, transforms=None, training=True):
+        super(KittiDataset, self).__init__(training)
         self.root_path = dataset_config['root_path']
-        self.labels = self.make_label_list(dataset_config['dataset_file'])
-        self.imgs = self.make_image_list()
+        # if self.training:
+        if dataset_config['dataset_file'] is None:
+            print('Demo mode enabled!')
+            self.imgs = [dataset_config['demo_file']]
+        else:
+            self.labels = self.make_label_list(dataset_config['dataset_file'])
+            self.imgs = self.make_image_list()
         self.transforms = transforms
 
-    def __getitem__(self, index):
-        img_file = self.imgs[index]
-        lbl_file = self.labels[index]
+    # def set_data(self, img_path):
+    # self.imgs = [img_path]
 
-        # load image and label
+    def provide_data(self, item_idx):
+        pass
+
+    def provide_label(self, item_idx):
+        pass
+
+    def preprocess_load_data(self):
+        pass
+
+    def preprocess_load_label(self):
+        pass
+
+    def __getitem__(self, index):
+        # Image
+        img_file = self.imgs[index]
         img = Image.open(img_file)
-        bbox, lbl = self.read_annotation(lbl_file)
+
+        # label
+        if self.training:
+            lbl_file = self.labels[index]
+            bbox, lbl = self.read_annotation(lbl_file)
+
+            # make sample
+            transform_sample = {
+                'img': img,
+                'bbox': bbox,
+                'label': lbl,
+                'im_scale': 1.0,
+            }
+        else:
+            # make sample
+            transform_sample = {
+                'img': img,
+                'im_scale': 1.0,
+            }
 
         if self.transforms is not None:
-            img, bbox, lbl, im_scale = self.transforms(img, bbox, lbl)
+            sample = self.transforms(transform_sample)
 
+        # bbox and num
+        img = sample['img']
         w = img.size()[2]
         h = img.size()[1]
-        bbox[:, 2] *= w
-        bbox[:, 0] *= w
-        bbox[:, 1] *= h
-        bbox[:, 3] *= h
+        if self.training:
+            bbox = sample['bbox']
+            bbox[:, 2] *= w
+            bbox[:, 0] *= w
+            bbox[:, 1] *= h
+            bbox[:, 3] *= h
+            # For car, the label is one
+            bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
+            sample['bbox'] = bbox
+            sample['num'] = torch.LongTensor([bbox.size()[0]])
+        else:
+            # fake gt
+            sample['bbox'] = torch.zeros((1, 5))
+            sample['num'] = torch.Tensor(1)
 
-        # ratio = float(w)/float(h)
-        # For car, the label is one
-        bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
+        # im_info
+        im_scale = sample.get('im_scale')
         img_info = torch.FloatTensor([h, w, im_scale])
 
-        return img, img_info, bbox, torch.LongTensor(
-            [bbox.size()[0]]), img_file
+        sample['im_info'] = img_info
+        sample['img_name'] = img_file
+
+        return sample
+
+    # return img, img_info, bbox, torch.LongTensor(
+
+    # [bbox.size()[0]]), img_file
 
     def read_annotation(self, file_name):
         """

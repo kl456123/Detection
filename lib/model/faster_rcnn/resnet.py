@@ -252,7 +252,7 @@ class resnet(_fasterRCNN):
     def _init_modules(self):
         resnet = resnet50()
 
-        if self.pretrained:
+        if self.training and self.pretrained:
             print("Loading pretrained weights from %s" % (self.model_path))
             state_dict = torch.load(self.model_path)
             resnet.load_state_dict({

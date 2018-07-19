@@ -28,13 +28,26 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver):
         scheduler.step()
 
         for step, _data in enumerate(data_loader):
-            im_data, im_info, gt_boxes, num_boxes, img_file = _data
+            im_data = _data['img']
+            im_info = _data['im_info']
+            gt_boxes = _data['bbox']
+            num_boxes = _data['num']
+
             im_data, im_info, gt_boxes, num_boxes = __change_into_variable(
                 [im_data, im_info, gt_boxes, num_boxes])
-            rois, cls_prob, bbox_pred, \
-                rpn_loss_cls, rpn_loss_box, \
-                RCNN_loss_cls, RCNN_loss_bbox, \
-                rois_label = model(im_data, im_info, gt_boxes, num_boxes)
+            # rois, cls_prob, bbox_pred, \
+            # rpn_loss_cls, rpn_loss_box, \
+            # RCNN_loss_cls, RCNN_loss_bbox, \
+            prediction = model(im_data, im_info, gt_boxes, num_boxes)
+
+            # loss
+            rpn_loss_cls = prediction['rpn_loss_cls']
+            rpn_loss_box = prediction['rpn_loss_bbox']
+            RCNN_loss_cls = prediction['RCNN_loss_cls']
+            RCNN_loss_bbox = prediction['RCNN_loss_bbox']
+
+            # pred
+            rois_label = prediction['rois_label']
 
             loss = rpn_loss_cls.mean() + rpn_loss_box.mean() \
                 + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()

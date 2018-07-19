@@ -18,15 +18,12 @@ class Saver():
         print("loading checkpoint %s" % (checkpoint_path))
 
         checkpoint = torch.load(checkpoint_path)
-        self.start_epoch = checkpoint['epoch']
-        res = {}
         for name, module in params_dict.items():
             if name in checkpoint:
                 if hasattr(module, 'load_state_dict'):
                     module.load_state_dict(checkpoint[name])
-                    res[name] = module
                 else:
-                    res[name] = checkpoint[name]
+                    params_dict[name] = checkpoint[name]
             else:
                 print('module:{} can not be loaded'.format(name))
 

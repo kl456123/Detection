@@ -21,9 +21,8 @@ class vgg16(_fasterRCNN):
         self.pretrained = model_config['pretrained']
         self.class_agnostic = model_config['class_agnostic']
         self.img_channels = model_config['img_channels']
-        classes = model_config['classes']
 
-        _fasterRCNN.__init__(self, classes, self.class_agnostic)
+        _fasterRCNN.__init__(self, model_config)
 
     def _init_modules(self):
         if self.img_channels == 3:

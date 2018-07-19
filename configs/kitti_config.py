@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 model_config = {
-    'net': 'vgg16',
+    'net': 'resnet50',
     'num_classes': 2,
     'output_stride': [8., 16., 32., 64., 128., 192., 384.],
     'input_shape': (384, 1300),
@@ -10,7 +10,7 @@ model_config = {
     'img_channels': 3,
     'classes': ['bg', 'Car'],
     'rpn_config': {
-        'din': 512,
+        'din': 1024,
         'anchor_ratios': [0.5, 1, 2],
         'anchor_scales': [2, 3, 4],
         'feat_stride': 16,
@@ -65,9 +65,29 @@ data_config = {
     }
 }
 
+eval_data_config = {
+    'name': 'kitti',
+    'dataset_config': {
+        'root_path': '/data/object/training',
+        'dataset_file': 'val.txt'
+    },
+    'transform_config': {
+        'normal_mean': [0.485, 0.456, 0.406],
+        'normal_van': [0.229, 0.224, 0.225],
+        # 'resize_range': [0.2, 0.4],
+        # 'random_brightness': 10,
+        # 'crop_size': (284, 1300),
+        # 'random_blur': 0,
+    },
+    'dataloader_config': {
+        'shuffle': True,
+        'batch_size': 1,
+        'num_workers': 1
+    },
+}
+
 train_config = {
     'rng_seed': 3,
-    'eval_out': './eval',
     'save_dir': 'weights',
     'device_ids': [0],
     'disp_interval': 100,
@@ -89,4 +109,22 @@ train_config = {
     }
 }
 
-eval_config = {'checksession': 1, 'checkpoint': 3257, 'checkepoch': 100}
+eval_config = {
+    # used for testing one image
+    'demo_file': '',
+    'checkpoint': 3257,
+    'checkepoch': 100,
+    'rng_seed': 3,
+    'load_dir': '/data/liangxiong/models',
+    'max_per_image': 100,
+    'bbox_reg': True,
+    'bbox_normalize_targets_precomputed': False,
+    'bbox_normalize_means': [],
+    'bbox_normalize_stds': [],
+    'batch_size': 1,
+    'class_agnostic': True,
+    'thresh': 0.5,
+    'nms': 0.3,
+    'classes': ['bg', 'Car'],
+    'eval_out': './results/data',
+}

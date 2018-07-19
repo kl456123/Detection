@@ -92,6 +92,9 @@ if __name__ == '__main__':
     # parse config of scripts
     args = parse_args()
 
+    if args.resume:
+        model_config['pretrained'] = False
+
     np.random.seed(train_config['rng_seed'])
 
     torch.backends.cudnn.benchmark = True
@@ -115,7 +118,7 @@ if __name__ == '__main__':
     if args.cuda:
         fasterRCNN.cuda()
 
-    data_loader_builder = KittiDataLoaderBuilder(data_config, train=True)
+    data_loader_builder = KittiDataLoaderBuilder(data_config, training=True)
     data_loader = data_loader_builder.build()
 
     # optimizer
@@ -125,8 +128,8 @@ if __name__ == '__main__':
 
     scheduler_config = train_config['scheduler_config']
     if args.resume:
-        checkpoint_name = 'faster_rcnn_{}_{}_{}.pth'.format(args.checkepoch,
-                                                            args.checkpoint)
+        checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
+                                                         args.checkpoint)
         params_dict = {
             'start_epoch': None,
             'model': fasterRCNN,
