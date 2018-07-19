@@ -26,6 +26,7 @@ from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoader
 from builder.dataloader_builders.kitti_bev_dataloader_builder import KITTIBEVDataLoaderBuilder
 from builder.optimizer_builder import OptimizerBuilder
 from builder.scheduler_builder import SchedulerBuilder
+from builder import model_builder
 from core import trainer
 from core.saver import Saver
 
@@ -116,8 +117,9 @@ if __name__ == '__main__':
 
     # model
     # fasterRCNN = vgg16(model_config=model_config)
-    fasterRCNN = resnet(model_config)
-    fasterRCNN.create_architecture()
+    # fasterRCNN = resnet(model_config)
+    # fasterRCNN.create_architecture()
+    fasterRCNN = model_builder.build(model_config)
 
     # saver
     saver = Saver(output_dir)
