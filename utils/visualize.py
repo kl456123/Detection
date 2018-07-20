@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import argparse
 import pickle
-from utils.generate_anchors import generate_anchors
+from generate_anchors import generate_anchors
 
 
 def expand_anchors(anchors, feat_size=(24, 79), feat_stride=16):
@@ -99,19 +99,24 @@ def visualize_bbox(img, bboxes, gt_bboxes=[], size=None, save=False):
             cv2.imwrite(img_path, img)
 
 
-def read_kitti(label_file):
+def read_kitti(label_file, classes=['Car'], pred=True):
     with open(label_file, 'r') as f:
         lines = f.readlines()
 
     boxes = []
     for line in lines:
         obj = line.strip().split(' ')
+        obj_name = obj[0]
+        if obj_name in classes:
+            continue
         xmin = int(float(obj[4]))
         ymin = int(float(obj[5]))
         xmax = int(float(obj[6]))
         ymax = int(float(obj[7]))
-        # obj_name = obj[0]
-        conf = float(obj[-1])
+        if pred:
+            conf = float(obj[-1])
+        else:
+            conf = 1.0
         boxes.append([xmin, ymin, xmax, ymax, conf])
     return np.asarray(boxes)
 
@@ -183,12 +188,17 @@ if __name__ == '__main__':
     # test()
     #  img_name = '000000.png'
     args = parser_args()
-    img = read_img(args.img_path)
-    # scales = np.array([2, 3, 4])
-    # ratios = np.array([0.5, 1, 2])
-    # anchors = generate_anchors(base_size=16, scales=scales, ratios=ratios)
+    if args.img_path is not None:
+        img = read_img(args.img_path)
+    elif args.pkl_path is not None:
+        img = read_pkl(args.pkl_path)
+    scales = np.array([2, 3, 4])
+    ratios = np.array([0.5, 1, 2])
+    anchors = generate_anchors(base_size=16, scales=scales, ratios=ratios)
     # anchors = expand_anchors(anchors)
-    # print(anchors)
+    print(anchors)
+    import ipdb
+    ipdb.set_trace()
     # anchors = shift_bbox(anchors,translation=(200,200))
     # analysis_boxes(anchors)
     # anchors = [[100,100,300,300]]

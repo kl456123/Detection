@@ -7,15 +7,32 @@
 # 'aspect_ratio': ((2.39, ), (2.39, )),
 # }
 
+# some shared configurations
+num_classes = 2
+classes = ['bg', 'Car']
+class_agnostic = False
+bbox_normalize_targets_precomputed = True
+bbox_normalize_stds = (0.1, 0.1, 0.2, 0.2)
+bbox_normalize_means = (0.0, 0.0, 0.0, 0.0)
+
+train_batch_size = 1
+eval_batch_size = 1
+
+# rgb format
+normal_mean = [0.485, 0.456, 0.406]
+normal_van = [0.229, 0.224, 0.225]
+
+checkpoint_dir = ''
+
 model_config = {
-    'net': 'resnet50',
-    'num_classes': 2,
+    # 'net': 'resnet50',
+    'num_classes': num_classes,
     'output_stride': [4., 8.],
     'input_shape': (800, 700),
-    'class_agnostic': True,
-    'pretrained': False,
+    'class_agnostic': class_agnostic,
+    # 'pretrained': False,
     'img_channels': 6,
-    'classes': ['bg', 'Car'],
+    'classes': classes,
     'rpn_config': {
         'din': 1024,
         'anchor_ratios': [0.5, 1, 2],
@@ -38,13 +55,14 @@ model_config = {
     'crop_resize_with_max_pool': False,
     'truncated': False,
     'proposal_target_layer_config': {
-        'nclasses': 2,
-        'bbox_normalize_means': (0.0, 0.0, 0.0, 0.0),
-        'bbox_normalize_stds': (0.1, 0.1, 0.2, 0.2),
+        'nclasses': num_classes,
+        'bbox_normalize_means': bbox_normalize_means,
+        'bbox_normalize_stds': bbox_normalize_stds,
         'bbox_inside_weights': [1.0, 1.0, 1.0, 1.0],
         'batch_size': 512,
         'fg_fraction': 0.25,
-        'bbox_normalize_targets_precomputed': True,
+        'bbox_normalize_targets_precomputed':
+        bbox_normalize_targets_precomputed,
         'fg_thresh': 0.5,
         'bg_thresh': 0.5,
         'bg_thresh_lo': 0.0,
@@ -56,9 +74,6 @@ data_config = {
     'dataset_config': {
         'root_path': '/data/object/training',
         'dataset_file': 'train.txt',
-        # cache bev map to pkl file
-        'cache_bev': False,
-        'cache_dir': '/data/object/training/cache_bev',
         'bev_config': {
             'height_lo': -0.2,
             'height_hi': 2.3,
@@ -71,17 +86,10 @@ data_config = {
         },
         'camera_baseline': 0.54
     },
-    'transform_config': {
-        'normal_mean': [0.485, 0.456, 0.406],
-        'normal_van': [0.229, 0.224, 0.225],
-        'resize_range': [0.2, 0.4],
-        'random_brightness': 10,
-        'crop_size': (284, 1300),
-        'random_blur': 0,
-    },
+    'transform_config': {},
     'dataloader_config': {
         'shuffle': True,
-        'batch_size': 1,
+        'batch_size': train_batch_size,
         'num_workers': 1
     }
 }
@@ -90,26 +98,31 @@ eval_data_config = {
     'name': 'kitti',
     'dataset_config': {
         'root_path': '/data/object/training',
-        'dataset_file': 'val.txt'
+        'dataset_file': 'val.txt',
+        'cache_bev': True,
+        'bev_config': {
+            'height_lo': -0.2,
+            'height_hi': 2.3,
+            'num_slices': 5,
+            'voxel_size': 0.1,
+            'area_extents':
+            [[-40, 40], [-5, 3],
+             [0, 70]],  # [[xmin, xmax], [ymin, ymax], [zmin, zmax]]
+            'density_threshold': 1,
+        },
+        'camera_baseline': 0.54
     },
-    'transform_config': {
-        'normal_mean': [0.485, 0.456, 0.406],
-        'normal_van': [0.229, 0.224, 0.225],
-        # 'resize_range': [0.2, 0.4],
-        # 'random_brightness': 10,
-        # 'crop_size': (284, 1300),
-        # 'random_blur': 0,
-    },
+    'transform_config': {},
     'dataloader_config': {
-        'shuffle': True,
-        'batch_size': 1,
+        'shuffle': False,
+        'batch_size': eval_batch_size,
         'num_workers': 1
     },
 }
 
 train_config = {
     'rng_seed': 3,
-    'save_dir': '/data/object/liangxiong/bev',
+    'save_dir': checkpoint_dir,
     'device_ids': [0],
     'disp_interval': 100,
     'max_epochs': 100,
@@ -131,21 +144,19 @@ train_config = {
 }
 
 eval_config = {
-    # used for testing one image
-    'demo_file': '',
-    'checkpoint': 3257,
-    'checkepoch': 100,
     'rng_seed': 3,
-    'load_dir': '/data/liangxiong/models',
+    'cache_img_dir': './results/bev',
+    'cache_gt_dir': './results/label',
+    'load_dir': checkpoint_dir,
     'max_per_image': 100,
     'bbox_reg': True,
-    'bbox_normalize_targets_precomputed': False,
-    'bbox_normalize_means': [],
-    'bbox_normalize_stds': [],
-    'batch_size': 1,
+    'bbox_normalize_targets_precomputed': bbox_normalize_targets_precomputed,
+    'bbox_normalize_means': bbox_normalize_means,
+    'bbox_normalize_stds': bbox_normalize_stds,
+    'batch_size': eval_batch_size,
     'class_agnostic': True,
     'thresh': 0.5,
     'nms': 0.3,
-    'classes': ['bg', 'Car'],
+    'classes': classes,
     'eval_out': './results/data',
 }

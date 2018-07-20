@@ -22,7 +22,7 @@ class KITTIBEVDataset(DetDataset):
 
         # cache bev map
         self.cache_bev = self.config['cache_bev']
-        self.cache_dir = self.config['cache_dir']
+        # self.cache_dir = self.config['cache_dir']
 
         if self.config['dataset_file'] is None:
             print('Demo mode enabled!')
@@ -45,12 +45,11 @@ class KITTIBEVDataset(DetDataset):
     def get_transform_sample(self, index):
         sample_name = int(self.imgs[index])
         bev_map = self.get_bev(sample_name)
-        if self.cache_bev:
-            pass
         transform_sample = {
             'img': bev_map,
             'im_scale': 1.0,
-            'img_name': sample_name,
+            'img_name':
+            os.path.join(self.depth_dir, self.imgs[index] + '.png'),
         }
         if self.training:
             bbox, ry, labels = self.get_label(sample_name)
@@ -69,6 +68,8 @@ class KITTIBEVDataset(DetDataset):
                 'ry': ry,
                 'label': labels,
             })
+        if self.cache_bev:
+            transform_sample.update({'img_orig': bev_map.copy()})
 
         return transform_sample
 
@@ -105,6 +106,8 @@ class KITTIBEVDataset(DetDataset):
         training_sample['ry'] = ry
         training_sample['img_name'] = transform_sample['img_name']
         training_sample['img'] = transform_sample['img']
+        if self.cache_bev:
+            training_sample['img_orig'] = transform_sample['img_orig']
 
         return training_sample
 

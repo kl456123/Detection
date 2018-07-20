@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # --------------------------------------------------------
 # Tensorflow Faster R-CNN
 # Licensed under The MIT License [see LICENSE for details]
@@ -20,7 +22,7 @@ from configs import kitti_config
 from configs import kitti_bev_config
 from core.saver import Saver
 from core import tester
-from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
+from builder.dataloader_builders.kitti_bev_dataloader_builder import KITTIBEVDataLoaderBuilder
 from builder import model_builder
 
 
@@ -81,8 +83,6 @@ def parse_args():
         help='path to image',
         default='',
         type=str)
-    parser.add_argument(
-        '--bev', dest='bev', help='use bev dataset', default=True, type=bool)
     args = parser.parse_args()
     return args
 
@@ -91,10 +91,7 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    if args.bev:
-        config = kitti_bev_config
-    else:
-        config = kitti_config
+    config = kitti_bev_config
 
     model_config = config.model_config
     data_config = config.eval_data_config
@@ -133,13 +130,17 @@ if __name__ == '__main__':
     else:
         print('dir {} exist already!'.format(eval_out))
 
+    if eval_config['cache_bev']:
+        bev_dir = eval_config['cache_dir']
+        if not os.path.exists(bev_dir):
+            os.makedirs(bev_dir)
+        else:
+            print('dir {} exist already!'.format(bev_dir))
+
     checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
                                                      args.checkpoint)
 
     # model
-    # fasterRCNN = resnet(model_config)
-    # fasterRCNN.eval()
-    # fasterRCNN.create_architecture()
     fasterRCNN = model_builder.build(model_config, training=False)
 
     # saver
@@ -151,8 +152,8 @@ if __name__ == '__main__':
 
     start = time.time()
 
-    vis = args.vis
-    data_loader_builder = KittiDataLoaderBuilder(data_config, training=False)
+    data_loader_builder = KITTIBEVDataLoaderBuilder(
+        data_config, training=False)
     data_loader = data_loader_builder.build()
 
     tester.test(eval_config, data_loader, fasterRCNN)

@@ -5,6 +5,7 @@ from torch.autograd import Variable
 from model.rpn.bbox_transform import bbox_transform_inv
 from model.rpn.bbox_transform import clip_boxes
 from model.nms.nms_wrapper import nms
+from utils.visualize import save_pkl
 import numpy as np
 import torch
 import os
@@ -31,6 +32,9 @@ def test(eval_config, data_loader, model):
         im_data = data['img']
         im_info = data['im_info']
         img_file = data['img_name']
+        # if eval_config['cache_bev']:
+        # img_orig = data['img_orig']
+        # save_bev_map(img_orig[0], img_file[0], eval_config['cache_dir'])
         # gt_boxes = data['bbox']
         # num_boxes = data['num']
 
@@ -98,7 +102,7 @@ def im_detect(model, im_data, im_name, im_info, eval_config):
             if eval_config['class_agnostic']:
                 box_deltas = box_deltas.view(
                     -1, 4) * torch.FloatTensor(eval_config[
-                        'bbox_normaalize_stds']).cuda() + torch.FloatTensor(
+                        'bbox_normalize_stds']).cuda() + torch.FloatTensor(
                             eval_config['bbox_normalize_means']).cuda()
                 box_deltas = box_deltas.view(eval_config['batch_size'], -1, 4)
             else:
@@ -138,3 +142,10 @@ def save_dets_kitti(dets, label_info, output_dir):
             res_str.append(
                 kitti_template.format(class_name, xmin, ymin, xmax, ymax, cf))
         f.write('\n'.join(res_str))
+
+
+def save_bev_map(bev_map, label_info, cache_dir):
+    label_idx = os.path.splitext(label_info)[0][-6:]
+    label_file = label_idx + '.pkl'
+    pkl_path = os.path.join(cache_dir, label_file)
+    save_pkl(bev_map.numpy(), pkl_path)

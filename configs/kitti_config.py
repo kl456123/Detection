@@ -1,14 +1,27 @@
 # -*- coding: utf-8 -*-
 
+# some shared configurations
+num_classes = 2
+classes = ['bg', 'Car']
+class_agnostic = False
+bbox_normalize_targets_precomputed = True
+bbox_normalize_stds = (0.1, 0.1, 0.2, 0.2)
+bbox_normalize_means = (0.0, 0.0, 0.0, 0.0)
+# rgb format
+normal_mean = [0.485, 0.456, 0.406]
+normal_van = [0.229, 0.224, 0.225]
+
+checkpoint_dir = ''
+
 model_config = {
-    'net': 'resnet50',
-    'num_classes': 2,
+    # 'net': 'resnet50',
+    'num_classes': num_classes,
     'output_stride': [8., 16., 32., 64., 128., 192., 384.],
     'input_shape': (384, 1300),
-    'class_agnostic': True,
-    'pretrained': True,
+    'class_agnostic': class_agnostic,
+    # 'pretrained': True,
     'img_channels': 3,
-    'classes': ['bg', 'Car'],
+    'classes': classes,
     'rpn_config': {
         'din': 1024,
         'anchor_ratios': [0.5, 1, 2],
@@ -31,9 +44,9 @@ model_config = {
     'crop_resize_with_max_pool': False,
     'truncated': False,
     'proposal_target_layer_config': {
-        'nclasses': 2,
-        'bbox_normalize_means': (0.0, 0.0, 0.0, 0.0),
-        'bbox_normalize_stds': (0.1, 0.1, 0.2, 0.2),
+        'nclasses': num_classes,
+        'bbox_normalize_means': bbox_normalize_means,
+        'bbox_normalize_stds': bbox_normalize_stds,
         'bbox_inside_weights': [1.0, 1.0, 1.0, 1.0],
         'batch_size': 512,
         'fg_fraction': 0.25,
@@ -51,8 +64,8 @@ data_config = {
         'dataset_file': 'train.txt'
     },
     'transform_config': {
-        'normal_mean': [0.485, 0.456, 0.406],
-        'normal_van': [0.229, 0.224, 0.225],
+        'normal_mean': normal_mean,
+        'normal_van': normal_van,
         'resize_range': [0.2, 0.4],
         'random_brightness': 10,
         'crop_size': (284, 1300),
@@ -72,15 +85,16 @@ eval_data_config = {
         'dataset_file': 'val.txt'
     },
     'transform_config': {
-        'normal_mean': [0.485, 0.456, 0.406],
-        'normal_van': [0.229, 0.224, 0.225],
+        'normal_mean': normal_mean,
+        'normal_van': normal_van,
         # 'resize_range': [0.2, 0.4],
         # 'random_brightness': 10,
         # 'crop_size': (284, 1300),
         # 'random_blur': 0,
     },
     'dataloader_config': {
-        'shuffle': True,
+        # no need to shuffle for test data
+        'shuffle': False,
         'batch_size': 1,
         'num_workers': 1
     },
@@ -88,7 +102,7 @@ eval_data_config = {
 
 train_config = {
     'rng_seed': 3,
-    'save_dir': 'weights',
+    'save_dir': checkpoint_dir,
     'device_ids': [0],
     'disp_interval': 100,
     'max_epochs': 100,
@@ -110,21 +124,19 @@ train_config = {
 }
 
 eval_config = {
-    # used for testing one image
-    'demo_file': '',
-    'checkpoint': 3257,
-    'checkepoch': 100,
     'rng_seed': 3,
-    'load_dir': '/data/liangxiong/models',
+    'load_dir': checkpoint_dir,
     'max_per_image': 100,
     'bbox_reg': True,
-    'bbox_normalize_targets_precomputed': False,
-    'bbox_normalize_means': [],
-    'bbox_normalize_stds': [],
+    'bbox_normalize_targets_precomputed': bbox_normalize_targets_precomputed,
+    'bbox_normalize_stds': bbox_normalize_stds,
+    'bbox_normalize_means': bbox_normalize_means,
     'batch_size': 1,
-    'class_agnostic': True,
+    'class_agnostic': class_agnostic,
+    # less value,more dets,
     'thresh': 0.5,
     'nms': 0.3,
-    'classes': ['bg', 'Car'],
+    'classes': classes,
+    # kitti format
     'eval_out': './results/data',
 }

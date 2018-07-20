@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # --------------------------------------------------------
 # Pytorch multi-GPU Faster R-CNN
 # Licensed under The MIT License [see LICENSE for details]
@@ -20,8 +22,8 @@ import torch.nn as nn
 
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
-from configs import kitti_config
-from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
+from configs import kitti_bev_config
+from builder.dataloader_builders.kitti_bev_dataloader_builder import KITTIBEVDataLoaderBuilder
 from builder.optimizer_builder import OptimizerBuilder
 from builder.scheduler_builder import SchedulerBuilder
 from builder import model_builder
@@ -88,7 +90,7 @@ if __name__ == '__main__':
     # parse config of scripts
     args = parse_args()
 
-    config = kitti_config
+    config = kitti_bev_config
     data_config = config.data_config
     model_config = config.model_config
     train_config = config.train_config
@@ -120,7 +122,7 @@ if __name__ == '__main__':
     if args.cuda:
         fasterRCNN.cuda()
 
-    data_loader_builder = KittiDataLoaderBuilder(data_config, training=True)
+    data_loader_builder = KITTIBEVDataLoaderBuilder(data_config, training=True)
     data_loader = data_loader_builder.build()
 
     # optimizer
