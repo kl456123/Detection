@@ -55,6 +55,9 @@ def main():
     check_dir(eval_config['cache_gt_dir'])
     check_dir(eval_config['cache_img_dir'])
 
+    print('label will be save to {}'.format(eval_config['cache_gt_dir']))
+    print('bev map will be save to {}'.format(eval_config['cache_img_dir']))
+
     dataloader_builder = KITTIBEVDataLoaderBuilder(data_config, training=False)
     data_loader = dataloader_builder.build()
 

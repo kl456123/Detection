@@ -63,6 +63,8 @@ def parse_args():
         default=0,
         type=int)
     parser.add_argument(
+        '--net', dest='net', help='which base mode to use', type=str)
+    parser.add_argument(
         '--checkepoch',
         dest='checkepoch',
         help='checkepoch to load network',
@@ -99,6 +101,12 @@ if __name__ == '__main__':
 
     model_config['pretrained'] = False
 
+    assert args.net is not None, 'please select a base model'
+    model_config['net'] = args.net
+
+    assert args.load_dir is not None, 'please choose a directory to load checkpoint'
+    eval_config['load_dir'] = args.load_dir
+
     if args.img_path:
         dataset_config = data_config['dataset_config']
         # disable dataset file,just use image directly
@@ -130,12 +138,12 @@ if __name__ == '__main__':
     else:
         print('dir {} exist already!'.format(eval_out))
 
-    if eval_config['cache_bev']:
-        bev_dir = eval_config['cache_dir']
-        if not os.path.exists(bev_dir):
-            os.makedirs(bev_dir)
-        else:
-            print('dir {} exist already!'.format(bev_dir))
+    # if eval_config['cache_bev']:
+    # bev_dir = eval_config['cache_dir']
+    # if not os.path.exists(bev_dir):
+    # os.makedirs(bev_dir)
+    # else:
+    # print('dir {} exist already!'.format(bev_dir))
 
     checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
                                                      args.checkpoint)

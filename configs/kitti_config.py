@@ -3,7 +3,7 @@
 # some shared configurations
 num_classes = 2
 classes = ['bg', 'Car']
-class_agnostic = False
+class_agnostic = True
 bbox_normalize_targets_precomputed = True
 bbox_normalize_stds = (0.1, 0.1, 0.2, 0.2)
 bbox_normalize_means = (0.0, 0.0, 0.0, 0.0)
@@ -11,7 +11,7 @@ bbox_normalize_means = (0.0, 0.0, 0.0, 0.0)
 normal_mean = [0.485, 0.456, 0.406]
 normal_van = [0.229, 0.224, 0.225]
 
-checkpoint_dir = ''
+checkpoint_dir = '/data/object/liangxiong/fv'
 
 model_config = {
     # 'net': 'resnet50',
@@ -19,7 +19,7 @@ model_config = {
     'output_stride': [8., 16., 32., 64., 128., 192., 384.],
     'input_shape': (384, 1300),
     'class_agnostic': class_agnostic,
-    # 'pretrained': True,
+    'pretrained': True,
     'img_channels': 3,
     'classes': classes,
     'rpn_config': {

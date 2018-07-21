@@ -55,6 +55,8 @@ def parse_args():
         help='whether use multiple GPUs',
         action='store_true')
     parser.add_argument(
+        '--net', dest='net', help='which base mode to use', type=str)
+    parser.add_argument(
         '--parallel_type',
         dest='parallel_type',
         help='which part of model to parallel, 0: all, 1: model before roi pooling',
@@ -91,16 +93,19 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    if args.bev:
-        config = kitti_bev_config
-    else:
-        config = kitti_config
+    config = kitti_config
 
     model_config = config.model_config
     data_config = config.eval_data_config
     eval_config = config.eval_config
 
     model_config['pretrained'] = False
+
+    assert args.net is not None, 'please select a base model'
+    model_config['net'] = args.net
+
+    assert args.load_dir is not None, 'please choose a directory to load checkpoint'
+    eval_config['load_dir'] = args.load_dir
 
     if args.img_path:
         dataset_config = data_config['dataset_config']

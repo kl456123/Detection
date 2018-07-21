@@ -107,7 +107,7 @@ def read_kitti(label_file, classes=['Car'], pred=True):
     for line in lines:
         obj = line.strip().split(' ')
         obj_name = obj[0]
-        if obj_name in classes:
+        if obj_name not in classes:
             continue
         xmin = int(float(obj[4]))
         ymin = int(float(obj[5]))
@@ -171,6 +171,8 @@ def parser_args():
     parser.add_argument(
         '--pkl_path', dest='pkl_path', help='path to pkl', type=str)
     parser.add_argument(
+        '--label_file', dest='label_file', help='path to label', type=str)
+    parser.add_argument(
         '--kitti_file',
         dest='kitti_file',
         help='path to bbox file in kitti format',
@@ -192,18 +194,22 @@ if __name__ == '__main__':
         img = read_img(args.img_path)
     elif args.pkl_path is not None:
         img = read_pkl(args.pkl_path)
-    scales = np.array([2, 3, 4])
-    ratios = np.array([0.5, 1, 2])
-    anchors = generate_anchors(base_size=16, scales=scales, ratios=ratios)
+    # scales = np.array([2, 3, 4])
+    # ratios = np.array([0.5, 1, 2])
+    # anchors = generate_anchors(base_size=16, scales=scales, ratios=ratios)
     # anchors = expand_anchors(anchors)
-    print(anchors)
-    import ipdb
-    ipdb.set_trace()
+    # print(anchors)
+    # import ipdb
+    # ipdb.set_trace()
     # anchors = shift_bbox(anchors,translation=(200,200))
     # analysis_boxes(anchors)
     # anchors = [[100,100,300,300]]
     # visualize_bbox(img, anchors)
 
     # read from kitti result file
+    if args.label_file is not None:
+        gt_boxes = read_kitti(args.label_file)
+    else:
+        gt_boxes = []
     boxes = read_kitti(args.kitti_file)
-    visualize_bbox(img, boxes, save=True)
+    visualize_bbox(img, boxes, gt_boxes, save=True)

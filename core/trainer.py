@@ -33,10 +33,10 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver):
             im_info = _data['im_info']
             gt_boxes = _data['bbox']
             num_boxes = _data['num']
-            import ipdb
-            ipdb.set_trace()
-            visualize_bbox(im_data.numpy()[0].transpose(1, 2, 0),
-                           gt_boxes.numpy()[0, :, :4])
+            # import ipdb
+            # ipdb.set_trace()
+            # visualize_bbox(im_data.numpy()[0].transpose(1, 2, 0),
+            # gt_boxes.numpy()[0, :, :4])
 
             im_data, im_info, gt_boxes, num_boxes = __change_into_variable(
                 [im_data, im_info, gt_boxes, num_boxes])

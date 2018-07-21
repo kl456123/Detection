@@ -62,6 +62,8 @@ def parse_args():
         default=False,
         type=bool)
     parser.add_argument(
+        '--net', dest='net', help='which base mode to use', type=str)
+    parser.add_argument(
         '--checkepoch',
         dest='checkepoch',
         help='checkepoch to load model',
@@ -95,6 +97,9 @@ if __name__ == '__main__':
 
     if args.resume:
         model_config['pretrained'] = False
+
+    assert args.net is not None, 'please select a base model'
+    model_config['net'] = args.net
 
     np.random.seed(train_config['rng_seed'])
 

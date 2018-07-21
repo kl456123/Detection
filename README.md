@@ -36,3 +36,11 @@ Kitti
 ```bash
 python trainval_net.py  --bs 4 --cuda
 ```
+
+```
+trainval_bev and test_bev for bev
+trainval and test for fv
+
+python trainval_net.py --cuda --net resnet50
+python test_net.py --cuda --checkpoint 3257 --checkepoch 100 --load_dir /data/liangxiong/models/ --net resnet50
+```

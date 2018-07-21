@@ -10,7 +10,7 @@
 # some shared configurations
 num_classes = 2
 classes = ['bg', 'Car']
-class_agnostic = False
+class_agnostic = True
 bbox_normalize_targets_precomputed = True
 bbox_normalize_stds = (0.1, 0.1, 0.2, 0.2)
 bbox_normalize_means = (0.0, 0.0, 0.0, 0.0)
