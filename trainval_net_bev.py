@@ -46,8 +46,9 @@ def parse_args():
         '--save_dir',
         dest='save_dir',
         help='directory to save models',
-        default="./weights",
-        nargs=argparse.REMAINDER)
+        type=str)
+    parser.add_argument(
+        '--net', dest='net', help='which arch to use', type=str)
     parser.add_argument(
         '--cuda', dest='cuda', help='whether use CUDA', action='store_true')
     parser.add_argument(
@@ -101,6 +102,12 @@ if __name__ == '__main__':
     np.random.seed(train_config['rng_seed'])
 
     torch.backends.cudnn.benchmark = True
+
+    if args.save_dir is not None:
+        train_config['save_dir'] = args.save_dir
+
+    assert args.net is not None, 'please select a base model'
+    model_config['net'] = args.net
 
     output_dir = train_config['save_dir'] + "/" + model_config[
         'net'] + "/" + data_config['name']

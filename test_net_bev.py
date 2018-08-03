@@ -85,6 +85,11 @@ def parse_args():
         help='path to image',
         default='',
         type=str)
+    parser.add_argument(
+        '--rois_vis',
+        dest='rois_vis',
+        help='if to visualize rois',
+        action='store_true')
     args = parser.parse_args()
     return args
 
@@ -106,6 +111,8 @@ if __name__ == '__main__':
 
     assert args.load_dir is not None, 'please choose a directory to load checkpoint'
     eval_config['load_dir'] = args.load_dir
+
+    eval_config['rois_vis'] = args.rois_vis
 
     if args.img_path:
         dataset_config = data_config['dataset_config']

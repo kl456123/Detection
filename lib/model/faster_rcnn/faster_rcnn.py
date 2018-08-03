@@ -8,6 +8,7 @@ from model.roi_crop.modules.roi_crop import _RoICrop
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
 from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta
+from utils.focal_loss import FocalLoss
 
 
 class _fasterRCNN(nn.Module):
@@ -41,6 +42,7 @@ class _fasterRCNN(nn.Module):
         self.grid_size = self.pooling_size * 2 if self.crop_resize_with_max_pool else self.pooling_size
         self.RCNN_roi_crop = _RoICrop()
         self.l2loss = nn.MSELoss(reduce=False)
+        self.use_focal_loss = model_config['use_focal_loss']
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes, gt_ry=None):
         batch_size = im_data.size(0)
@@ -54,8 +56,19 @@ class _fasterRCNN(nn.Module):
         base_feat = self.RCNN_base(im_data)
 
         # feed base feature map tp RPN to obtain rois
-        rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info,
-                                                          gt_boxes, num_boxes)
+        # all_rois = []
+        # all_rpn_loss_cls = []
+        # all_rpn_loss_bbox = []
+        # for base_feat in base_feats:
+        rois, rpn_loss_cls, rpn_loss_bbox, scores = self.RCNN_rpn(
+            base_feat, im_info, gt_boxes, num_boxes)
+        # all_rois.append(rois)
+        # all_rpn_loss_cls.append(rpn_loss_cls)
+        # all_rpn_loss_bbox.append(rpn_loss_bbox)
+
+        # all_rois = torch.cat(all_rois, 0)
+        # all_rpn_loss_cls = torch.cat(all_rpn_loss_cls, 0)
+        # all_rpn_loss_bbox = torch.cat(all_rpn_loss_bbox, 0)
 
         # if it is training phrase, then use ground trubut bboxes for refining
         if self.training:
@@ -121,7 +134,10 @@ class _fasterRCNN(nn.Module):
 
         if self.training:
             # classification loss
-            RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
+            if self.use_focal_loss:
+                RCNN_loss_cls = FocalLoss(2).forward(cls_score, rois_label)
+            else:
+                RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
 
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target,
@@ -143,6 +159,7 @@ class _fasterRCNN(nn.Module):
             'rois_label': rois_label,
             'cls_prob': cls_prob,
             'bbox_pred': bbox_pred,
+            'rois_scores': scores,
 
             # loss
             'rpn_loss_cls': rpn_loss_cls,

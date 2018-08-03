@@ -23,6 +23,7 @@ class KittiDataset(DetDataset):
         else:
             self.labels = self.make_label_list(dataset_config['dataset_file'])
             self.imgs = self.make_image_list()
+        self.cache_bev = dataset_config['cache_bev']
         self.transforms = transforms
 
     def get_training_sample(self, transform_sample):
@@ -56,6 +57,9 @@ class KittiDataset(DetDataset):
         training_sample['im_scale'] = im_scale
         training_sample['bbox'] = bbox
         training_sample['num'] = num
+        if self.cache_bev:
+            training_sample['img_orig'] = transform_sample['img_orig']
+
         return training_sample
 
     def get_transform_sample(self, index):
@@ -81,6 +85,9 @@ class KittiDataset(DetDataset):
                 'im_scale': 1.0,
                 'img_name': img_file,
             }
+        if self.cache_bev:
+            transform_sample.update({'img_orig': numpy.asarray(img).copy()})
+
         return transform_sample
 
     def __getitem__(self, index):

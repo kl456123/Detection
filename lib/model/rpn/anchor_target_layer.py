@@ -24,8 +24,8 @@ except NameError:
 
 class _AnchorTargetLayer(nn.Module):
     """
-        Assign anchors to ground-truth targets. Produces anchor classification
-        labels and bounding-box regression targets.
+    Assign anchors to ground-truth targets. Produces anchor classification
+    labels and bounding-box regression targets.
     """
 
     def __init__(self, layer_config):
@@ -55,6 +55,8 @@ class _AnchorTargetLayer(nn.Module):
         # allow boxes to sit over the edge by a small amount
         self._allowed_border = 0  # default is 0
 
+        self.use_focal_loss = layer_config['use_focal_loss']
+
     def forward(self, input):
         # Algorithm:
         #
@@ -63,7 +65,8 @@ class _AnchorTargetLayer(nn.Module):
         #   apply predicted bbox deltas at cell i to each of the 9 anchors
         # filter out-of-image anchors
 
-        rpn_cls_score = input[0]
+        rpn_cls_score = input[0][:, self._num_anchors:, :, :]
+        # rpn_cls_score = input[0]
         gt_boxes = input[1]
         im_info = input[2]
 
@@ -88,6 +91,9 @@ class _AnchorTargetLayer(nn.Module):
             gt_boxes)  # move to specific gpu.
         all_anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)
         all_anchors = all_anchors.view(K * A, 4)
+        batch_size = rpn_cls_score.shape[0]
+        rpn_cls_score = rpn_cls_score.permute(
+            0, 2, 3, 1).contiguous().view(batch_size, K * A, 1)
 
         total_anchors = int(K * A)
 
@@ -101,6 +107,9 @@ class _AnchorTargetLayer(nn.Module):
 
         # keep only inside anchors
         anchors = all_anchors[inds_inside, :]
+        inside_rpn_cls_score = torch.index_select(rpn_cls_score, 1,
+                                                  inds_inside)[0]
+        # inside_rpn_cls_score = rpn_cls_score[:, inds_inside, 0]
 
         # label: 1 is positive, 0 is negative, -1 is dont care
         labels = gt_boxes.new(batch_size, inds_inside.size(0)).fill_(-1)
@@ -112,10 +121,13 @@ class _AnchorTargetLayer(nn.Module):
         overlaps = bbox_overlaps_batch(anchors, gt_boxes)
 
         max_overlaps, argmax_overlaps = torch.max(overlaps, 2)
+        focal_bbox_inside_weights = calculate_bbox_inside_weights(max_overlaps)
         gt_max_overlaps, _ = torch.max(overlaps, 1)
 
         if not self.rpn_clobber_positives:
             labels[max_overlaps < self.rpn_negative_overlap] = 0
+            # focal_bbox_inside_weights[max_overlaps < self.
+        # rpn_negative_overlap] = 0
 
         gt_max_overlaps[gt_max_overlaps == 0] = 1e-5
         keep = torch.sum(
@@ -129,41 +141,76 @@ class _AnchorTargetLayer(nn.Module):
         # fg label: above threshold IOU
         labels[max_overlaps >= self.rpn_positive_overlap] = 1
 
+        # bbox_labels = labels.clone()
+
         if self.rpn_clobber_positives:
             labels[max_overlaps < self.rpn_negative_overlap] = 0
+            # focal_bbox_inside_weights[max_overlaps < self.
+        # rpn_negative_overlap] = 0
 
         num_fg = int(self.rpn_fg_fraction * self.rpn_batch_size)
 
         sum_fg = torch.sum((labels == 1).int(), 1)
         sum_bg = torch.sum((labels == 0).int(), 1)
+
+        # overwrite focal_bbox_inside_weights
+        focal_bbox_inside_weights[labels == -1] = 0
+        focal_bbox_inside_weights[labels == 0] = 0
         # print('sum_fg is', sum_fg)
 
-        for i in range(batch_size):
-            # subsample positive labels if we have too many
-            if sum_fg[i] > num_fg:
-                fg_inds = torch.nonzero(labels[i] == 1).view(-1)
-                # torch.randperm seems has a bug on multi-gpu setting that cause the segfault.
-                # See https://github.com/pytorch/pytorch/issues/1868 for more details.
-                # use numpy instead.
-                #rand_num = torch.randperm(fg_inds.size(0)).type_as(gt_boxes).long()
-                rand_num = torch.from_numpy(
-                    np.random.permutation(fg_inds.size(0))).type_as(
-                        gt_boxes).long()
-                disable_inds = fg_inds[rand_num[:fg_inds.size(0) - num_fg]]
-                labels[i][disable_inds] = -1
+        # sort cls_score
+        # _, sorted_inds = torch.sort(rpn_cls_score, 1, True)
+        # import ipdb
+        # ipdb.set_trace()
+        # trick here
+        i = 0
+        if not self.use_focal_loss:
+            # subsample
+            for i in range(batch_size):
+                # subsample positive labels if we have too many
+                if sum_fg[i] > num_fg:
+                    fg_inds = torch.nonzero(labels[i] == 1).view(-1)
+                    # fg_overlaps = max_overlaps[i][fg_inds]
+                    fg_cls_score = inside_rpn_cls_score[fg_inds]
+                    # descending
+                    _, fg_sorted_inds = torch.sort(fg_cls_score, 0, True)
+                    # _, iou_sorted_inds = torch.sort(
+                    # fg_overlaps, descending=True)
+                    fg_sorted_inds = fg_sorted_inds.type_as(
+                        gt_boxes).long().view(-1)
+                    # torch.randperm seems has a bug on multi-gpu setting that cause the segfault.
+                    # See https://github.com/pytorch/pytorch/issues/1868 for more details.
+                    # use numpy instead.
+                    #rand_num = torch.randperm(fg_inds.size(0)).type_as(gt_boxes).long()
+                    # rand_num = torch.from_numpy(
+                    # np.random.permutation(fg_inds.size(0))).type_as(
+                    # gt_boxes).long()
+                    disable_inds = fg_inds[fg_sorted_inds[:fg_inds.size(0) -
+                                                          num_fg]]
+                    # iou_disable_inds = fg_inds[iou_sorted_inds[:fg_inds.size(0)
+                    # - num_fg]]
+                    labels[i][disable_inds] = -1
+                    # bbox_labels[i][iou_disable_inds] = -1
 
-            num_bg = self.rpn_batch_size - sum_fg[i]
+                num_bg = self.rpn_batch_size - sum_fg[i]
 
-            # subsample negative labels if we have too many
-            if sum_bg[i] > num_bg:
-                bg_inds = torch.nonzero(labels[i] == 0).view(-1)
-                #rand_num = torch.randperm(bg_inds.size(0)).type_as(gt_boxes).long()
+                # subsample negative labels if we have too many
+                if sum_bg[i] > num_bg:
+                    bg_inds = torch.nonzero(labels[i] == 0).view(-1)
+                    bg_cls_score = inside_rpn_cls_score[bg_inds]
 
-                rand_num = torch.from_numpy(
-                    np.random.permutation(bg_inds.size(0))).type_as(
-                        gt_boxes).long()
-                disable_inds = bg_inds[rand_num[:bg_inds.size(0) - num_bg]]
-                labels[i][disable_inds] = -1
+                    # aescending
+                    _, bg_sorted_inds = torch.sort(bg_cls_score, 0, False)
+                    #rand_num = torch.randperm(bg_inds.size(0)).type_as(gt_boxes).long()
+                    bg_sorted_inds = bg_sorted_inds.type_as(
+                        gt_boxes).long().view(-1)
+
+                    # rand_num = torch.from_numpy(
+                    # np.random.permutation(bg_inds.size(0))).type_as(
+                    # gt_boxes).long()
+                    disable_inds = bg_inds[bg_sorted_inds[:bg_inds.size(0) -
+                                                          num_bg]]
+                    labels[i][disable_inds] = -1
 
         offset = torch.arange(0, batch_size) * gt_boxes.size(1)
 
@@ -175,6 +222,9 @@ class _AnchorTargetLayer(nn.Module):
                                                                    -1, 5))
 
         # use a single value instead of 4 values for easy index.
+        # if self.use_focal_loss:
+        # bbox_inside_weights = focal_bbox_inside_weights
+        # else:
         bbox_inside_weights[labels == 1] = self.rpn_bbox_inside_weights[0]
 
         if self.rpn_positive_weight < 0:
@@ -221,14 +271,14 @@ class _AnchorTargetLayer(nn.Module):
             batch_size, anchors_count, 1).expand(batch_size, anchors_count, 4)
 
         bbox_inside_weights = bbox_inside_weights.contiguous().view(batch_size, height, width, 4*A)\
-                            .permute(0,3,1,2).contiguous()
+            .permute(0,3,1,2).contiguous()
 
         outputs.append(bbox_inside_weights)
 
         bbox_outside_weights = bbox_outside_weights.view(
             batch_size, anchors_count, 1).expand(batch_size, anchors_count, 4)
         bbox_outside_weights = bbox_outside_weights.contiguous().view(batch_size, height, width, 4*A)\
-                            .permute(0,3,1,2).contiguous()
+            .permute(0,3,1,2).contiguous()
         outputs.append(bbox_outside_weights)
 
         return outputs
@@ -260,3 +310,13 @@ def _compute_targets_batch(ex_rois, gt_rois):
     """Compute bounding-box regression targets for an image."""
 
     return bbox_transform_batch(ex_rois, gt_rois[:, :, :4])
+
+
+def calculate_bbox_inside_weights(max_overlaps):
+    """
+    max_overlaps: shape(N,inside_num)
+    bbox_inside_weights: shape(N,inside_num)
+    """
+    gamma = 2
+    bbox_inside_weights = torch.pow(1 - max_overlaps, gamma)
+    return bbox_inside_weights

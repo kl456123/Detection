@@ -13,11 +13,10 @@ import numpy as np
 import argparse
 import pprint
 import time
+import json
 
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
-from configs import kitti_config
-from configs import kitti_bev_config
 from core.saver import Saver
 from core import tester
 from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
@@ -84,7 +83,12 @@ def parse_args():
         default='',
         type=str)
     parser.add_argument(
-        '--bev', dest='bev', help='use bev dataset', default=True, type=bool)
+        '--rois_vis',
+        dest='rois_vis',
+        help='if to visualize rois',
+        action='store_true')
+    parser.add_argument(
+        '--config', dest='config', help='config file(.json)', type=str)
     args = parser.parse_args()
     return args
 
@@ -92,12 +96,13 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
+    assert args.config is not None, 'please select a config file(json)'
+    with open(args.config) as f:
+        config = json.load(f)
 
-    config = kitti_config
-
-    model_config = config.model_config
-    data_config = config.eval_data_config
-    eval_config = config.eval_config
+    model_config = config['model_config']
+    data_config = config['eval_data_config']
+    eval_config = config['eval_config']
 
     model_config['pretrained'] = False
 
@@ -106,6 +111,8 @@ if __name__ == '__main__':
 
     assert args.load_dir is not None, 'please choose a directory to load checkpoint'
     eval_config['load_dir'] = args.load_dir
+
+    eval_config['rois_vis'] = args.rois_vis
 
     if args.img_path:
         dataset_config = data_config['dataset_config']

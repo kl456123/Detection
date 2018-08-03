@@ -37,6 +37,9 @@ class _ProposalTargetLayer(nn.Module):
         self.fg_thresh = layer_config['fg_thresh']
         self.bg_thresh = layer_config['bg_thresh']
         self.bg_thresh_lo = layer_config['bg_thresh_lo']
+        # self.fg_bbox_thresh = layer_config['fg_bbox_thresh']
+
+        self.use_focal_loss = layer_config['use_focal_loss']
 
     def forward(self, all_rois, gt_boxes, num_boxes):
 
@@ -53,7 +56,12 @@ class _ProposalTargetLayer(nn.Module):
         all_rois = torch.cat([all_rois, gt_boxes_append], 1)
 
         num_images = 1
-        rois_per_image = int(self.batch_size / num_images)
+        if self.use_focal_loss:
+            # no need to subsample
+            rois_per_image = all_rois.size(1)
+        else:
+            rois_per_image = int(self.batch_size / num_images)
+
         fg_rois_per_image = int(np.round(self.fg_fraction * rois_per_image))
         fg_rois_per_image = 1 if fg_rois_per_image == 0 else fg_rois_per_image
 
@@ -130,6 +138,9 @@ class _ProposalTargetLayer(nn.Module):
         overlaps = bbox_overlaps_batch(all_rois, gt_boxes)
 
         max_overlaps, gt_assignment = torch.max(overlaps, 2)
+        focal_bbox_inside_weights = self.calculate_bbox_inside_weights(
+            max_overlaps)
+        # _,order = torch.sort(max_overlaps,descending=False)
 
         batch_size = overlaps.size(0)
 
@@ -142,6 +153,8 @@ class _ProposalTargetLayer(nn.Module):
         labels_batch = labels.new(batch_size, rois_per_image).zero_()
         rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
         gt_rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
+        # used for subsample bbox
+        # fake_label_batch = labels.new(batch_size, rois_per_image).zero_()
         # (idx,cos,sin)
         # gt_ry_batch = all_rois.new(batch_size, rois_per_image, 2).zero_()
         # Guard against the case when an image has fewer than max_fg_rois_per_image
@@ -149,58 +162,102 @@ class _ProposalTargetLayer(nn.Module):
         for i in range(batch_size):
 
             fg_inds = torch.nonzero(max_overlaps[i] >= self.fg_thresh).view(-1)
+
+            # ohem for fg
+            fg_overlaps = max_overlaps[i][fg_inds]
+            _, fg_order = torch.sort(fg_overlaps, descending=False)
+
             fg_num_rois = fg_inds.numel()
 
             # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
-            bg_inds = torch.nonzero((max_overlaps[i] < self.bg_thresh) & (
-                max_overlaps[i] >= self.bg_thresh_lo)).view(-1)
+            if self.use_focal_loss:
+                # ensure all are reserved
+                bg_inds = torch.nonzero(
+                    max_overlaps[i] < self.fg_thresh).view(-1)
+            else:
+                bg_inds = torch.nonzero((max_overlaps[i] < self.bg_thresh) & (
+                    max_overlaps[i] >= self.bg_thresh_lo)).view(-1)
+            focal_bbox_inside_weights[i][bg_inds] = 0
+
+            # ohem for bg
+            bg_overlaps = max_overlaps[i][bg_inds]
+            _, bg_order = torch.sort(bg_overlaps, descending=True)
+
             bg_num_rois = bg_inds.numel()
 
-            if fg_num_rois > 0 and bg_num_rois > 0:
-                # sampling fg
-                fg_rois_per_this_image = min(fg_rois_per_image, fg_num_rois)
+            if not self.use_focal_loss:
+                if fg_num_rois > 0 and bg_num_rois > 0:
+                    # sampling fg
+                    fg_rois_per_this_image = min(fg_rois_per_image,
+                                                 fg_num_rois)
 
-                # torch.randperm seems has a bug on multi-gpu setting that cause the segfault.
-                # See https://github.com/pytorch/pytorch/issues/1868 for more details.
-                # use numpy instead.
-                #rand_num = torch.randperm(fg_num_rois).long().cuda()
-                rand_num = torch.from_numpy(
+                    # torch.randperm seems has a bug on multi-gpu setting that cause the segfault.
+                    # See https://github.com/pytorch/pytorch/issues/1868 for more details.
+                    # use numpy instead.
+                    rand_num = torch.randperm(fg_num_rois).long().cuda()
+                    rand_num = torch.from_numpy(
                     np.random.permutation(fg_num_rois)).type_as(
+                    gt_boxes).long()
+                    fg_inds = fg_inds[rand_num[:fg_rois_per_this_image]]
+
+                    # sampling bg
+                    bg_rois_per_this_image = rois_per_image - fg_rois_per_this_image
+
+                    # Seems torch.rand has a bug, it will generate very large number and make an error.
+                    # We use numpy rand instead.
+                    rand_num = np.floor(
+                        np.random.rand(bg_rois_per_this_image) * bg_num_rois)
+                    rand_num = torch.from_numpy(rand_num).type_as(
                         gt_boxes).long()
-                fg_inds = fg_inds[rand_num[:fg_rois_per_this_image]]
+                    # if bg_rois_per_this_image <= bg_num_rois:
+                    # bg_inds = bg_inds[bg_order[:bg_rois_per_this_image]]
+                    # else:
+                    # random samples and samples of the smallest iou
+                    # rand_num = np.floor(
+                    # np.random.rand(bg_rois_per_this_image) *
+                    # (bg_rois_per_this_image - bg_num_rois))
+                    # rand_num = torch.from_numpy(rand_num).type_as(
+                    # gt_boxes).long()
+                    # bg_inds = torch.cat(bg_inds, bg_inds[rand_num])
+                    bg_inds = bg_inds[rand_num]
 
-                # sampling bg
-                bg_rois_per_this_image = rois_per_image - fg_rois_per_this_image
+                elif fg_num_rois > 0 and bg_num_rois == 0:
+                    # sampling fg
+                    # if rois_per_image <= fg_num_rois:
+                    # fg_inds = fg_inds[fg_order[:rois_per_image]]
+                    # else:
+                    rand_num = np.floor(
+                        np.random.rand(rois_per_image) * fg_num_rois)
+                    rand_num = torch.from_numpy(rand_num).type_as(
+                        gt_boxes).long()
+                    # fg_inds = torch.cat(fg_inds[rand_num], fg_inds)
+                    fg_inds = fg_inds[rand_num]
+                    fg_rois_per_this_image = rois_per_image
+                    bg_rois_per_this_image = 0
+                elif bg_num_rois > 0 and fg_num_rois == 0:
+                    # sampling bg
+                    #rand_num = torch.floor(torch.rand(rois_per_image) * bg_num_rois).long().cuda()
+                    # if rois_per_image <= bg_num_rois:
+                    # bg_inds = bg_inds[bg_order[:rois_per_image]]
+                    # else:
+                    rand_num = np.floor(
+                        np.random.rand(rois_per_image) * bg_num_rois)
+                    rand_num = torch.from_numpy(rand_num).type_as(
+                        gt_boxes).long()
 
-                # Seems torch.rand has a bug, it will generate very large number and make an error.
-                # We use numpy rand instead.
-                rand_num = np.floor(
-                    np.random.rand(bg_rois_per_this_image) * bg_num_rois)
-                rand_num = torch.from_numpy(rand_num).type_as(gt_boxes).long()
-                bg_inds = bg_inds[rand_num]
-
-            elif fg_num_rois > 0 and bg_num_rois == 0:
-                # sampling fg
-                rand_num = np.floor(
-                    np.random.rand(rois_per_image) * fg_num_rois)
-                rand_num = torch.from_numpy(rand_num).type_as(gt_boxes).long()
-                fg_inds = fg_inds[rand_num]
-                fg_rois_per_this_image = rois_per_image
-                bg_rois_per_this_image = 0
-            elif bg_num_rois > 0 and fg_num_rois == 0:
-                # sampling bg
-                #rand_num = torch.floor(torch.rand(rois_per_image) * bg_num_rois).long().cuda()
-                rand_num = np.floor(
-                    np.random.rand(rois_per_image) * bg_num_rois)
-                rand_num = torch.from_numpy(rand_num).type_as(gt_boxes).long()
-
-                bg_inds = bg_inds[rand_num]
-                bg_rois_per_this_image = rois_per_image
-                fg_rois_per_this_image = 0
+                    # bg_inds = torch.cat(bg_inds[rand_num], bg_inds)
+                    bg_inds = bg_inds[rand_num]
+                    bg_rois_per_this_image = rois_per_image
+                    fg_rois_per_this_image = 0
+                else:
+                    raise ValueError(
+                        "bg_num_rois = 0 and fg_num_rois = 0, this should not happen!"
+                    )
             else:
-                raise ValueError(
-                    "bg_num_rois = 0 and fg_num_rois = 0, this should not happen!"
-                )
+                fg_rois_per_this_image = fg_inds.numel()
+                bg_rois_per_this_image = bg_inds.numel()
+
+            # if focal loss used,no need to subsample
 
             # The indices that we're selecting (both fg and bg)
             keep_inds = torch.cat([fg_inds, bg_inds], 0)
@@ -221,7 +278,30 @@ class _ProposalTargetLayer(nn.Module):
         bbox_target_data = self._compute_targets_pytorch(
             rois_batch[:, :, 1:5], gt_rois_batch[:, :, :4])
 
+        # shape(N,rois_per_image,4)
         bbox_targets, bbox_inside_weights = \
             self._get_bbox_regression_labels_pytorch(bbox_target_data, labels_batch, num_classes)
+        if self.use_focal_loss:
+            bbox_inside_weights = focal_bbox_inside_weights
 
         return labels_batch, rois_batch, bbox_targets, bbox_inside_weights
+
+    def sample_rois(self, max_overlaps):
+        """
+        Returns bbox_inside_weights
+        """
+        pass
+
+    def calculate_bbox_inside_weights(self, max_overlaps):
+        """
+        max_overlaps: shape(N,inside_num_all_rois)
+        bbox_inside_weights: shape(N,num_all_rois)
+        """
+        gamma = 2
+        batch_size = max_overlaps.shape[0]
+        bbox_inside_weights = torch.pow(1 - max_overlaps, gamma)
+        # 4 degree
+        bbox_inside_weights = bbox_inside_weights.repeat(1, 4).view(
+            batch_size, 4, -1).transpose(1, 2).contiguous()
+
+        return bbox_inside_weights

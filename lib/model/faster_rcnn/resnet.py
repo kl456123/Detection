@@ -241,6 +241,7 @@ def resnet152(pretrained=False):
 
 class resnet(_fasterRCNN):
     def __init__(self, model_config):
+        # self.model_path = model_config['model_path']
         self.model_path = 'data/pretrained_model/resnet50-19c8e357.pth'
         self.dout_base_model = 1024
         self.pretrained = model_config['pretrained']

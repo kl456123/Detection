@@ -12,6 +12,8 @@ import os
 
 import numpy as np
 import argparse
+import shutil
+import json
 
 import torch
 import torch.nn as nn
@@ -40,12 +42,6 @@ def parse_args():
         help='number of epochs to train',
         default=20,
         type=int)
-    parser.add_argument(
-        '--save_dir',
-        dest='save_dir',
-        help='directory to save models',
-        default="./weights",
-        nargs=argparse.REMAINDER)
     parser.add_argument(
         '--cuda', dest='cuda', help='whether use CUDA', action='store_true')
     parser.add_argument(
@@ -82,18 +78,39 @@ def parse_args():
         help='whether use tensorflow tensorboard',
         default=False,
         type=bool)
+    parser.add_argument(
+        '--config', dest='config', help='config file(.json)', type=str)
+    parser.add_argument('--lr', dest='lr', help='learning rate', type=float)
+    parser.add_argument(
+        '--model', dest='model', help='path to pretrained model', type=str)
+
+    parser.add_argument(
+        '--in_path', default=None, type=str, help='Input directory.')
+    parser.add_argument(
+        '--out_path', default=None, type=str, help='Output directory.')
     args = parser.parse_args()
     return args
+
+
+def change_lr(lr, optimizer):
+    for param_group in optimizer.param_groups:
+        # used for scheduler
+        param_group['initial_lr'] = lr
 
 
 if __name__ == '__main__':
     # parse config of scripts
     args = parse_args()
+    with open(args.config) as f:
+        config = json.load(f)
 
-    config = kitti_config
-    data_config = config.data_config
-    model_config = config.model_config
-    train_config = config.train_config
+    data_config = config['data_config']
+    model_config = config['model_config']
+    train_config = config['train_config']
+    if args.in_path is not None:
+        # overwrite the data root path
+        data_config['dataset_config']['root_path'] = os.path.join(
+            args.in_path, 'object/training')
 
     if args.resume:
         model_config['pretrained'] = False
@@ -105,12 +122,19 @@ if __name__ == '__main__':
 
     torch.backends.cudnn.benchmark = True
 
+    train_config['save_dir'] = args.out_path
+
     output_dir = train_config['save_dir'] + "/" + model_config[
         'net'] + "/" + data_config['name']
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+
     else:
         print('output_dir is already exist')
+
+    # copy config to output dir
+    shutil.copy2(args.config, output_dir)
+
     print('checkpoint will be saved to {}'.format(output_dir))
 
     # model
@@ -135,6 +159,7 @@ if __name__ == '__main__':
 
     scheduler_config = train_config['scheduler_config']
     if args.resume:
+        # resume mode
         checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
                                                          args.checkpoint)
         params_dict = {
@@ -145,6 +170,15 @@ if __name__ == '__main__':
         saver.load(params_dict, checkpoint_name)
         train_config['start_epoch'] = params_dict['start_epoch']
         scheduler_config['last_epoch'] = params_dict['start_epoch'] - 1
+
+    if args.model is not None:
+        # pretrain mode
+        # just load pretrained model
+        params_dict = {'model': fasterRCNN, }
+        saver.load(params_dict, args.model)
+
+    if args.lr is not None:
+        change_lr(args.lr, optimizer)
 
     # scheduler(after resume)
     scheduler_builder = SchedulerBuilder(optimizer, scheduler_config)

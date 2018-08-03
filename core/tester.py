@@ -5,7 +5,7 @@ from torch.autograd import Variable
 from model.rpn.bbox_transform import bbox_transform_inv
 from model.rpn.bbox_transform import clip_boxes
 from model.nms.nms_wrapper import nms
-from utils.visualize import save_pkl
+from utils.visualize import save_pkl, visualize_bbox
 import numpy as np
 import torch
 import os
@@ -40,8 +40,15 @@ def test(eval_config, data_loader, model):
 
         im_data, im_info = __change_into_variable([im_data, im_info])
         # det_tic = time.time()
-        pred_boxes, scores = im_detect(model, im_data, img_file, im_info,
-                                       eval_config)
+        start_time = time.time()
+        pred_boxes, scores = im_detect(
+            model,
+            im_data,
+            img_file,
+            im_info,
+            eval_config,
+            im_orig=data['img_orig'])
+        duration_time = time.time() - start_time
 
         scores = scores.squeeze()
         pred_boxes = pred_boxes.squeeze()
@@ -76,11 +83,12 @@ def test(eval_config, data_loader, model):
             else:
                 dets.append([])
         save_dets(dets[0], img_file[0], 'kitti', eval_config['eval_out'])
-        sys.stdout.write('\r{}/{}'.format(i + 1, num_samples))
+        sys.stdout.write(
+            '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
         sys.stdout.flush()
 
 
-def im_detect(model, im_data, im_name, im_info, eval_config):
+def im_detect(model, im_data, im_name, im_info, eval_config, im_orig=None):
     # fake label
     gt_boxes = torch.zeros((1, 1, 5))
     num_boxes = torch.Tensor(1)
@@ -93,6 +101,16 @@ def im_detect(model, im_data, im_name, im_info, eval_config):
     scores = cls_prob.data
     im_scale = im_info.data[0][2]
     boxes = rois.data[:, :, 1:5]
+    if prediction.get('rois_scores') is not None:
+        rois_scores = prediction['rois_scores']
+        boxes = torch.cat([boxes, rois_scores], dim=2)
+
+    # visualize rois
+    # import ipdb
+    # ipdb.set_trace()
+    rois = prediction['rois']
+    if im_orig is not None and eval_config['rois_vis']:
+        visualize_bbox(im_orig.numpy()[0], boxes.cpu().numpy()[0], save=True)
 
     if eval_config['bbox_reg']:
         # Apply bounding-box regression deltas

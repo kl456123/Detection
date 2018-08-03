@@ -80,12 +80,13 @@ def visualize_bbox(img, bboxes, gt_bboxes=[], size=None, save=False):
                 img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
                 color=(55, 255, 155),
                 thickness=2)
-            #  cv2.putText(
-        #  img,
-        #  str(box[4]), (int(box[0]), int(box[1])),
-        #  fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-        #  fontScale=0.5,
-        #  color=(255, 0, 0))
+            if len(box) == 5:
+                cv2.putText(
+                    img,
+                    str(box[4]), (int(box[0]), int(box[1])),
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                    fontScale=0.5,
+                    color=(255, 0, 0))
         for i, box in enumerate(gt_bboxes):
             cv2.rectangle(
                 img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
@@ -166,15 +167,13 @@ def analysis_boxes(boxes):
 def parser_args():
     parser = argparse.ArgumentParser(
         description='Visualize bbox in one image from txt file')
+    parser.add_argument('--img', dest='img', help='path to image', type=str)
+    parser.add_argument('--pkl', dest='pkl', help='path to pkl', type=str)
     parser.add_argument(
-        '--img_path', dest='img_path', help='path to image', type=str)
+        '--label', dest='label', help='path to label', type=str)
     parser.add_argument(
-        '--pkl_path', dest='pkl_path', help='path to pkl', type=str)
-    parser.add_argument(
-        '--label_file', dest='label_file', help='path to label', type=str)
-    parser.add_argument(
-        '--kitti_file',
-        dest='kitti_file',
+        '--kitti',
+        dest='kitti',
         help='path to bbox file in kitti format',
         type=str)
     parser.add_argument(
@@ -190,10 +189,10 @@ if __name__ == '__main__':
     # test()
     #  img_name = '000000.png'
     args = parser_args()
-    if args.img_path is not None:
-        img = read_img(args.img_path)
-    elif args.pkl_path is not None:
-        img = read_pkl(args.pkl_path)
+    if args.img is not None:
+        img = read_img(args.img)
+    elif args.pkl is not None:
+        img = read_pkl(args.pkl)
     # scales = np.array([2, 3, 4])
     # ratios = np.array([0.5, 1, 2])
     # anchors = generate_anchors(base_size=16, scales=scales, ratios=ratios)
@@ -207,9 +206,9 @@ if __name__ == '__main__':
     # visualize_bbox(img, anchors)
 
     # read from kitti result file
-    if args.label_file is not None:
-        gt_boxes = read_kitti(args.label_file)
+    if args.label is not None:
+        gt_boxes = read_kitti(args.label)
     else:
         gt_boxes = []
-    boxes = read_kitti(args.kitti_file)
+    boxes = read_kitti(args.kitti)
     visualize_bbox(img, boxes, gt_boxes, save=True)
