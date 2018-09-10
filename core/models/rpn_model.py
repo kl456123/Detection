@@ -11,120 +11,12 @@ from core.samplers.balanced_sampler import BalancedSampler
 from core.target_assigner import TargetAssigner
 from core.filler import Filler
 from core.models.focal_loss import FocalLoss
-from lib.model.utils.net_utils import _smooth_l1_loss
 
 from utils import box_ops
 from lib.model.nms.nms_wrapper import nms
 
-from lib.model.rpn.proposal_layer import _ProposalLayer as Proposal
-from lib.model.rpn.anchor_target_layer import _AnchorTargetLayer as AnchorTarget
-from lib.model.rpn.anchor_target_layer_new import _AnchorTargetLayer as AnchorTargetNew
-
 
 class RPNModel(Model):
-    def forward_old(self, feed_dict):
-        base_feat = feed_dict['base_feat']
-        batch_size = base_feat.size(0)
-        im_info = feed_dict['im_info']
-        gt_boxes = feed_dict['gt_boxes']
-        gt_labels = feed_dict['gt_labels']
-        gt_boxes = torch.cat([gt_boxes, gt_labels.unsqueeze(2).float()], dim=2)
-
-        # return feature map after convrelu layer
-        rpn_conv1 = F.relu(self.rpn_conv(base_feat), inplace=True)
-        # get rpn classification score
-        # nchw
-        rpn_cls_score = self.rpn_cls_score(rpn_conv1)
-
-        # import ipdb
-        # ipdb.set_trace()
-        rpn_cls_score_reshape = rpn_cls_score.view(batch_size, 2, -1)
-
-        # rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)
-        rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, dim=1)
-        rpn_cls_prob = rpn_cls_prob_reshape.view_as(rpn_cls_score)
-
-        # import ipdb
-        # ipdb.set_trace()
-        if self.use_score:
-            rpn_bbox_preds = []
-            for i in range(self.num_anchors):
-                rpn_bbox_feat = torch.cat(
-                    [rpn_conv1, rpn_cls_score[:, ::self.num_anchors, :, :]],
-                    dim=1)
-                rpn_bbox_preds.append(self.rpn_bbox_pred(rpn_bbox_feat))
-            rpn_bbox_pred = torch.cat(rpn_bbox_preds, dim=1)
-        else:
-            # get rpn offsets to the anchor boxes
-            rpn_bbox_pred = self.rpn_bbox_pred(rpn_conv1)
-
-        feature_map_list = [base_feat.size()[-2:]]
-        anchors = self.anchor_generator.generate(feature_map_list)
-
-        proposals_batch, proposals_order = self.generate_proposal(
-            rpn_cls_prob, anchors, rpn_bbox_pred, im_info)
-        batch_idx = torch.arange(batch_size).view(batch_size, 1).expand(
-            -1, proposals_batch.shape[1]).type_as(proposals_batch)
-        rois = torch.cat((batch_idx.unsqueeze(-1), proposals_batch), dim=2)
-
-        self.rpn_loss_cls = 0
-        self.rpn_loss_box = 0
-
-        # generating training labels and build the rpn loss
-        if self.training:
-            assert gt_boxes is not None
-
-            rpn_data = self.rpn_anchor_target(
-                (rpn_cls_prob.data, gt_boxes, im_info))
-
-            # compute classification loss
-            rpn_cls_score = rpn_cls_score_reshape.permute(
-                0, 2, 1).contiguous().view(batch_size, -1, 2)
-            rpn_label = rpn_data[0].view(batch_size, -1)
-
-            rpn_keep = rpn_label.view(-1).ne(-1).nonzero().view(-1)
-            rpn_cls_score = torch.index_select(
-                rpn_cls_score.view(-1, 2), 0, rpn_keep)
-            rpn_label = torch.index_select(
-                rpn_label.view(-1), 0, rpn_keep.data)
-            rpn_label = rpn_label.long()
-            self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
-
-            rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[
-                1:]
-
-            # compute bbox regression loss
-            rpn_bbox_inside_weights = rpn_bbox_inside_weights
-            rpn_bbox_outside_weights = rpn_bbox_outside_weights
-            rpn_bbox_targets = rpn_bbox_targets
-
-            self.rpn_loss_box = _smooth_l1_loss(
-                rpn_bbox_pred,
-                rpn_bbox_targets,
-                rpn_bbox_inside_weights,
-                rpn_bbox_outside_weights,
-                sigma=3,
-                dim=[1, 2, 3])
-
-        predict_dict = {}
-        predict_dict = {
-            'rpn_cls_scores': rpn_cls_score,
-            'rois_batch': rois,
-
-            # used for loss
-            'rpn_bbox_preds': rpn_bbox_pred,
-            'rpn_cls_probs': rpn_cls_prob,
-            'proposals_order': proposals_order,
-
-            # loss
-            'rpn_bbox_loss': self.rpn_loss_box,
-            'rpn_cls_loss': self.rpn_loss_cls,
-            'anchors': anchors,
-        }
-
-        # return rois, self.rpn_loss_cls, self.rpn_loss_box, scores
-        return predict_dict
-
     def init_param(self, model_config):
         self.in_channels = model_config['din']
         self.post_nms_topN = model_config['post_nms_topN']
@@ -150,25 +42,6 @@ class RPNModel(Model):
 
         # bbox coder
         self.bbox_coder = self.target_assigner.bbox_coder
-
-        # some params used for old forward
-        self.anchor_target_config = {
-            "rpn_positive_overlap": self.target_assigner.fg_thresh,
-            "rpn_positive_weight": -1.0,
-            "rpn_bbox_inside_weights": [1.0, 1.0, 1.0, 1.0],
-            "rpn_fg_fraction": self.sampler.fg_fraction,
-            "rpn_batch_size": self.rpn_batch_size,
-            "rpn_negative_overlap": self.target_assigner.bg_thresh,
-            "feat_stride": self.anchor_generator.anchor_stride[0],
-            "rpn_clobber_positives": False,
-            "anchor_ratios": self.anchor_generator.aspect_ratios,
-            "anchor_scales": self.anchor_generator.scales,
-            "pre_nms_topN": self.pre_nms_topN,
-            "post_nms_topN": self.post_nms_topN,
-            "nms_thresh": self.nms_thresh,
-            "min_size": 16,
-        }
-        self.proposal_config = self.anchor_target_config
 
     def init_weights(self):
         self.truncated = False
@@ -201,11 +74,6 @@ class RPNModel(Model):
         # self.rpn_cls_loss = FocalLoss(2)
         self.rpn_cls_loss = F.cross_entropy
 
-        # some modules used for old forward
-        self.rpn_proposal = Proposal(self.proposal_config)
-
-        self.rpn_anchor_target = AnchorTarget(self.anchor_target_config)
-
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
         # TODO create a new Function
@@ -224,7 +92,7 @@ class RPNModel(Model):
         # rpn_bbox_preds = rpn_bbox_preds[0]
         anchors = anchors[0]
         # do not backward
-        anchors = anchors.detach()
+        anchors = anchors
         rpn_cls_probs = rpn_cls_probs.detach()
         rpn_bbox_preds = rpn_bbox_preds.detach()
 

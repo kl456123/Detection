@@ -46,8 +46,6 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             # img.cpu().numpy()[0], proposals_batch.cpu().numpy(), save=True)
 
             # loss
-            # loss_dict = model.rpn_model.loss(prediction, data)
-            # loss_dict = prediction
             loss_dict = model.loss(prediction, data)
             loss_dict.update(prediction)
             rpn_cls_loss = loss_dict['rpn_cls_loss']

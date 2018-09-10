@@ -145,7 +145,7 @@
                 "fg_thresh": 0.7,
                 "bg_thresh":0.3,
                 "coder_config": {
-                    "type":"scale",
+                    "type":"center",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {

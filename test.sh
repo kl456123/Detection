@@ -19,5 +19,4 @@ CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     --checkpoint 3257 \
     --checkepoch 46 \
     --net faster_rcnn \
-    --load_dir /data/object/liangxiong/scale \
-    --config /data/object/liangxiong/scale/faster_rcnn/kitti/kitti_config.json
+    --load_dir /data/object/liangxiong/scale

@@ -4,9 +4,6 @@
 # Written by Jiasen Lu, Jianwei Yang, based on code from Ross Girshick
 # --------------------------------------------------------
 
-
-
-
 import _init_paths
 import os
 import numpy as np
@@ -88,15 +85,32 @@ def parse_args():
         help='if to visualize rois',
         action='store_true')
     parser.add_argument(
+        '--dataset',
+        dest='dataset',
+        help='kitti or others',
+        type=str,
+        default='kitti')
+    parser.add_argument(
         '--config', dest='config', help='config file(.json)', type=str)
     args = parser.parse_args()
     return args
 
 
+def infer_config_fn(args):
+    import glob
+    output_dir = args.load_dir + '/' + args.net + '/' + args.dataset
+    possible_config = glob.glob(os.path.join(output_dir, '*.json'))
+    assert len(possible_config) == 1
+    return os.path.join(output_dir, possible_config[0])
+
+
 if __name__ == '__main__':
 
     args = parse_args()
-    assert args.config is not None, 'please select a config file(json)'
+    # assert args.config is not None, 'please select a config file(json)'
+    if args.config is None:
+        # infer it
+        args.config = infer_config_fn(args)
     with open(args.config) as f:
         config = json.load(f)
 
@@ -111,6 +125,9 @@ if __name__ == '__main__':
 
     assert args.load_dir is not None, 'please choose a directory to load checkpoint'
     eval_config['load_dir'] = args.load_dir
+
+    if args.dataset is not None:
+        data_config['name'] = args.dataset
 
     eval_config['rois_vis'] = args.rois_vis
 

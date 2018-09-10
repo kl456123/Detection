@@ -14,9 +14,9 @@ from core.filler import Filler
 from core.target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.models.feature_extractor_model import FeatureExtractor
+from core.samplers.balanced_sampler import BalancedSampler
 
 from lib.model.utils.net_utils import _smooth_l1_loss
-# from lib.model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer as ProposalTarget
 from lib.model.rpn.proposal_target_layer_tworpn import _ProposalTargetLayer as ProposalTargetTwoRPN
 
 
@@ -29,12 +29,10 @@ class TwoRPNModel(Model):
         Returns:
             clean_feat: shape(N,C,H,W)
         """
-        base_feat = base_feat
-
         upsampled_feat = self.upsample(base_feat)
         rois_batch = rois_batch[:, :, 1:]
         if gt_boxes is not None:
-            rois_batch = torch.cat([rois_batch, gt_boxes[:, :, :4]], dim=1)
+            rois_batch = torch.cat([rois_batch, gt_boxes], dim=1)
 
         rois_batch = rois_batch.int()
         batch_size = rois_batch.shape[0]
@@ -48,7 +46,7 @@ class TwoRPNModel(Model):
                 roi = rois[j]
                 mask[i, roi[1]:roi[3], roi[0]:roi[2]] = 1
 
-        upsampled_feat *= mask.type_as(upsampled_feat)
+        upsampled_feat *= mask.unsqueeze(1).type_as(upsampled_feat)
         clean_feat = F.upsample(
             upsampled_feat, size=base_feat.shape[-2:], mode='bilinear')
 
@@ -62,7 +60,9 @@ class TwoRPNModel(Model):
         Returns:
             res_batch: shape (batch_size,rois_per_img,4)
         """
-        batch_size = proposals_order.shape[0]
+        second_rpn_bbox_pred = second_rpn_bbox_pred.detach()
+        batch_size = second_rpn_bbox_pred.shape[0]
+        proposals_order = proposals_order.view(batch_size, -1)
         second_rpn_bbox_pred = second_rpn_bbox_pred.permute(
             0, 2, 3, 1).contiguous().view(batch_size, -1, 4)
         res_batch = second_rpn_bbox_pred.new(batch_size,
@@ -71,15 +71,7 @@ class TwoRPNModel(Model):
             bbox_single = second_rpn_bbox_pred[i]
             order_single = proposals_order[i]
             res_batch[i] = bbox_single[order_single]
-        return res_batch
-
-    def second_rpn_anchors_select(self, anchors, proposals_order):
-        """
-        Args:
-            anchors: shape(K*A,4)
-            proposals_order: shape(batch_size,rois_per_img)
-        """
-        return anchors[0][proposals_order]
+        return res_batch.view(-1, 4)
 
     def second_rpn_cls_select(self, second_rpn_cls_score, proposals_order):
         """
@@ -90,114 +82,69 @@ class TwoRPNModel(Model):
         Returns:
             res_batch: shape(batch_size,rois_per_img,2)
         """
-        batch_size = proposals_order.shape[0]
+        second_rpn_cls_score = second_rpn_cls_score.detach()
+        batch_size = second_rpn_cls_score.shape[0]
+
+        proposals_order = proposals_order.view(batch_size, -1)
         h, w = second_rpn_cls_score.shape[-2:]
         second_rpn_cls_score = second_rpn_cls_score.view(
-            batch_size, 2, -1, h, w).permute(
-                0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
-        res_batch = second_rpn_cls_score.new(batch_size,
-                                             proposals_order.shape[1], 2)
+            batch_size, self.n_classes, -1, h,
+            w).permute(0, 3, 4, 2,
+                       1).contiguous().view(batch_size, -1, self.n_classes)
+        res_batch = second_rpn_cls_score.new(
+            batch_size, proposals_order.shape[1], self.n_classes)
         for i in range(batch_size):
             cls_single = second_rpn_cls_score[i]
             order_single = proposals_order[i]
             res_batch[i] = cls_single[order_single]
-        return res_batch
+        return res_batch.view(-1, self.n_classes)
 
     def forward(self, feed_dict):
-        # import ipdb
-        # ipdb.set_trace()
-        if self.training:
-            gt_boxes = feed_dict['gt_boxes']
-            gt_labels = feed_dict['gt_labels']
-            gt_boxes = torch.cat([gt_boxes, gt_labels.unsqueeze(2).float()],
-                                 dim=2)
-        else:
-            gt_boxes = None
-        img = feed_dict['img']
-        batch_size = img.shape[0]
         prediction_dict = {}
 
         # base model
-        base_feat = self.feature_extractor.first_stage_feature(img)
+        base_feat = self.feature_extractor.first_stage_feature(
+            feed_dict['img'])
         feed_dict.update({'base_feat': base_feat})
+        # batch_size = base_feat.shape[0]
 
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
 
-        rois_batch = prediction_dict['rois_batch']
-        # shape(N,K*A)
-        proposals_order = prediction_dict['proposals_order']
-
         if self.training:
-            roi_data = self.RCNN_proposal_target(
-                rois_batch, gt_boxes, proposals_order, self.bbox_coder)
-            rois_batch, rois_label, rois_target, rois_inside_ws, rois_outside_ws, proposals_order = roi_data
+            self.pre_subsample(prediction_dict, feed_dict)
+        rois_batch = prediction_dict['rois_batch']
 
-            rois_label = rois_label.view(-1).long()
-            rois_target = rois_target.view(-1, rois_target.size(2))
-            rois_inside_ws = rois_inside_ws.view(-1, rois_inside_ws.size(2))
-            rois_outside_ws = rois_outside_ws.view(-1, rois_outside_ws.size(2))
-        else:
-            rois_label = None
-            rois_target = None
-            rois_inside_ws = None
-            rois_outside_ws = None
-            # rpn_loss_cls = 0
-            # rpn_loss_bbox = 0
-
+        gt_boxes = feed_dict['gt_boxes']
         cleaned_feat = self.clean_base_feat(base_feat, rois_batch, gt_boxes)
         second_rpn_conv1 = F.relu(
             self.second_rpn_conv(cleaned_feat), inplace=True)
 
         # cls
         # shape(N,2*A,H,W)
-        second_rpn_cls_score = self.second_rpn_cls_score(second_rpn_conv1)
-        # second_rpn_cls_score_reshape = second_rpn_cls_score.view(
-        # second_rpn_conv1.shape[0], 2, -1)
-        # second_rpn_cls_prob_reshape = F.softmax(
-        # second_rpn_cls_score_reshape, dim=1)
-        # second_rpn_cls_prob = second_rpn_cls_prob_reshape.view_as(
-        # second_rpn_cls_score)
+        second_rpn_cls_scores = self.second_rpn_cls_score(second_rpn_conv1)
 
         # reg
         # shape(N,A*4,H,W)
         second_rpn_bbox_pred = self.second_rpn_bbox_pred(second_rpn_conv1)
 
+        proposals_order = prediction_dict['proposals_order']
         # mask select
         proposals_order = proposals_order.long()
         second_rpn_bbox_pred = self.second_rpn_bbox_select(
             second_rpn_bbox_pred, proposals_order)
-        second_rpn_cls_score = self.second_rpn_cls_select(second_rpn_cls_score,
-                                                          proposals_order)
-
-        second_rpn_anchors = self.second_rpn_anchors_select(
-            prediction_dict['anchors'], proposals_order)
+        second_rpn_cls_scores = self.second_rpn_cls_select(
+            second_rpn_cls_scores, proposals_order)
 
         if self.training:
-            # cls loss
-            rcnn_loss_cls = F.cross_entropy(
-                second_rpn_cls_score.view(-1, 2), rois_label)
-
-            # box loss
-            rcnn_loss_bbox = _smooth_l1_loss(
-                second_rpn_bbox_pred.view(-1, 4), rois_target, rois_inside_ws,
-                rois_outside_ws)
             second_rpn_cls_prob = 0
         else:
-            second_rpn_cls_prob = F.softmax(
-                second_rpn_cls_score.view(-1, 2), dim=1).view(batch_size, -1,
-                                                              2)
-            rcnn_loss_cls = 0
-            rcnn_loss_bbox = 0
+            second_rpn_cls_prob = F.softmax(second_rpn_cls_scores, dim=1)
 
         prediction_dict.update({
-            'rois_batch': rois_batch,
-            'rcnn_cls_targets': rois_label,
             'rcnn_cls_probs': second_rpn_cls_prob,
             'rcnn_bbox_preds': second_rpn_bbox_pred,
-            'rcnn_cls_loss': rcnn_loss_cls,
-            'rcnn_bbox_loss': rcnn_loss_bbox,
-            'second_rpn_anchors': second_rpn_anchors
+            'rcnn_cls_scores': second_rpn_cls_scores,
         })
 
         return prediction_dict
@@ -225,37 +172,12 @@ class TwoRPNModel(Model):
             self.rcnn_bbox_pred = nn.Linear(2048, 4 * self.n_classes)
 
         # loss module
-        # if self.use_focal_loss:
-        # self.rcnn_cls_loss = FocalLoss(2)
-        # else:
-        # self.rcnn_cls_loss = F.cross_entropy
+        if self.use_focal_loss:
+            self.rcnn_cls_loss = FocalLoss(2)
+        else:
+            self.rcnn_cls_loss = F.cross_entropy
 
-        # self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
-
-        self.proposal_target_layer_config = {
-            "use_focal_loss": self.use_focal_loss,
-            "nclasses": self.n_classes,
-            "bbox_normalize_stds":
-            self.target_assigner.bbox_coder.bbox_normalize_stds,
-            "bbox_normalize_means":
-            self.target_assigner.bbox_coder.bbox_normalize_means,
-            "bbox_inside_weights": [1.0, 1.0, 1.0, 1.0],
-            "batch_size": self.rcnn_batch_size,
-            "fg_fraction": self.sampler.fg_fraction,
-            "bbox_normalize_targets_precomputed":
-            self.target_assigner.bbox_coder.bbox_normalize_targets_precomputed,
-            "fg_thresh": self.target_assigner.fg_thresh,
-            "bg_thresh": self.target_assigner.bg_thresh,
-            "bg_thresh_lo": 0.0
-        }
-        # use_org = True
-        # if use_org:
-
-        self.RCNN_proposal_target = ProposalTargetTwoRPN(
-            self.proposal_target_layer_config)
-        # else:
-        # self.RCNN_proposal_target = ProposalTarget(
-        # self.proposal_target_layer_config)
+        self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
         self.din = 1024
         self.num_anchors = 9
@@ -276,6 +198,53 @@ class TwoRPNModel(Model):
         layers.append(nn.Conv2d(512, self.din, 1, 1, 0, bias=False))
         layers.append(nn.BatchNorm2d(self.din))
         return nn.Sequential(*layers)
+
+    def pre_subsample(self, prediction_dict, feed_dict):
+        rois_batch = prediction_dict['rois_batch']
+        gt_boxes = feed_dict['gt_boxes']
+        gt_labels = feed_dict['gt_labels']
+
+        ##########################
+        # assigner
+        ##########################
+        rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights = self.target_assigner.assign(
+            rois_batch[:, :, 1:], gt_boxes, gt_labels)
+
+        ##########################
+        # subsampler
+        ##########################
+        pos_indicator = rcnn_cls_targets > 0
+        critation = rcnn_cls_weights > 0
+
+        # subsample from all
+        # shape (N,M)
+        batch_sampled_mask = self.sampler.subsample_batch(
+            self.rcnn_batch_size, pos_indicator, criterion=critation)
+        rcnn_cls_weights = rcnn_cls_weights[batch_sampled_mask]
+        rcnn_reg_weights = rcnn_reg_weights[batch_sampled_mask]
+        num_cls_coeff = rcnn_cls_weights.type(torch.cuda.ByteTensor).sum(
+            dim=-1)
+        num_reg_coeff = rcnn_reg_weights.type(torch.cuda.ByteTensor).sum(
+            dim=-1)
+
+        prediction_dict[
+            'rcnn_cls_weights'] = rcnn_cls_weights / num_cls_coeff.float()
+        prediction_dict[
+            'rcnn_reg_weights'] = rcnn_reg_weights / num_reg_coeff.float()
+        prediction_dict['rcnn_cls_targets'] = rcnn_cls_targets[
+            batch_sampled_mask]
+        prediction_dict['rcnn_reg_targets'] = rcnn_reg_targets[
+            batch_sampled_mask]
+
+        # update rois_batch
+        prediction_dict['rois_batch'] = rois_batch[batch_sampled_mask].view(
+            rois_batch.shape[0], -1, 5)
+
+        # used for track
+        proposals_order = prediction_dict['proposals_order']
+        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][0][
+            proposals_order]
+        prediction_dict['proposals_order'] = proposals_order[batch_sampled_mask]
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -301,7 +270,8 @@ class TwoRPNModel(Model):
             model_config['target_assigner_config'])
 
         # sampler
-        self.sampler = HardNegativeSampler(model_config['sampler_config'])
+        # self.sampler = HardNegativeSampler(model_config['sampler_config'])
+        self.sampler = BalancedSampler(model_config['sampler_config'])
 
         # coder
         self.bbox_coder = self.target_assigner.bbox_coder
@@ -312,72 +282,30 @@ class TwoRPNModel(Model):
         Then calculate loss
         """
         loss_dict = {}
-        # assign label
-        rois_batch = prediction_dict['rois_batch']
-        gt_boxes = feed_dict['gt_boxes']
-
-        gt_labels = feed_dict['gt_labels']
-        rcnn_cls_targets, rcnn_reg_targets, \
-            rcnn_cls_weights, rcnn_reg_weights = \
-            self.target_assigner.assign(rois_batch, gt_boxes, gt_labels)
-
-        ##########################
-        # subsampler
-        ##########################
-        # rcnn_cls_score = prediction_dict['rcnn_cls_score']
-        rcnn_cls_probs = prediction_dict['rcnn_cls_probs']
-        pos_indicator = rcnn_cls_targets.type(torch.cuda.ByteTensor)
-
-        # pos prob shape(N,K,num_classes)
-        # rcnn_cls_targets shape(N,K,)
-        # too ulgy
-        # get accord probs for each target
-        targets_indx = torch.arange(
-            rcnn_cls_targets.numel()).type_as(rcnn_cls_targets)
-        cls_criterion = rcnn_cls_probs.view(-1, self.n_classes)[
-            targets_indx, rcnn_cls_targets.view(-1)].view_as(rcnn_cls_targets)
-
-        reg_criterion = self.target_assigner.matcher.assigned_overlaps_batch
-        if self.subsample_twice:
-            # shape(N,K)
-            # subsample from all
-            cls_batch_sampled_mask = self.sampler.subsample_batch(
-                self.rcnn_batch_size, pos_indicator, criterion=cls_criterion)
-            rcnn_cls_weights *= cls_batch_sampled_mask
-
-            # subsample from pos indicator
-            reg_batch_sampled_mask = self.sampler.subsample_batch(
-                self.rcnn_batch_size,
-                pos_indicator,
-                # subsample from iou
-                criterion=reg_criterion,
-                indicator=pos_indicator)
-            rcnn_reg_weights *= reg_batch_sampled_mask
-        else:
-            # subsample from all
-            batch_sampled_mask = self.sampler.subsample_batch(
-                self.rcnn_batch_size, pos_indicator, criterion=cls_criterion)
-            batch_sampled_mask = batch_sampled_mask.type_as(rcnn_cls_weights)
-            rcnn_cls_weights = rcnn_cls_weights * batch_sampled_mask
-            rcnn_reg_weights = rcnn_reg_weights * batch_sampled_mask
-
-        # subsample
-        # self.sampler.subsample()
 
         # submodule loss
         loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
 
-        # classification loss
+        # targets and weights
+        rcnn_cls_weights = prediction_dict['rcnn_cls_weights']
+        rcnn_reg_weights = prediction_dict['rcnn_reg_weights']
 
+        rcnn_cls_targets = prediction_dict['rcnn_cls_targets']
+        rcnn_reg_targets = prediction_dict['rcnn_reg_targets']
+
+        # classification loss
         rcnn_cls_scores = prediction_dict['rcnn_cls_scores']
         rcnn_cls_loss = self.rcnn_cls_loss(rcnn_cls_scores, rcnn_cls_targets)
-        rcnn_cls_loss *= rcnn_cls_weights.detach()
+        rcnn_cls_loss *= rcnn_cls_weights
+        rcnn_cls_loss = rcnn_cls_loss.sum(dim=-1)
 
         # bounding box regression L1 loss
         rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']
         rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
                                              rcnn_reg_targets).sum(dim=-1)
-        rcnn_bbox_loss *= rcnn_reg_weights.detach()
+        rcnn_bbox_loss *= rcnn_reg_weights
+        # rcnn_bbox_loss *= rcnn_reg_weights
+        rcnn_bbox_loss = rcnn_bbox_loss.sum(dim=-1)
 
         # loss weights has no gradients
         loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
