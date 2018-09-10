@@ -2,6 +2,8 @@
 
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
+from core.models.faster_rcnn_model import FasterRCNN
+from core.models.two_rpn_model import TwoRPNModel
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -19,6 +21,10 @@ def build(model_config, training=True):
         fasterRCNN = vgg16(model_config)
     elif net_arch == 'resnet50':
         fasterRCNN = resnet(model_config)
+    elif net_arch == 'faster_rcnn':
+        fasterRCNN = FasterRCNN(model_config)
+    elif net_arch == 'two_rpn':
+        fasterRCNN = TwoRPNModel(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 
@@ -26,5 +32,6 @@ def build(model_config, training=True):
         fasterRCNN.train()
     else:
         fasterRCNN.eval()
-    fasterRCNN.create_architecture()
+    # depercated
+    # fasterRCNN.create_architecture()
     return fasterRCNN

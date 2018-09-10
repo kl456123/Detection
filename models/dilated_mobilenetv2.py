@@ -89,7 +89,7 @@ class DilatedMobileNetV2(nn.Module):
 
     def load_pretrained_weight(self, net):
         new_state_dict = OrderedDict()
-        for k, v in net.items():
+        for k, v in list(net.items()):
             k_name = k.split('.')
             if k_name[0] == 'features' and float(k_name[1]) < 18:
                 new_state_dict[k] = v

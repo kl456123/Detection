@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 # --------------------------------------------------------
 # Faster R-CNN
 # Copyright (c) 2015 Microsoft
@@ -52,7 +52,7 @@ def generate_anchors(base_size=16, ratios=[0.5, 1, 2],
     base_anchor = np.array([1, 1, base_size, base_size]) - 1
     ratio_anchors = _ratio_enum(base_anchor, ratios)
     anchors = np.vstack([_scale_enum(ratio_anchors[i, :], scales)
-                         for i in xrange(ratio_anchors.shape[0])])
+                         for i in range(ratio_anchors.shape[0])])
     return anchors
 
 def _whctrs(anchor):

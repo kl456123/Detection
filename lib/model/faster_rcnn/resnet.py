@@ -1,6 +1,6 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+
+
+
 
 from model.faster_rcnn.faster_rcnn import _fasterRCNN
 
@@ -258,7 +258,7 @@ class resnet(_fasterRCNN):
             state_dict = torch.load(self.model_path)
             resnet.load_state_dict({
                 k: v
-                for k, v in state_dict.items() if k in resnet.state_dict()
+                for k, v in list(state_dict.items()) if k in resnet.state_dict()
             })
 
         base_features = [

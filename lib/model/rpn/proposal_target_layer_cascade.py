@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+
 # --------------------------------------------------------
 # Faster R-CNN
 # Copyright (c) 2015 Microsoft
@@ -41,7 +41,7 @@ class _ProposalTargetLayer(nn.Module):
 
         self.use_focal_loss = layer_config['use_focal_loss']
 
-    def forward(self, all_rois, gt_boxes, num_boxes):
+    def forward(self, all_rois, gt_boxes, num_boxes=None, rpn_cls_score=None):
 
         self.bbox_normalize_means = self.bbox_normalize_means.type_as(gt_boxes)
         self.bbox_normalize_stds = self.bbox_normalize_stds.type_as(gt_boxes)
@@ -147,7 +147,7 @@ class _ProposalTargetLayer(nn.Module):
         offset = torch.arange(0, batch_size) * gt_boxes.size(1)
         offset = offset.view(-1, 1).type_as(gt_assignment) + gt_assignment
 
-        labels = gt_boxes[:,:,4].contiguous().view(-1).index(offset.view(-1))\
+        labels = gt_boxes[:,:,4].contiguous().view(-1)[offset.view(-1)]\
             .view(batch_size, -1)
 
         labels_batch = labels.new(batch_size, rois_per_image).zero_()
@@ -196,8 +196,8 @@ class _ProposalTargetLayer(nn.Module):
                     # use numpy instead.
                     rand_num = torch.randperm(fg_num_rois).long().cuda()
                     rand_num = torch.from_numpy(
-                    np.random.permutation(fg_num_rois)).type_as(
-                    gt_boxes).long()
+                        np.random.permutation(fg_num_rois)).type_as(
+                            gt_boxes).long()
                     fg_inds = fg_inds[rand_num[:fg_rois_per_this_image]]
 
                     # sampling bg
@@ -305,3 +305,15 @@ class _ProposalTargetLayer(nn.Module):
             batch_size, 4, -1).transpose(1, 2).contiguous()
 
         return bbox_inside_weights
+
+    def compute_rpn_ap(self, rpn_cls_score, rois_label):
+        """
+        Args:
+            rpn_cls_score: shape(N,2*num_anchors,H,W)
+            rois_label: shape(N,M)
+        """
+        pass
+        # rpn_cls_
+
+    def compute_rpn_ar(self):
+        pass

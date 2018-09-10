@@ -4,7 +4,8 @@ Note that this script is just writen for job clients
 """
 
 import argparse
-import sys
+import time
+import subprocess
 
 
 def parse_args():
@@ -21,10 +22,16 @@ if __name__ == '__main__':
     args = parse_args()
     in_path = args.in_path
     out_path = args.out_path
+    print(in_path)
+    print(out_path)
 
     script = "trainval_net.py"
-    net = "resnet50"
+    net = "two_rpn"
     config = "configs/kitti_config.json"
-    command = "python {} --cuda --net {} --config {} --in_path {} --out_path"\
+    command = "/node01/jobs/io/env/py3torch0.4/bin/python {} --cuda --net {} --config {} --in_path {} --out_path"\
         .format(script, net, config, in_path, out_path)
-    sys.system(command)
+
+    # import sys
+    print("now time: ", time.time())
+    # sys.system(command)
+    subprocess.call(command, shell=True)

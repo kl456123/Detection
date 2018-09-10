@@ -2,9 +2,7 @@ from torch.utils.data import DataLoader
 from abc import ABCMeta, abstractmethod
 
 
-class DataLoaderBuilder(object):
-    __metaclass__ = ABCMeta
-
+class DataLoaderBuilder(object, metaclass=ABCMeta):
     def __init__(self, data_config, training=True):
         self.tranform_config = data_config['transform_config']
         self.dataset_config = data_config['dataset_config']

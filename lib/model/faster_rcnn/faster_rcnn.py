@@ -44,13 +44,18 @@ class _fasterRCNN(nn.Module):
         self.l2loss = nn.MSELoss(reduce=False)
         self.use_focal_loss = model_config['use_focal_loss']
 
-    def forward(self, im_data, im_info, gt_boxes, num_boxes, gt_ry=None):
+    def forward(self, feed_dict):
+        im_data = feed_dict['img']
+        gt_boxes = feed_dict['gt_boxes']
+        gt_labels = feed_dict['gt_labels']
+        gt_boxes = torch.cat([gt_boxes, gt_labels.unsqueeze(2).float()], dim=2)
+        im_info = feed_dict['im_info']
         batch_size = im_data.size(0)
 
         im_info = im_info.data
         gt_boxes = gt_boxes.data
         # gt_ry = gt_ry.data
-        num_boxes = num_boxes.data
+        # num_boxes = num_boxes.data
 
         # feed image data to base model to obtain base feature map
         base_feat = self.RCNN_base(im_data)
@@ -61,7 +66,7 @@ class _fasterRCNN(nn.Module):
         # all_rpn_loss_bbox = []
         # for base_feat in base_feats:
         rois, rpn_loss_cls, rpn_loss_bbox, scores = self.RCNN_rpn(
-            base_feat, im_info, gt_boxes, num_boxes)
+            base_feat, im_info, gt_boxes)
         # all_rois.append(rois)
         # all_rpn_loss_cls.append(rpn_loss_cls)
         # all_rpn_loss_bbox.append(rpn_loss_bbox)
@@ -72,7 +77,7 @@ class _fasterRCNN(nn.Module):
 
         # if it is training phrase, then use ground trubut bboxes for refining
         if self.training:
-            roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes)
+            roi_data = self.RCNN_proposal_target(rois, gt_boxes)
             rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws = roi_data
 
             rois_label = Variable(rois_label.view(-1).long())
@@ -196,23 +201,3 @@ class _fasterRCNN(nn.Module):
     def create_architecture(self):
         self._init_modules()
         self._init_weights()
-
-    # def get_params(self, train_config):
-    # params = []
-    # lr = train_config['lr']
-    # for key, value in dict(self.named_parameters()).items():
-    # if value.requires_grad:
-    # if 'bias' in key:
-    # params += [{
-    # 'params': [value],
-    # 'lr': lr * (cfg.TRAIN.DOUBLE_BIAS + 1),
-    # 'weight_decay': cfg.TRAIN.BIAS_DECAY and
-    # cfg.TRAIN.WEIGHT_DECAY or 0
-    # }]
-    # else:
-    # params += [{
-    # 'params': [value],
-    # 'lr': lr,
-    # 'weight_decay': cfg.TRAIN.WEIGHT_DECAY
-    # }]
-    # return params

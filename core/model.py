@@ -6,10 +6,23 @@ import torch.nn as nn
 class Model(nn.Module):
     def __init__(self, model_config):
         super(Model, self).__init__()
-        self.build(model_config)
+        # store model_config
+        self.init_param(model_config)
 
-    def build(self):
-        pass
+        # use config to set up model
+        self.init_modules()
+
+        # init weights
+        self.init_weights()
 
     def loss(self):
+        pass
+
+    def init_weights(self):
+        pass
+
+    def init_modules(self):
+        pass
+
+    def init_param(self, model_config):
         pass

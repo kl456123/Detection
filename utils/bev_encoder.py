@@ -199,7 +199,7 @@ class DataEncoder(object):
         ids = labels.nonzero()
         tmp = ids.cpu().numpy()
         if tmp.__len__() > 0:
-            print('detected %d objs' % tmp.__len__())
+            print(('detected %d objs' % tmp.__len__()))
             ids = ids.squeeze(1)  # [#boxes,]
             has_obj = True
         else:

@@ -3,9 +3,9 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Jiasen Lu, Jianwei Yang, based on code from Ross Girshick
 # --------------------------------------------------------
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+
+
+
 
 import _init_paths
 import os
@@ -22,13 +22,13 @@ import torch.nn as nn
 
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
-from configs import kitti_config
 from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
 from builder.optimizer_builder import OptimizerBuilder
 from builder.scheduler_builder import SchedulerBuilder
 from builder import model_builder
 from core import trainer
 from core.saver import Saver
+from tensorboardX import SummaryWriter
 
 
 def parse_args():
@@ -184,5 +184,9 @@ if __name__ == '__main__':
     scheduler_builder = SchedulerBuilder(optimizer, scheduler_config)
     scheduler = scheduler_builder.build()
 
+    # summary writer
+    summary_path = os.path.join(output_dir, './summary')
+    summary_writer = SummaryWriter(summary_path)
+
     trainer.train(train_config, data_loader, fasterRCNN, optimizer, scheduler,
-                  saver)
+                  saver, summary_writer)

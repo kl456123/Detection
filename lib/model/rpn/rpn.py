@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,7 +8,6 @@ from .proposal_layer import _ProposalLayer
 from .anchor_target_layer import _AnchorTargetLayer
 from model.utils.net_utils import _smooth_l1_loss
 from utils.focal_loss import FocalLoss
-from utils.focal_loss import BBoxFocalLoss
 
 
 class _RPN(nn.Module):

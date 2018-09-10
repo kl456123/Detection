@@ -5,42 +5,43 @@ import torch
 
 
 class HardNegativeSampler(Sampler):
-    def _subsample(self, mask, pos_mask, scores):
+    def __init__(self, sampler_config):
+        super().__init__(sampler_config)
         """
-        Hard Negative Mining
+        Note that the scores here is the critation of samples,it can be
+        confidence or IoU e,c
         """
-        num_samples = self.num_samples
 
-        # subsample from fg
-        pos_scores = scores[pos_mask]
-        pos_sorted_scores, pos_order = torch.sort(pos_scores, descending=False)
-        fg_num = pos_scores.numel()
-        if self.fg_num > fg_num:
-            # subsample all pos
-            mb_fg_inds = pos_order
-        else:
-            mb_fg_inds = pos_order[:self.fg_num]
+    def subsample(self,
+                  num_samples,
+                  pos_indicator,
+                  criterion=None,
+                  indicator=None):
+        fg_num_for_sample = int(self.fg_fraction * num_samples)
+        fg_inds = torch.nonzero(pos_indicator).view(-1)
+        if fg_inds.numel() > fg_num_for_sample:
+            sorted_scores, order = torch.sort(criterion, descending=False)
+            fg_order = order[pos_indicator]
+            fg_inds = fg_order[:fg_num_for_sample]
 
-        # the remain  is bg
-        self.bg_num = num_samples - mb_fg_inds.numel()
-        # subsample from bg
-        neg_mask = mask and not pos_mask
-        neg_scores = scores[neg_mask]
-        neg_sorted_scores, neg_order = torch.sort(neg_scores, descending=True)
-        bg_num = neg_scores.numel()
-        if self.bg_num > bg_num:
-            mb_bg_inds = neg_order
-        else:
-            mb_bg_inds = neg_order[:self.bg_num]
+        # the remain is bg
+        bg_num_for_sample = num_samples - fg_inds.numel()
+        neg_indicator = indicator & ~pos_indicator
+        bg_inds = torch.nonzero(neg_indicator).view(-1)
+
+        if bg_inds.numel() > bg_num_for_sample:
+            sorted_scores, order = torch.sort(criterion, descending=True)
+            bg_order = order[neg_indicator]
+            bg_inds = bg_order[:bg_num_for_sample]
 
         # if not enough samples,oversample from fg
-        if mb_fg_inds.numel() + mb_bg_inds.numel() < num_samples:
-            pass
-        mb_pos_mask = torch.zeros_like(pos_mask)
-        mb_pos_mask[mb_fg_inds] = 1
-        mb_neg_mask = torch.zeros_like(pos_mask)
-        mb_neg_mask[mb_bg_inds] = 1
+        if fg_inds.numel() + bg_inds.numel() < num_samples:
+            raise ValueError(
+                "can not subsample enough samples,please check it!")
 
-        mb_mask = mb_pos_mask and mb_neg_mask
+        keep = torch.cat([fg_inds, bg_inds], dim=0)
 
-        return mb_mask, mb_pos_mask
+        sample_mask = torch.zeros_like(pos_indicator)
+        sample_mask[keep] = 1
+
+        return sample_mask

@@ -3,9 +3,9 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Jiasen Lu, Jianwei Yang, based on code from Ross Girshick
 # --------------------------------------------------------
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+
+
+
 
 import _init_paths
 import os
@@ -290,7 +290,7 @@ if __name__ == '__main__':
     lr = args.lr
 
     params = []
-    for key, value in dict(fasterRCNN.named_parameters()).items():
+    for key, value in list(dict(fasterRCNN.named_parameters()).items()):
         if value.requires_grad:
             if 'bias' in key:
                 params += [{'params':[value],'lr':lr*(cfg.TRAIN.DOUBLE_BIAS + 1), \
@@ -319,7 +319,7 @@ if __name__ == '__main__':
         fasterRCNN.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         lr = optimizer.param_groups[0]['lr']
-        if 'pooling_mode' in checkpoint.keys():
+        if 'pooling_mode' in list(checkpoint.keys()):
             cfg.POOLING_MODE = checkpoint['pooling_mode']
         print("loaded checkpoint %s" % (load_name))
 

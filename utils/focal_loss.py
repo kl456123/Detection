@@ -81,7 +81,7 @@ class FocalLoss(nn.Module):
         num_pos_neg = max(1.0, num_pos_neg)
         num_pos = max(1.0, num_pos)
         if is_print:
-            print('cls_loss: %.3f' % (cls_loss.data[0] / num_pos))
+            print(('cls_loss: %.3f' % (cls_loss.data[0] / num_pos)))
         loss = cls_loss / num_pos
 
         return loss

@@ -3,3 +3,8 @@
 .weights
 *.so
 *.o
+.Trash-1000/
+*.jpg
+*.png
+env/
+results

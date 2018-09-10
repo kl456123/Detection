@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import argparse
 import pickle
-from generate_anchors import generate_anchors
+from utils.generate_anchors import generate_anchors
 
 
 def expand_anchors(anchors, feat_size=(24, 79), feat_stride=16):
@@ -29,14 +29,19 @@ def expand_anchors(anchors, feat_size=(24, 79), feat_stride=16):
     return anchors
 
 
-def visualize_bbox(img, bboxes, gt_bboxes=[], size=None, save=False):
+def visualize_bbox(img,
+                   bboxes,
+                   gt_bboxes=[],
+                   size=None,
+                   save=False,
+                   title='test'):
     """
     Args:
         bboxes: non-normalized(N,4)
         img: non-noramlized (H,W,C)(bgr)
     """
 
-    print("img shape: ", img.shape)
+    print(("img shape: ", img.shape))
     #################################
     # Image
     ################################
@@ -92,7 +97,7 @@ def visualize_bbox(img, bboxes, gt_bboxes=[], size=None, save=False):
                 img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
                 color=(255, 255, 255),
                 thickness=2)
-        cv2.imshow('test', img)
+        cv2.imshow(title, img)
         cv2.waitKey(0)
 
         if save:
@@ -160,8 +165,8 @@ def test():
 def analysis_boxes(boxes):
     w = boxes[:, 2] - boxes[:, 0]
     h = boxes[:, 3] - boxes[:, 1]
-    print('h: ', h)
-    print('w: ', w)
+    print(('h: ', h))
+    print(('w: ', w))
 
 
 def parser_args():
@@ -181,6 +186,12 @@ def parser_args():
         dest='save',
         help='whether image should be saved',
         action='store_true')
+    parser.add_argument(
+        '--title',
+        dest='title',
+        help='title of display window',
+        type=str,
+        default='test')
     args = parser.parse_args()
     return args
 
@@ -211,4 +222,4 @@ if __name__ == '__main__':
     else:
         gt_boxes = []
     boxes = read_kitti(args.kitti)
-    visualize_bbox(img, boxes, gt_boxes, save=True)
+    visualize_bbox(img, boxes, gt_boxes, save=True, title=args.title)

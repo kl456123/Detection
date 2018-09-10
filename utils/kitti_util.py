@@ -294,11 +294,11 @@ class Object3d(object):
 
 
     def print_object(self):
-        print('Type, truncation, occlusion, alpha: %s, %d, %d, %f' % \
-              (self.type, self.truncation, self.occlusion, self.alpha))
-        print('2d bbox (x0,y0,x1,y1): %f, %f, %f, %f' % \
-              (self.xmin, self.ymin, self.xmax, self.ymax))
-        print('3d bbox h,w,l: %f, %f, %f' % \
-              (self.h, self.w, self.l))
-        print('3d bbox location, ry: (%f, %f, %f), %f' % \
-              (self.t[0],self.t[1],self.t[2],self.ry))
+        print(('Type, truncation, occlusion, alpha: %s, %d, %d, %f' % \
+              (self.type, self.truncation, self.occlusion, self.alpha)))
+        print(('2d bbox (x0,y0,x1,y1): %f, %f, %f, %f' % \
+              (self.xmin, self.ymin, self.xmax, self.ymax)))
+        print(('3d bbox h,w,l: %f, %f, %f' % \
+              (self.h, self.w, self.l)))
+        print(('3d bbox location, ry: (%f, %f, %f), %f' % \
+              (self.t[0],self.t[1],self.t[2],self.ry)))

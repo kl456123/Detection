@@ -3,9 +3,9 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Xinlei Chen
 # --------------------------------------------------------
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+
+
+
 
 import torch
 import torch.nn as nn
@@ -36,7 +36,7 @@ class vgg16(_fasterRCNN):
             state_dict = torch.load(self.model_path)
             vgg.load_state_dict(
                 {k: v
-                 for k, v in state_dict.items() if k in vgg.state_dict()})
+                 for k, v in list(state_dict.items()) if k in vgg.state_dict()})
 
         vgg.classifier = nn.Sequential(*list(
             vgg.classifier._modules.values())[:-1])

@@ -16,12 +16,11 @@ IMG_EXTENSIONS = [
 ]
 
 
-class DetDataset(Dataset):
+class DetDataset(Dataset, metaclass=ABCMeta):
     """
     The important thing is that data and label should be separated
     so that it can adapt to both training and testing mode
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, training):
         self.imgs = None

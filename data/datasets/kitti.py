@@ -23,8 +23,9 @@ class KittiDataset(DetDataset):
         else:
             self.labels = self.make_label_list(dataset_config['dataset_file'])
             self.imgs = self.make_image_list()
-        self.cache_bev = dataset_config['cache_bev']
+        #  self.cache_bev = dataset_config['cache_bev']
         self.transforms = transforms
+        self.max_num_gt_boxes = 40
 
     def get_training_sample(self, transform_sample):
         # bbox and num
@@ -49,16 +50,21 @@ class KittiDataset(DetDataset):
             num = torch.Tensor(1)
 
         # im_info
+        # num_boxes = bbox.shape[0]
+        # if num_boxes < 40:
+        # bbox = torch.cat(
+        # (bbox, torch.ones(self.max_num_gt_boxes - num_boxes, 5)),
+        # dim=0)
 
         training_sample = {}
         training_sample['img'] = transform_sample['img']
         training_sample['im_info'] = img_info
         training_sample['img_name'] = transform_sample['img_name']
         training_sample['im_scale'] = im_scale
-        training_sample['bbox'] = bbox
+        training_sample['gt_boxes'] = bbox[:, :4]
+        training_sample['gt_labels'] = bbox[:, -1].long()
         training_sample['num'] = num
-        if self.cache_bev:
-            training_sample['img_orig'] = transform_sample['img_orig']
+        training_sample['img_orig'] = transform_sample['img_orig']
 
         return training_sample
 
@@ -85,8 +91,7 @@ class KittiDataset(DetDataset):
                 'im_scale': 1.0,
                 'img_name': img_file,
             }
-        if self.cache_bev:
-            transform_sample.update({'img_orig': numpy.asarray(img).copy()})
+        transform_sample.update({'img_orig': numpy.asarray(img).copy()})
 
         return transform_sample
 
@@ -158,7 +163,7 @@ class KittiDataset(DetDataset):
                 _id = i
                 break
         if _id == -1:
-            print "wrong label !"
+            print("wrong label !")
         return _id
 
     @staticmethod
@@ -178,7 +183,11 @@ class KittiDataset(DetDataset):
                 os.path.join(self.root_path, 'label_2/{}.txt'.format(label))
                 for label in labels
             ]
-            labels = [label for label in labels if self.__check_has_car(label)]
+            if self.training:
+                # when testing,do not filter out labels for increase fp
+                labels = [
+                    label for label in labels if self.__check_has_car(label)
+                ]
         return labels
 
     def make_image_list(self):
