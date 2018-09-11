@@ -5,19 +5,20 @@ import torch
 
 # core classes
 
-from core.similarity_calc import SimilarityCalc
 from core.analyzer import Analyzer
 
 # builder
 from builder import matcher_builder
 from builder import bbox_coder_builder
+from builder import similarity_calc_builder
 
 
 class TargetAssigner(object):
     def __init__(self, assigner_config):
 
         # some compositions
-        self.similarity_calc = SimilarityCalc()
+        self.similarity_calc = similarity_calc_builder.build(
+            assigner_config['similarity_calc_config'])
         self.bbox_coder = bbox_coder_builder.build(
             assigner_config['coder_config'])
         self.matcher = matcher_builder.build(assigner_config['matcher_config'])
@@ -75,8 +76,10 @@ class TargetAssigner(object):
         reg_weights[match == -1] = 0
 
         # as for cls weights, ignore according to bg_thresh
-        ignored_bg = (assigned_overlaps_batch > self.bg_thresh) & (match == -1)
-        cls_weights[ignored_bg] = 0
+        if self.bg_thresh > 0:
+            ignored_bg = (assigned_overlaps_batch > self.bg_thresh) & (
+                match == -1)
+            cls_weights[ignored_bg] = 0
 
         return cls_targets, reg_targets, cls_weights, reg_weights
 

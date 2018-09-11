@@ -15,8 +15,8 @@
     # --load_dir /data/object/liangxiong/faster_rcnn \
     # --config /data/object/liangxiong/faster_rcnn/faster_rcnn/kitti/kitti_config.json
 
-CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     --checkpoint 3257 \
-    --checkepoch 46 \
+    --checkepoch 2 \
     --net faster_rcnn \
-    --load_dir /data/object/liangxiong/scale
+    --load_dir /data/object/liangxiong/scale_encode

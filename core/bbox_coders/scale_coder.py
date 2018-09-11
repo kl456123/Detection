@@ -26,8 +26,8 @@ class ScaleCoder(object):
             anchors = anchors.expand_as(gt_boxes)
 
         if anchors.dim() == 3:
-            anchor_ws_half = (anchors[:, :, 2] - anchors[:, :, 0]) / 2 + 1
-            anchor_hs_half = (anchors[:, :, 3] - anchors[:, :, 1]) / 2 + 1
+            anchor_ws_half = (anchors[:, :, 2] - anchors[:, :, 0] + 1) / 2
+            anchor_hs_half = (anchors[:, :, 3] - anchors[:, :, 1] + 1) / 2
             anchor_ctr_x = (anchors[:, :, 0] + anchors[:, :, 2]) / 2
             anchor_ctr_y = (anchors[:, :, 3] + anchors[:, :, 1]) / 2
 
@@ -64,8 +64,8 @@ class ScaleCoder(object):
         else:
             raise ValueError("The dimension of boxes should be 3 or 2")
 
-        boxes_ws_half = (boxes[:, :, 2] - boxes[:, :, 0]) / 2 + 1
-        boxes_hs_half = (boxes[:, :, 3] - boxes[:, :, 1]) / 2 + 1
+        boxes_ws_half = (boxes[:, :, 2] - boxes[:, :, 0]+1) / 2 + 1
+        boxes_hs_half = (boxes[:, :, 3] - boxes[:, :, 1]+1) / 2 + 1
         boxes_ctr_x = (boxes[:, :, 0] + boxes[:, :, 2]) / 2
         boxes_ctr_y = (boxes[:, :, 1] + boxes[:, :, 3]) / 2
 

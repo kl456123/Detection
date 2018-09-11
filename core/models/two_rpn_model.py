@@ -19,6 +19,8 @@ from core.samplers.balanced_sampler import BalancedSampler
 from lib.model.utils.net_utils import _smooth_l1_loss
 from lib.model.rpn.proposal_target_layer_tworpn import _ProposalTargetLayer as ProposalTargetTwoRPN
 
+from utils import box_ops
+
 
 class TwoRPNModel(Model):
     def clean_base_feat(self, base_feat, rois_batch, gt_boxes=None):
@@ -29,13 +31,22 @@ class TwoRPNModel(Model):
         Returns:
             clean_feat: shape(N,C,H,W)
         """
+        batch_size = rois_batch.shape[0]
         upsampled_feat = self.upsample(base_feat)
         rois_batch = rois_batch[:, :, 1:]
         if gt_boxes is not None:
             rois_batch = torch.cat([rois_batch, gt_boxes], dim=1)
 
+        # round it first
         rois_batch = rois_batch.int()
-        batch_size = rois_batch.shape[0]
+
+        # filter small rois
+        rois_batch = rois_batch.view(-1, 4)
+        # import ipdb
+        # ipdb.set_trace()
+        keep = box_ops.size_filter(rois_batch, 16)
+        rois_batch = rois_batch[keep].view(batch_size, -1, 4)
+
         rois_per_img = rois_batch.shape[1]
         mask = torch.zeros(upsampled_feat.shape[0], upsampled_feat.shape[2],
                            upsampled_feat.shape[3])
@@ -60,7 +71,6 @@ class TwoRPNModel(Model):
         Returns:
             res_batch: shape (batch_size,rois_per_img,4)
         """
-        second_rpn_bbox_pred = second_rpn_bbox_pred.detach()
         batch_size = second_rpn_bbox_pred.shape[0]
         proposals_order = proposals_order.view(batch_size, -1)
         second_rpn_bbox_pred = second_rpn_bbox_pred.permute(
@@ -82,7 +92,6 @@ class TwoRPNModel(Model):
         Returns:
             res_batch: shape(batch_size,rois_per_img,2)
         """
-        second_rpn_cls_score = second_rpn_cls_score.detach()
         batch_size = second_rpn_cls_score.shape[0]
 
         proposals_order = proposals_order.view(batch_size, -1)
@@ -141,6 +150,8 @@ class TwoRPNModel(Model):
         else:
             second_rpn_cls_prob = F.softmax(second_rpn_cls_scores, dim=1)
 
+        second_rpn_anchors = prediction_dict['anchors'][0][proposals_order]
+        prediction_dict['second_rpn_anchors'] = second_rpn_anchors
         prediction_dict.update({
             'rcnn_cls_probs': second_rpn_cls_prob,
             'rcnn_bbox_preds': second_rpn_bbox_pred,
@@ -226,6 +237,10 @@ class TwoRPNModel(Model):
             dim=-1)
         num_reg_coeff = rcnn_reg_weights.type(torch.cuda.ByteTensor).sum(
             dim=-1)
+        if num_cls_coeff == 0:
+            num_cls_coeff = torch.ones([]).type_as(num_cls_coeff)
+        if num_reg_coeff == 0:
+            num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
         prediction_dict[
             'rcnn_cls_weights'] = rcnn_cls_weights / num_cls_coeff.float()
@@ -242,8 +257,7 @@ class TwoRPNModel(Model):
 
         # used for track
         proposals_order = prediction_dict['proposals_order']
-        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][0][
-            proposals_order]
+
         prediction_dict['proposals_order'] = proposals_order[batch_sampled_mask]
 
     def init_param(self, model_config):

@@ -109,6 +109,7 @@
         "pooling_size": 7,
         "rcnn_batch_size": 512,
         "rpn_config": {
+            "use_focal_loss":true,
             "anchor_generator_config": {
                 "anchor_offset": [
                     0,
@@ -142,14 +143,17 @@
                 "fg_fraction": 0.25
             },
             "target_assigner_config": {
-                "fg_thresh": 0.7,
-                "bg_thresh":0.3,
+                "similarity_calc_config":{
+                    "type":"scale"
+                },
+                "fg_thresh": 0,
+                "bg_thresh":0,
                 "coder_config": {
-                    "type":"center",
+                    "type":"scale",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "bipartitle"
+                    "type": "scale"
                 }
             },
             "use_score": false
@@ -159,10 +163,13 @@
         },
         "subsample_twice": false,
         "target_assigner_config": {
+            "similarity_calc_config":{
+                "type":"scale"
+            },
             "fg_thresh": 0.5,
             "bg_thresh":0.5,
             "coder_config": {
-                "type":"center",
+                "type":"scale",
                 "bbox_inside_weights": [
                     1.0,
                     1.0,
@@ -184,7 +191,7 @@
                 "bbox_normalize_targets_precomputed": true
             },
             "matcher_config": {
-                "type": "argmax"
+                "type": "scale"
             }
         },
         "truncated": false,

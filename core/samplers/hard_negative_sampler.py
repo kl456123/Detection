@@ -21,7 +21,7 @@ class HardNegativeSampler(Sampler):
         fg_inds = torch.nonzero(pos_indicator).view(-1)
         if fg_inds.numel() > fg_num_for_sample:
             sorted_scores, order = torch.sort(criterion, descending=False)
-            fg_order = order[pos_indicator]
+            fg_order = order[pos_indicator[order]]
             fg_inds = fg_order[:fg_num_for_sample]
 
         # the remain is bg
@@ -31,7 +31,7 @@ class HardNegativeSampler(Sampler):
 
         if bg_inds.numel() > bg_num_for_sample:
             sorted_scores, order = torch.sort(criterion, descending=True)
-            bg_order = order[neg_indicator]
+            bg_order = order[neg_indicator[order]]
             bg_inds = bg_order[:bg_num_for_sample]
 
         # if not enough samples,oversample from fg

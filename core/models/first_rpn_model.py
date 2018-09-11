@@ -15,6 +15,8 @@ from core.models.focal_loss import FocalLoss
 from utils import box_ops
 from lib.model.nms.nms_wrapper import nms
 
+import functools
+
 
 class FirstRPNModel(Model):
     def init_param(self, model_config):
@@ -24,6 +26,7 @@ class FirstRPNModel(Model):
         self.nms_thresh = model_config['nms_thresh']
         self.use_score = model_config['use_score']
         self.rpn_batch_size = model_config['rpn_batch_size']
+        self.use_focal_loss = model_config['use_focal_loss']
 
         # sampler
         self.sampler = HardNegativeSampler(model_config['sampler_config'])
@@ -71,8 +74,11 @@ class FirstRPNModel(Model):
         self.rpn_bbox_loss = nn.modules.loss.SmoothL1Loss(reduce=False)
 
         # cls
-        # self.rpn_cls_loss = FocalLoss(2)
-        self.rpn_cls_loss = F.cross_entropy
+        if self.use_focal_loss:
+            self.rpn_cls_loss = FocalLoss(2)
+        else:
+            self.rpn_cls_loss = functools.partial(
+                F.cross_entropy, reduce=False)
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
@@ -292,10 +298,12 @@ class FirstRPNModel(Model):
         rpn_cls_score = prediction_dict['rpn_cls_scores']
         # rpn_cls_loss = self.rpn_cls_loss(rpn_cls_score, rpn_cls_targets)
         rpn_cls_loss = self.rpn_cls_loss(
-            rpn_cls_score.view(-1, 2), rpn_cls_targets.view(-1), reduce=False)
+            rpn_cls_score.view(-1, 2), rpn_cls_targets.view(-1))
         rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
         rpn_cls_loss *= rpn_cls_weights
-        rpn_cls_loss = rpn_cls_loss.sum(dim=1) / num_cls_coeff.float()
+        rpn_cls_loss = rpn_cls_loss.sum(dim=1)
+        if num_cls_coeff:
+            rpn_cls_loss /= num_cls_coeff.float()
 
         # bbox loss
         # shape(N,num,4)
@@ -305,8 +313,9 @@ class FirstRPNModel(Model):
         rpn_bbox_preds = rpn_bbox_preds.view(rpn_bbox_preds.shape[0], -1, 4)
         rpn_reg_loss = self.rpn_bbox_loss(rpn_bbox_preds, rpn_reg_targets)
         rpn_reg_loss *= rpn_reg_weights.unsqueeze(-1).expand(-1, -1, 4)
-        rpn_reg_loss = rpn_reg_loss.view(rpn_reg_loss.shape[0], -1).sum(
-            dim=1) / num_reg_coeff.float()
+        rpn_reg_loss = rpn_reg_loss.view(rpn_reg_loss.shape[0], -1).sum(dim=1)
+        if num_reg_coeff:
+            rpn_reg_loss /= num_reg_coeff.float()
 
         loss_dict['rpn_cls_loss'] = rpn_cls_loss
         loss_dict['rpn_bbox_loss'] = rpn_reg_loss

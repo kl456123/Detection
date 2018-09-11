@@ -14,6 +14,7 @@ from core.models.focal_loss import FocalLoss
 
 from utils import box_ops
 from lib.model.nms.nms_wrapper import nms
+import functools
 
 
 class RPNModel(Model):
@@ -24,6 +25,7 @@ class RPNModel(Model):
         self.nms_thresh = model_config['nms_thresh']
         self.use_score = model_config['use_score']
         self.rpn_batch_size = model_config['rpn_batch_size']
+        self.use_focal_loss = model_config['use_focal_loss']
 
         # sampler
         self.sampler = HardNegativeSampler(model_config['sampler_config'])
@@ -71,8 +73,11 @@ class RPNModel(Model):
         self.rpn_bbox_loss = nn.modules.loss.SmoothL1Loss(reduce=False)
 
         # cls
-        # self.rpn_cls_loss = FocalLoss(2)
-        self.rpn_cls_loss = F.cross_entropy
+        if self.use_focal_loss:
+            self.rpn_cls_loss = FocalLoss(2)
+        else:
+            self.rpn_cls_loss = functools.partial(
+                F.cross_entropy, reduce=False)
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
@@ -267,8 +272,8 @@ class RPNModel(Model):
         # target assigner
         ################################
         # no need gt labels here,it just a binary classifcation problem
-        # import ipdb
-        # ipdb.set_trace()
+        #  import ipdb
+        #  ipdb.set_trace()
         rpn_cls_targets, rpn_reg_targets, \
             rpn_cls_weights, rpn_reg_weights = \
             self.target_assigner.assign(anchors, gt_boxes, gt_labels=None)
@@ -291,12 +296,19 @@ class RPNModel(Model):
         rpn_reg_weights = rpn_reg_weights * batch_sampled_mask
         num_cls_coeff = rpn_cls_weights.type(torch.cuda.ByteTensor).sum(dim=1)
         num_reg_coeff = rpn_reg_weights.type(torch.cuda.ByteTensor).sum(dim=1)
+        # check
+        #  assert num_cls_coeff, 'bug happens'
+        #  assert num_reg_coeff, 'bug happens'
+        if num_cls_coeff == 0:
+            num_cls_coeff = torch.ones([]).type_as(num_cls_coeff)
+        if num_reg_coeff == 0:
+            num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
         # cls loss
         rpn_cls_score = prediction_dict['rpn_cls_scores']
         # rpn_cls_loss = self.rpn_cls_loss(rpn_cls_score, rpn_cls_targets)
         rpn_cls_loss = self.rpn_cls_loss(
-            rpn_cls_score.view(-1, 2), rpn_cls_targets.view(-1), reduce=False)
+            rpn_cls_score.view(-1, 2), rpn_cls_targets.view(-1))
         rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
         rpn_cls_loss *= rpn_cls_weights
         rpn_cls_loss = rpn_cls_loss.sum(dim=1) / num_cls_coeff.float()

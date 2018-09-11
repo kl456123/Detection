@@ -109,6 +109,7 @@
         "pooling_size": 7,
         "rcnn_batch_size": 512,
         "rpn_config": {
+            "use_focal_loss":true,
             "anchor_generator_config": {
                 "anchor_offset": [
                     0,
@@ -145,11 +146,14 @@
                 "fg_thresh": 0.7,
                 "bg_thresh":0.3,
                 "coder_config": {
-                    "type":"scale",
+                    "type":"center",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
                     "type": "bipartitle"
+                },
+                "similarity_calc_config":{
+                    "type":"center"
                 }
             },
             "use_score": false
@@ -185,6 +189,9 @@
             },
             "matcher_config": {
                 "type": "argmax"
+            },
+            "similarity_calc_config":{
+                "type":"center"
             }
         },
         "truncated": false,

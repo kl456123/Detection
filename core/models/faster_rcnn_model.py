@@ -15,6 +15,8 @@ from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractor_model import FeatureExtractor
 
+import functools
+
 
 class FasterRCNN(Model):
     def forward(self, feed_dict):
@@ -54,6 +56,11 @@ class FasterRCNN(Model):
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
         prediction_dict['rcnn_cls_scores'] = rcnn_cls_scores
 
+        # used for track
+        proposals_order = prediction_dict['proposals_order']
+        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][0][
+            proposals_order]
+
         return prediction_dict
 
     def init_weights(self):
@@ -80,7 +87,8 @@ class FasterRCNN(Model):
         if self.use_focal_loss:
             self.rcnn_cls_loss = FocalLoss(2)
         else:
-            self.rcnn_cls_loss = F.cross_entropy
+            self.rcnn_cls_loss = functools.partial(
+                F.cross_entropy, reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
@@ -138,6 +146,9 @@ class FasterRCNN(Model):
             dim=-1)
         num_reg_coeff = rcnn_reg_weights.type(torch.cuda.ByteTensor).sum(
             dim=-1)
+        # check
+        assert num_cls_coeff, 'bug happens'
+        assert num_reg_coeff, 'bug happens'
 
         prediction_dict[
             'rcnn_cls_weights'] = rcnn_cls_weights / num_cls_coeff.float()
@@ -155,8 +166,7 @@ class FasterRCNN(Model):
         if not self.training:
             # used for track
             proposals_order = prediction_dict['proposals_order']
-            prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
-                0][proposals_order]
+
             prediction_dict['proposals_order'] = proposals_order[
                 batch_sampled_mask]
 
