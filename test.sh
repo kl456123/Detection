@@ -27,11 +27,11 @@
     # --net distance_faster_rcnn \
     # --load_dir /data/object/liangxiong/distance_center
 
-# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    # --checkpoint 3257 \
-    # --checkepoch 46 \
-    # --net faster_rcnn \
-    # --load_dir /data/object/liangxiong/faster_rcnn_detection_all
+CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    --checkpoint 3257 \
+    --checkepoch 46 \
+    --net faster_rcnn \
+    --load_dir /data/object/liangxiong/faster_rcnn_detection
 
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
@@ -45,8 +45,8 @@
     # --net new_faster_rcnn \
     # --load_dir /data/object/liangxiong/exp_iouweights_hem_great
 
-CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    --checkpoint 3257 \
-    --checkepoch 37 \
-    --net iou_faster_rcnn \
-    --load_dir /data/object/liangxiong/iou_exp
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 37 \
+    # --net iou_faster_rcnn \
+    # --load_dir /data/object/liangxiong/iou_exp

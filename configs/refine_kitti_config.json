@@ -88,7 +88,6 @@
         }
     },
     "model_config": {
-        "iou_criterion":true,
         "class_agnostic": true,
         "classes": [
             "bg",
@@ -110,7 +109,6 @@
         "pooling_size": 7,
         "rcnn_batch_size": 512,
         "rpn_config": {
-            "iou_criterion":true,
             "use_focal_loss":true,
             "anchor_generator_config": {
                 "anchor_offset": [
