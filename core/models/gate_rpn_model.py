@@ -18,7 +18,7 @@ from lib.model.nms.nms_wrapper import nms
 import functools
 
 
-class RPNModel(Model):
+class GateRPNModel(Model):
     def init_param(self, model_config):
         self.in_channels = model_config['din']
         self.post_nms_topN = model_config['post_nms_topN']
@@ -27,6 +27,7 @@ class RPNModel(Model):
         self.use_score = model_config['use_score']
         self.rpn_batch_size = model_config['rpn_batch_size']
         self.use_focal_loss = model_config['use_focal_loss']
+        self.gate_thresh = model_config['gate_thresh']
 
         # sampler
         # self.sampler = HardNegativeSampler(model_config['sampler_config'])
@@ -81,6 +82,29 @@ class RPNModel(Model):
             self.rpn_cls_loss = functools.partial(
                 F.cross_entropy, reduce=False)
 
+    def get_rpn_cls_probs(self, bbox_pred, anchors=None):
+        """
+        Note that all inputs have no gradients
+        Args:
+        bbox_pred: shape (N,M,4)
+        anchors: shape (M,4)
+        Returns:
+        distance: shape(N,M)
+        """
+        # shape(N,M,4)
+        # distances = self.distance_similarity_calc.compare_batch(bbox, gt_boxes)
+        # anchors = anchors.expand_as(bbox_pred)
+        # widths = anchors[:, :, 2] - anchors[:, :, 0] + 1.0
+        # heights = anchors[:, :, 3] - anchors[:, :, 1] + 1.0
+        # dx = bbox_pred[:, :, 0] * widths
+        # dy = bbox_pred[:, :, 1] * heights
+        dx = bbox_pred[:, :, 0]
+        dy = bbox_pred[:, :, 1]
+        distance = torch.sqrt(dx * dx + dy * dy)
+        theta = 1e-5
+        #  return 1.0 / (distance + theta), distance
+        return 1.0 / (distance + theta)
+
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
         # TODO create a new Function
@@ -123,9 +147,10 @@ class RPNModel(Model):
         proposals = box_ops.clip_boxes(proposals, im_info)
 
         # fg prob
-        fg_probs = rpn_cls_probs[:, self.num_anchors:, :, :]
-        fg_probs = fg_probs.permute(0, 2, 3, 1).contiguous().view(batch_size,
-                                                                  -1)
+        gate = rpn_cls_probs[:, self.num_anchors:, :, :]
+        gate = gate.permute(0, 2, 3, 1).contiguous().view(batch_size, -1)
+        fg_probs = self.get_rpn_cls_probs(rpn_bbox_preds, anchors)
+        fg_probs[gate < self.gate_thresh] = 0
 
         # sort fg
         _, fg_probs_order = torch.sort(fg_probs, dim=1, descending=True)
@@ -165,7 +190,7 @@ class RPNModel(Model):
             proposals_batch[i, :num_proposal, :] = proposals_single
             # fg_probs_batch[i, :num_proposal] = fg_probs_single
             proposals_order[i, :num_proposal] = fg_order_single
-        return proposals_batch, proposals_order
+        return proposals_batch, proposals_order, fg_probs
 
     def forward(self, bottom_blobs):
         base_feat = bottom_blobs['base_feat']
@@ -182,8 +207,8 @@ class RPNModel(Model):
 
         # rpn cls prob shape(N,2*num_anchors,H,W)
         rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
-        rpn_cls_probs = F.softmax(rpn_cls_score_reshape, dim=1)
-        rpn_cls_probs = rpn_cls_probs.view_as(rpn_cls_scores)
+        gate_probs = F.softmax(rpn_cls_score_reshape, dim=1)
+        gate_probs = gate_probs.view_as(rpn_cls_scores)
         # import ipdb
         # ipdb.set_trace()
 
@@ -212,8 +237,8 @@ class RPNModel(Model):
         # Proposal
         ###############################
         # note that proposals_order is used for track transform of propsoals
-        proposals_batch, proposals_order = self.generate_proposal(
-            rpn_cls_probs, anchors, rpn_bbox_preds, im_info)
+        proposals_batch, proposals_order, fg_probs = self.generate_proposal(
+            gate_probs, anchors, rpn_bbox_preds, im_info)
         batch_idx = torch.arange(batch_size).view(batch_size, 1).expand(
             -1, proposals_batch.shape[1]).type_as(proposals_batch)
         rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
@@ -229,10 +254,10 @@ class RPNModel(Model):
             0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
 
         # postprocess
-        rpn_cls_probs = rpn_cls_probs.view(
-            batch_size, 2, -1, rpn_cls_probs.shape[2], rpn_cls_probs.shape[3])
-        rpn_cls_probs = rpn_cls_probs.permute(0, 3, 4, 2, 1).contiguous().view(
-            batch_size, -1, 2)
+        #  gate_probs = gate_probs.view(batch_size, 2, -1, gate_probs.shape[2],
+        #  gate_probs.shape[3])
+        #  gate_probs = gate_probs.permute(0, 3, 4, 2, 1).contiguous().view(
+        #  batch_size, -1, 2)
         predict_dict = {
             'proposals_batch': proposals_batch,
             'rpn_cls_scores': rpn_cls_scores,
@@ -241,8 +266,8 @@ class RPNModel(Model):
 
             # used for loss
             'rpn_bbox_preds': rpn_bbox_preds,
-            'rpn_cls_probs': rpn_cls_probs,
             'proposals_order': proposals_order,
+            'fg_probs': fg_probs,
         }
 
         return predict_dict
@@ -283,10 +308,15 @@ class RPNModel(Model):
         ################################
         # subsample
         ################################
-        rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
-        cls_criterion = rpn_cls_probs
         pos_indicator = rpn_cls_targets > 0
         indicator = rpn_cls_weights > 0
+
+        use_iou_for_criteron = True
+        if use_iou_for_criteron:
+            cls_criterion = self.target_assigner.matcher.assigned_overlaps_batch
+        else:
+            fg_probs = prediction_dict['fg_probs']
+            cls_criterion = fg_probs
 
         batch_sampled_mask = self.sampler.subsample_batch(
             self.rpn_batch_size,

@@ -5,22 +5,28 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from core.model import Model
-from core.models.rpn_model import RPNModel
+from core.models.distance_rpn_model import DistanceRPNModel
 from core.models.focal_loss import FocalLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 
 from core.filler import Filler
+from core.distance_target_assigner import DistanceTargetAssigner
 from core.target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
+from core.samplers.detection_sampler import DetectionSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractor_model import FeatureExtractor
-from core.samplers.detection_sampler import DetectionSampler
 
 import functools
+"""
+Note that due to lazy, it is the same as faster_rcnn_model here
+"""
 
 
-class FasterRCNN(Model):
+class DistanceFasterRCNN(Model):
     def forward(self, feed_dict):
+        # import ipdb
+        # ipdb.set_trace()
 
         prediction_dict = {}
 
@@ -75,7 +81,8 @@ class FasterRCNN(Model):
     def init_modules(self):
         self.feature_extractor = FeatureExtractor(
             self.feature_extractor_config)
-        self.rpn_model = RPNModel(self.rpn_config)
+        #  self.rpn_model = RPNModel(self.rpn_config)
+        self.rpn_model = DistanceRPNModel(self.rpn_config)
         self.rcnn_pooling = RoIAlignAvg(self.pooling_size, self.pooling_size,
                                         1.0 / 16.0)
         self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
@@ -85,12 +92,15 @@ class FasterRCNN(Model):
             self.rcnn_bbox_pred = nn.Linear(2048, 4 * self.n_classes)
 
         # loss module
-        if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(2)
+        if self.use_iou:
+            # cls reg
+            self.rcnn_cls_loss = nn.MSELoss(reduce=False)
         else:
-            self.rcnn_cls_loss = functools.partial(
-                F.cross_entropy, reduce=False)
-
+            if self.use_focal_loss:
+                self.rcnn_cls_loss = FocalLoss(2)
+            else:
+                self.rcnn_cls_loss = functools.partial(
+                    F.cross_entropy, reduce=False)
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
     def init_param(self, model_config):
@@ -107,17 +117,26 @@ class FasterRCNN(Model):
         self.use_focal_loss = model_config['use_focal_loss']
         self.subsample_twice = model_config['subsample_twice']
         self.rcnn_batch_size = model_config['rcnn_batch_size']
+        self.use_iou = model_config.get('use_iou')
 
         # some submodule config
         self.feature_extractor_config = model_config['feature_extractor_config']
         self.rpn_config = model_config['rpn_config']
 
-        # assigner
-        self.target_assigner = TargetAssigner(
-            model_config['target_assigner_config'])
+        if self.use_iou:
+            # assigner
+            self.target_assigner = DistanceTargetAssigner(
+                model_config['target_assigner_config'])
+        else:
+            self.target_assigner = TargetAssigner(
+                model_config['target_assigner_config'])
 
         # sampler
-        self.sampler = BalancedSampler(model_config['sampler_config'])
+        # self.sampler = HardNegativeSampler(model_config['sampler_config'])
+        if self.use_iou:
+            self.sampler = DetectionSampler(model_config['sampler_config'])
+        else:
+            self.sampler = BalancedSampler(model_config['sampler_config'])
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']
@@ -135,23 +154,17 @@ class FasterRCNN(Model):
         ##########################
         # subsampler
         ##########################
-        cls_criterion = None
         pos_indicator = rcnn_cls_targets > 0
         indicator = rcnn_cls_weights > 0
 
         # subsample from all
         # shape (N,M)
         batch_sampled_mask = self.sampler.subsample_batch(
-            self.rcnn_batch_size,
-            pos_indicator,
-            indicator=indicator,
-            criterion=cls_criterion)
+            self.rcnn_batch_size, pos_indicator, indicator=indicator)
         rcnn_cls_weights = rcnn_cls_weights[batch_sampled_mask]
         rcnn_reg_weights = rcnn_reg_weights[batch_sampled_mask]
-        num_cls_coeff = rcnn_cls_weights.type(torch.cuda.ByteTensor).sum(
-            dim=-1)
-        num_reg_coeff = rcnn_reg_weights.type(torch.cuda.ByteTensor).sum(
-            dim=-1)
+        num_cls_coeff = (rcnn_cls_weights > 0).sum(dim=-1)
+        num_reg_coeff = (rcnn_reg_weights > 0).sum(dim=-1)
         # check
         assert num_cls_coeff, 'bug happens'
         assert num_reg_coeff, 'bug happens'
@@ -194,10 +207,24 @@ class FasterRCNN(Model):
         rcnn_reg_targets = prediction_dict['rcnn_reg_targets']
 
         # classification loss
-        rcnn_cls_scores = prediction_dict['rcnn_cls_scores']
-        rcnn_cls_loss = self.rcnn_cls_loss(rcnn_cls_scores, rcnn_cls_targets)
-        rcnn_cls_loss *= rcnn_cls_weights
-        rcnn_cls_loss = rcnn_cls_loss.sum(dim=-1)
+        if self.use_iou:
+            rcnn_cls_probs = prediction_dict['rcnn_cls_probs']
+            fg_rcnn_cls_probs = rcnn_cls_probs[:, 1]
+            # exp
+            fg_rcnn_cls_probs = torch.exp(fg_rcnn_cls_probs)
+            rcnn_cls_targets = torch.exp(rcnn_cls_targets)
+            #  import ipdb
+            #  ipdb.set_trace()
+            rcnn_cls_loss = self.rcnn_cls_loss(
+                fg_rcnn_cls_probs, rcnn_cls_targets.type_as(fg_rcnn_cls_probs))
+            rcnn_cls_loss *= rcnn_cls_weights
+            rcnn_cls_loss = rcnn_cls_loss.sum(dim=-1)
+        else:
+            rcnn_cls_scores = prediction_dict['rcnn_cls_scores']
+            rcnn_cls_loss = self.rcnn_cls_loss(rcnn_cls_scores,
+                                               rcnn_cls_targets)
+            rcnn_cls_loss *= rcnn_cls_weights
+            rcnn_cls_loss = rcnn_cls_loss.sum(dim=-1)
 
         # bounding box regression L1 loss
         rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']

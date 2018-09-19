@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from core.model import Model
-from core.models.rpn_model import RPNModel
+from core.models.gate_rpn_model import GateRPNModel
 from core.models.focal_loss import FocalLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 
@@ -13,14 +13,16 @@ from core.filler import Filler
 from core.target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
-from core.models.feature_extractor_model import FeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
+from core.models.feature_extractor_model import FeatureExtractor
 
 import functools
 
 
-class FasterRCNN(Model):
+class GateFasterRCNN(Model):
     def forward(self, feed_dict):
+        # import ipdb
+        # ipdb.set_trace()
 
         prediction_dict = {}
 
@@ -75,7 +77,7 @@ class FasterRCNN(Model):
     def init_modules(self):
         self.feature_extractor = FeatureExtractor(
             self.feature_extractor_config)
-        self.rpn_model = RPNModel(self.rpn_config)
+        self.rpn_model = GateRPNModel(self.rpn_config)
         self.rcnn_pooling = RoIAlignAvg(self.pooling_size, self.pooling_size,
                                         1.0 / 16.0)
         self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
@@ -117,7 +119,9 @@ class FasterRCNN(Model):
             model_config['target_assigner_config'])
 
         # sampler
-        self.sampler = BalancedSampler(model_config['sampler_config'])
+        # self.sampler = HardNegativeSampler(model_config['sampler_config'])
+        # self.sampler = BalancedSampler(model_config['sampler_config'])
+        self.sampler = DetectionSampler(model_config['sampler_config'])
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']
@@ -135,12 +139,17 @@ class FasterRCNN(Model):
         ##########################
         # subsampler
         ##########################
-        cls_criterion = None
         pos_indicator = rcnn_cls_targets > 0
         indicator = rcnn_cls_weights > 0
 
         # subsample from all
         # shape (N,M)
+        # use overlaps to subsample
+        use_iou_for_criteron = True
+        if use_iou_for_criteron:
+            cls_criterion = self.target_assigner.matcher.assigned_overlaps_batch
+        else:
+            cls_criterion = None
         batch_sampled_mask = self.sampler.subsample_batch(
             self.rcnn_batch_size,
             pos_indicator,

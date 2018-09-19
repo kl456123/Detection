@@ -41,6 +41,8 @@ def test(eval_config, data_loader, model):
         classes = eval_config['classes']
         thresh = eval_config['thresh']
 
+        #  import ipdb
+        #  ipdb.set_trace()
         dets = []
         res_rois = []
         res_anchors = []
@@ -114,8 +116,8 @@ def im_detect(model, data, eval_config, im_orig=None):
         boxes = torch.cat([boxes, rois_scores], dim=2)
 
     # visualize rois
-    # import ipdb
-    # ipdb.set_trace()
+    #  import ipdb
+    #  ipdb.set_trace()
     if im_orig is not None and eval_config['rois_vis']:
         visualize_bbox(im_orig.numpy()[0], boxes.cpu().numpy()[0], save=True)
         # visualize_bbox(im_orig.numpy()[0], anchors[0].cpu().numpy()[:100], save=True)
@@ -139,11 +141,11 @@ def im_detect(model, data, eval_config, im_orig=None):
                 box_deltas = box_deltas.view(eval_config['batch_size'], -1,
                                              4 * len(eval_config['classes']))
 
-        pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
+        #  pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
+        pred_boxes = model.target_assigner.bbox_coder.decode_batch(
+            box_deltas.view(eval_config['batch_size'], -1, 4), boxes)
         pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
-    else:
-        # Simply repeat the boxes, once for each class
-        pred_boxes = np.tile(boxes, (1, scores.shape[1]))
+
     pred_boxes /= im_scale
     return pred_boxes, scores, rois[:, :, 1:5], anchors
 

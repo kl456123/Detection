@@ -12,6 +12,22 @@ class CenterCoder(object):
             self.bbox_normalize_stds = torch.tensor(
                 coder_config['bbox_normalize_stds'])
 
+    #  def decode_batch(self,deltas,boxes):
+    #  if self.bbox_normalize_targets_precomputed:
+    #  if eval_config['class_agnostic']:
+    #  box_deltas = box_deltas.view(
+    #  -1, 4) * torch.FloatTensor(eval_config[
+    #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
+    #  eval_config['bbox_normalize_means']).cuda()
+    #  box_deltas = box_deltas.view(eval_config['batch_size'], -1, 4)
+    #  else:
+    #  box_deltas = box_deltas.view(
+    #  -1, 4) * torch.FloatTensor(eval_config[
+    #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
+    #  eval_config['bbox_normalize_means']).cuda()
+    #  box_deltas = box_deltas.view(eval_config['batch_size'], -1,
+    #  4 * len(eval_config['classes']))
+
     def decode_batch(self, deltas, boxes):
         """
         Args:

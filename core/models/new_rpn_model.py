@@ -6,10 +6,10 @@ import torch.nn.functional as F
 
 from core.model import Model
 from core.anchor_generators.anchor_generator import AnchorGenerator
-# from core.samplers.hard_negative_sampler import HardNegativeSampler
-# from core.samplers.balanced_sampler import BalancedSampler
-from core.samplers.detection_sampler import DetectionSampler
+from core.samplers.hard_negative_sampler import HardNegativeSampler
+from core.samplers.balanced_sampler import BalancedSampler
 from core.target_assigner import TargetAssigner
+from core.new_target_assigner import NewTargetAssigner
 from core.filler import Filler
 from core.models.focal_loss import FocalLoss
 
@@ -18,7 +18,7 @@ from lib.model.nms.nms_wrapper import nms
 import functools
 
 
-class RPNModel(Model):
+class NewRPNModel(Model):
     def init_param(self, model_config):
         self.in_channels = model_config['din']
         self.post_nms_topN = model_config['post_nms_topN']
@@ -29,9 +29,8 @@ class RPNModel(Model):
         self.use_focal_loss = model_config['use_focal_loss']
 
         # sampler
-        # self.sampler = HardNegativeSampler(model_config['sampler_config'])
-        # self.sampler = BalancedSampler(model_config['sampler_config'])
-        self.sampler = DetectionSampler(model_config['sampler_config'])
+        self.sampler = HardNegativeSampler(model_config['sampler_config'])
+        #  self.sampler = BalancedSampler(model_config['sampler_config'])
 
         # anchor generator
         self.anchor_generator = AnchorGenerator(
@@ -41,7 +40,7 @@ class RPNModel(Model):
         self.nc_score_out = self.num_anchors * 2
 
         # target assigner
-        self.target_assigner = TargetAssigner(
+        self.target_assigner = NewTargetAssigner(
             model_config['target_assigner_config'])
 
         # bbox coder
@@ -75,24 +74,25 @@ class RPNModel(Model):
         self.rpn_bbox_loss = nn.modules.loss.SmoothL1Loss(reduce=False)
 
         # cls
-        if self.use_focal_loss:
-            self.rpn_cls_loss = FocalLoss(2)
-        else:
-            self.rpn_cls_loss = functools.partial(
-                F.cross_entropy, reduce=False)
+        #  if self.use_focal_loss:
+        #  self.rpn_cls_loss = FocalLoss(2)
+        #  else:
+        #  self.rpn_cls_loss = functools.partial(
+        #  F.cross_entropy, reduce=False)
+        self.rpn_cls_loss = nn.MSELoss(reduce=False)
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
         # TODO create a new Function
         """
         Args:
-        rpn_cls_probs: FloatTensor,shape(N,2*num_anchors,H,W)
-        rpn_bbox_preds: FloatTensor,shape(N,num_anchors*4,H,W)
-        anchors: FloatTensor,shape(N,4,H,W)
+            rpn_cls_probs: FloatTensor,shape(N,2*num_anchors,H,W)
+            rpn_bbox_preds: FloatTensor,shape(N,num_anchors*4,H,W)
+            anchors: FloatTensor,shape(N,4,H,W)
 
         Returns:
-        proposals_batch: FloatTensor, shape(N,post_nms_topN,4)
-        fg_probs_batch: FloatTensor, shape(N,post_nms_topN)
+            proposals_batch: FloatTensor, shape(N,post_nms_topN,4)
+            fg_probs_batch: FloatTensor, shape(N,post_nms_topN)
         """
         # assert len(
         # rpn_bbox_preds) == 1, 'just one feature maps is supported now'
@@ -270,23 +270,27 @@ class RPNModel(Model):
         assert len(anchors) == 1, 'just one feature maps is supported now'
         anchors = anchors[0]
 
+        window = feed_dict['img'].shape[-2:]
+
         #################################
         # target assigner
         ################################
         # no need gt labels here,it just a binary classifcation problem
-        #  import ipdb
-        #  ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
         rpn_cls_targets, rpn_reg_targets, \
             rpn_cls_weights, rpn_reg_weights = \
-            self.target_assigner.assign(anchors, gt_boxes, gt_labels=None)
+            self.target_assigner.assign(anchors, gt_boxes, gt_labels=None,
+                                        window=window)
 
         ################################
         # subsample
         ################################
         rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
-        cls_criterion = rpn_cls_probs
         pos_indicator = rpn_cls_targets > 0
         indicator = rpn_cls_weights > 0
+        # have better select ggod proposals(bigger pred of IoU)
+        cls_criterion = 1 - rpn_cls_probs
 
         batch_sampled_mask = self.sampler.subsample_batch(
             self.rpn_batch_size,
@@ -296,8 +300,8 @@ class RPNModel(Model):
         batch_sampled_mask = batch_sampled_mask.type_as(rpn_cls_weights)
         rpn_cls_weights = rpn_cls_weights * batch_sampled_mask
         rpn_reg_weights = rpn_reg_weights * batch_sampled_mask
-        num_cls_coeff = rpn_cls_weights.type(torch.cuda.ByteTensor).sum(dim=1)
-        num_reg_coeff = rpn_reg_weights.type(torch.cuda.ByteTensor).sum(dim=1)
+        num_cls_coeff = (rpn_cls_weights > 0).sum(dim=1)
+        num_reg_coeff = (rpn_reg_weights > 0).sum(dim=1)
         # check
         #  assert num_cls_coeff, 'bug happens'
         #  assert num_reg_coeff, 'bug happens'
@@ -307,10 +311,15 @@ class RPNModel(Model):
             num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
         # cls loss
-        rpn_cls_score = prediction_dict['rpn_cls_scores']
+        rpn_cls_probs = prediction_dict['rpn_cls_probs']
+        fg_rpn_cls_probs = rpn_cls_probs.view(-1, 2)[:, 1]
+        # exp
+        fg_rpn_cls_probs = torch.exp(fg_rpn_cls_probs)
+        rpn_cls_targets = torch.exp(rpn_cls_targets)
+
         # rpn_cls_loss = self.rpn_cls_loss(rpn_cls_score, rpn_cls_targets)
-        rpn_cls_loss = self.rpn_cls_loss(
-            rpn_cls_score.view(-1, 2), rpn_cls_targets.view(-1))
+        rpn_cls_loss = self.rpn_cls_loss(fg_rpn_cls_probs,
+                                         rpn_cls_targets.view(-1))
         rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
         rpn_cls_loss *= rpn_cls_weights
         rpn_cls_loss = rpn_cls_loss.sum(dim=1) / num_cls_coeff.float()

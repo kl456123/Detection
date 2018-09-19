@@ -48,7 +48,7 @@
             0.2,
             0.2
         ],
-        "bbox_normalize_targets_precomputed": false,
+        "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
         "class_agnostic": true,
         "classes": [
@@ -88,8 +88,8 @@
         }
     },
     "model_config": {
+        "iou_criterion":true,
         "class_agnostic": true,
-        "use_iou":true,
         "classes": [
             "bg",
             "Car"
@@ -111,6 +111,8 @@
         "rcnn_batch_size": 512,
         "rpn_config": {
             "use_focal_loss":true,
+            "iou_criterion":true,
+            "gate_thresh": 0.35,
             "anchor_generator_config": {
                 "anchor_offset": [
                     0,
@@ -145,16 +147,16 @@
             },
             "target_assigner_config": {
                 "similarity_calc_config":{
-                    "type":"scale"
+                    "type":"center"
                 },
-                "fg_thresh": 0,
-                "bg_thresh":0,
+                "fg_thresh": 0.3,
+                "bg_thresh":0.7,
                 "coder_config": {
-                    "type":"scale",
+                    "type":"center",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "scale"
+                    "type": "bipartitle"
                 }
             },
             "use_score": false
@@ -165,12 +167,12 @@
         "subsample_twice": false,
         "target_assigner_config": {
             "similarity_calc_config":{
-                "type":"scale"
+                "type":"center"
             },
-            "fg_thresh": 0,
-            "bg_thresh":0,
+            "fg_thresh": 0.5,
+            "bg_thresh":0.5,
             "coder_config": {
-                "type":"scale",
+                "type":"center",
                 "bbox_inside_weights": [
                     1.0,
                     1.0,
@@ -189,10 +191,10 @@
                     0.2,
                     0.2
                 ],
-                "bbox_normalize_targets_precomputed": false
+                "bbox_normalize_targets_precomputed": true
             },
             "matcher_config": {
-                "type": "scale"
+                "type": "argmax"
             }
         },
         "truncated": false,

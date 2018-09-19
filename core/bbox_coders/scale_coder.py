@@ -64,8 +64,8 @@ class ScaleCoder(object):
         else:
             raise ValueError("The dimension of boxes should be 3 or 2")
 
-        boxes_ws_half = (boxes[:, :, 2] - boxes[:, :, 0]+1) / 2 + 1
-        boxes_hs_half = (boxes[:, :, 3] - boxes[:, :, 1]+1) / 2 + 1
+        boxes_ws_half = (boxes[:, :, 2] - boxes[:, :, 0] + 1) / 2 + 1
+        boxes_hs_half = (boxes[:, :, 3] - boxes[:, :, 1] + 1) / 2 + 1
         boxes_ctr_x = (boxes[:, :, 0] + boxes[:, :, 2]) / 2
         boxes_ctr_y = (boxes[:, :, 1] + boxes[:, :, 3]) / 2
 

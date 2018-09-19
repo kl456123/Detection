@@ -13,7 +13,7 @@ from builder import bbox_coder_builder
 from builder import similarity_calc_builder
 
 
-class TargetAssigner(object):
+class RefineTargetAssigner(object):
     def __init__(self, assigner_config):
 
         # some compositions
@@ -62,7 +62,9 @@ class TargetAssigner(object):
         reg_targets = self._assign_regression_targets(match, bboxes, gt_boxes)
 
         # assign classification targets
-        cls_targets = self._assign_classification_targets(match, gt_labels)
+        #  cls_targets = self._assign_classification_targets(match, gt_labels,
+        #  assigned_overlaps_batch)
+        cls_targets = assigned_overlaps_batch.clone()
 
         # create regression weights
         reg_weights = self._create_regression_weights(assigned_overlaps_batch)
@@ -96,14 +98,16 @@ class TargetAssigner(object):
         """
         #  gamma = 2
         #  return torch.pow(1 - assigned_overlaps_batch, gamma).detach()
-        return torch.ones_like(assigned_overlaps_batch)
+        #  return torch.ones_like(assigned_overlaps_batch
+        return assigned_overlaps_batch.clone()
 
     def _create_classification_weights(self, assigned_overlaps_batch):
         """
         All samples can be used for calculating loss,So reserve all.
         """
-        cls_weights = torch.ones_like(assigned_overlaps_batch)
-        return cls_weights
+        #  cls_weights = torch.ones_like(assigned_overlaps_batch)
+        #  return cls_weights
+        return assigned_overlaps_batch.clone()
 
     def _assign_regression_targets(self, match, bboxes, gt_boxes):
         """
@@ -124,7 +128,8 @@ class TargetAssigner(object):
         # no need grad_fn
         return reg_targets_batch
 
-    def _assign_classification_targets(self, match, gt_labels):
+    def _assign_classification_targets(self, match, gt_labels,
+                                       match_quality_matrix):
         """
         Just return the countpart labels
         Note that use zero to represent background labels
@@ -132,18 +137,31 @@ class TargetAssigner(object):
         generate countpart gt_labels
         """
         # binary labels classifcation
-        if gt_labels is None:
-            # consider it as binary classification problem
-            return self._generate_binary_labels(match)
+        # if gt_labels is None:
+        # consider it as binary classification problem
+        return self._generate_binary_labels(match, match_quality_matrix)
 
         # multiple labels classification
-        batch_size = match.shape[0]
-        offset = torch.arange(0, batch_size) * gt_labels.size(1)
-        match += offset.view(batch_size, 1).type_as(match)
-        cls_targets_batch = gt_labels.view(-1)[match.view(-1)].view(
-            batch_size, match.shape[1])
-        return cls_targets_batch
+        # TODO(as for multiple cls ,match_quality_matrix should also be
+        # considered)
+        # batch_size = match.shape[0]
+        # offset = torch.arange(0, batch_size) * gt_labels.size(1)
+        # match += offset.view(batch_size, 1).type_as(match)
+        # cls_targets_batch = gt_labels.view(-1)[match.view(-1)].view(
 
-    def _generate_binary_labels(self, match):
-        gt_labels_batch = torch.ones_like(match).long()
-        return gt_labels_batch
+    # batch_size, match.shape[1])
+    # return cls_targets_batch
+
+    def _generate_binary_labels(self, match, match_quality_matrix):
+        """
+        Select cls_target from matrix according to match
+        Args:
+            match: shape(N,K)
+            match_quality_matrix: shape(N,K,M)
+        """
+        num = match.numel()
+        row = torch.arange(0, num).type_as(match)
+        M = match_quality_matrix.shape[2]
+        cls_targets_batch = match_quality_matrix.view(
+            -1, M)[row, match.view(-1)].view_as(match)
+        return cls_targets_batch

@@ -143,17 +143,17 @@
                 "fg_fraction": 0.25
             },
             "target_assigner_config": {
-                "fg_thresh": 0.7,
-                "bg_thresh":0.3,
+                "fg_thresh": 0,
+                "bg_thresh":0,
                 "coder_config": {
-                    "type":"center",
+                    "type":"scale",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "bipartitle"
+                    "type": "scale"
                 },
                 "similarity_calc_config":{
-                    "type":"center"
+                    "type":"scale"
                 }
             },
             "use_score": false
@@ -166,7 +166,7 @@
             "fg_thresh": 0.5,
             "bg_thresh":0.5,
             "coder_config": {
-                "type":"center",
+                "type":"scale",
                 "bbox_inside_weights": [
                     1.0,
                     1.0,
@@ -188,10 +188,10 @@
                 "bbox_normalize_targets_precomputed": true
             },
             "matcher_config": {
-                "type": "argmax"
+                "type": "scale"
             },
             "similarity_calc_config":{
-                "type":"center"
+                "type":"scale"
             }
         },
         "truncated": false,

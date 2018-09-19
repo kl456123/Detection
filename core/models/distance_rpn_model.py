@@ -6,19 +6,24 @@ import torch.nn.functional as F
 
 from core.model import Model
 from core.anchor_generators.anchor_generator import AnchorGenerator
-# from core.samplers.hard_negative_sampler import HardNegativeSampler
-# from core.samplers.balanced_sampler import BalancedSampler
+from core.samplers.hard_negative_sampler import HardNegativeSampler
+from core.samplers.balanced_sampler import BalancedSampler
 from core.samplers.detection_sampler import DetectionSampler
-from core.target_assigner import TargetAssigner
+from core.distance_target_assigner import DistanceTargetAssigner
 from core.filler import Filler
 from core.models.focal_loss import FocalLoss
+# from core.similarity_calc.distance_similarity_calc import DistanceSimilarityCalc
 
 from utils import box_ops
 from lib.model.nms.nms_wrapper import nms
 import functools
+"""
+Only predict bbox ,use distance of centers between gt boxes and pred bboxes
+to instead of scores
+"""
 
 
-class RPNModel(Model):
+class DistanceRPNModel(Model):
     def init_param(self, model_config):
         self.in_channels = model_config['din']
         self.post_nms_topN = model_config['post_nms_topN']
@@ -29,9 +34,10 @@ class RPNModel(Model):
         self.use_focal_loss = model_config['use_focal_loss']
 
         # sampler
-        # self.sampler = HardNegativeSampler(model_config['sampler_config'])
-        # self.sampler = BalancedSampler(model_config['sampler_config'])
+        #  self.sampler = HardNegativeSampler(model_config['sampler_config'])
         self.sampler = DetectionSampler(model_config['sampler_config'])
+        # can not use hem here
+        #  self.sampler = BalancedSampler(model_config['sampler_config'])
 
         # anchor generator
         self.anchor_generator = AnchorGenerator(
@@ -41,7 +47,7 @@ class RPNModel(Model):
         self.nc_score_out = self.num_anchors * 2
 
         # target assigner
-        self.target_assigner = TargetAssigner(
+        self.target_assigner = DistanceTargetAssigner(
             model_config['target_assigner_config'])
 
         # bbox coder
@@ -80,19 +86,22 @@ class RPNModel(Model):
         else:
             self.rpn_cls_loss = functools.partial(
                 F.cross_entropy, reduce=False)
+        #  self.rpn_cls_loss = nn.MSELoss(reduce=False)
+
+        # self.distance_similarity_calc = DistanceSimilarityCalc()
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
         # TODO create a new Function
         """
         Args:
-        rpn_cls_probs: FloatTensor,shape(N,2*num_anchors,H,W)
-        rpn_bbox_preds: FloatTensor,shape(N,num_anchors*4,H,W)
-        anchors: FloatTensor,shape(N,4,H,W)
+            rpn_cls_probs: FloatTensor,shape(N,2*num_anchors,H,W)
+            rpn_bbox_preds: FloatTensor,shape(N,num_anchors*4,H,W)
+            anchors: FloatTensor,shape(N,4,H,W)
 
         Returns:
-        proposals_batch: FloatTensor, shape(N,post_nms_topN,4)
-        fg_probs_batch: FloatTensor, shape(N,post_nms_topN)
+            proposals_batch: FloatTensor, shape(N,post_nms_topN,4)
+            fg_probs_batch: FloatTensor, shape(N,post_nms_topN)
         """
         # assert len(
         # rpn_bbox_preds) == 1, 'just one feature maps is supported now'
@@ -107,6 +116,15 @@ class RPNModel(Model):
         rpn_bbox_preds = rpn_bbox_preds.permute(0, 2, 3, 1).contiguous()
         # shape(N,H*W*num_anchors,4)
         rpn_bbox_preds = rpn_bbox_preds.view(batch_size, -1, 4)
+
+        # fg prob
+        gate = rpn_cls_probs[:, self.num_anchors:, :, :]
+        gate = gate.permute(0, 2, 3, 1).contiguous().view(batch_size, -1)
+        fg_probs, distance = self.get_rpn_cls_probs(
+            rpn_bbox_preds, anchors=None)
+        fg_probs[gate < 0.5] = 0
+        distance[gate < 0.5] = 1e5
+
         # apply deltas to anchors to decode
         # loop here due to many features maps
         # proposals = []
@@ -123,9 +141,6 @@ class RPNModel(Model):
         proposals = box_ops.clip_boxes(proposals, im_info)
 
         # fg prob
-        fg_probs = rpn_cls_probs[:, self.num_anchors:, :, :]
-        fg_probs = fg_probs.permute(0, 2, 3, 1).contiguous().view(batch_size,
-                                                                  -1)
 
         # sort fg
         _, fg_probs_order = torch.sort(fg_probs, dim=1, descending=True)
@@ -165,7 +180,33 @@ class RPNModel(Model):
             proposals_batch[i, :num_proposal, :] = proposals_single
             # fg_probs_batch[i, :num_proposal] = fg_probs_single
             proposals_order[i, :num_proposal] = fg_order_single
-        return proposals_batch, proposals_order
+
+        #  row = torch.arange(0, batch_size).type_as(proposals_order)
+        #  fg_probs = fg_probs[row, proposals_order.view(-1)].view_as(
+        #  proposals_order)
+        return proposals_batch, proposals_order, fg_probs, distance
+
+    def get_rpn_cls_probs(self, bbox_pred, anchors=None):
+        """
+        Note that all inputs have no gradients
+        Args:
+            bbox_pred: shape (N,M,4)
+            anchors: shape (M,4)
+        Returns:
+            distance: shape(N,M)
+        """
+        # shape(N,M,4)
+        # distances = self.distance_similarity_calc.compare_batch(bbox, gt_boxes)
+        # anchors = anchors.expand_as(bbox_pred)
+        # widths = anchors[:, :, 2] - anchors[:, :, 0] + 1.0
+        # heights = anchors[:, :, 3] - anchors[:, :, 1] + 1.0
+        # dx = bbox_pred[:, :, 0] * widths
+        # dy = bbox_pred[:, :, 1] * heights
+        dx = bbox_pred[:, :, 0]
+        dy = bbox_pred[:, :, 1]
+        distance = torch.sqrt(dx * dx + dy * dy)
+        theta = 1e-5
+        return 1.0 / (distance + theta), distance
 
     def forward(self, bottom_blobs):
         base_feat = bottom_blobs['base_feat']
@@ -176,43 +217,28 @@ class RPNModel(Model):
         # rpn conv
         rpn_conv = F.relu(self.rpn_conv(base_feat), inplace=True)
 
-        # rpn cls score
-        # shape(N,2*num_anchors,H,W)
-        rpn_cls_scores = self.rpn_cls_score(rpn_conv)
-
-        # rpn cls prob shape(N,2*num_anchors,H,W)
-        rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
-        rpn_cls_probs = F.softmax(rpn_cls_score_reshape, dim=1)
-        rpn_cls_probs = rpn_cls_probs.view_as(rpn_cls_scores)
-        # import ipdb
-        # ipdb.set_trace()
-
         # rpn bbox pred
         # shape(N,4*num_anchors,H,W)
-        if self.use_score:
-            # shape (N,2,num_anchoros*H*W)
-            rpn_cls_scores = rpn_cls_score_reshape.permute(0, 2, 1)
-            rpn_bbox_preds = []
-            for i in range(self.num_anchors):
-                rpn_bbox_feat = torch.cat(
-                    [rpn_conv, rpn_cls_scores[:, ::self.num_anchors, :, :]],
-                    dim=1)
-                rpn_bbox_preds.append(self.rpn_bbox_pred(rpn_bbox_feat))
-            rpn_bbox_preds = torch.cat(rpn_bbox_preds, dim=1)
-        else:
-            # get rpn offsets to the anchor boxes
-            rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
-            # rpn_bbox_preds = [rpn_bbox_preds]
+        rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
 
         # generate anchors
         feature_map_list = [base_feat.size()[-2:]]
         anchors = self.anchor_generator.generate(feature_map_list)
 
+        rpn_cls_scores = self.rpn_cls_score(rpn_conv)
+
+        # softmax
+        rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
+        rpn_cls_probs = F.softmax(rpn_cls_score_reshape, dim=1)
+        rpn_cls_probs = rpn_cls_probs.view_as(rpn_cls_scores)
+        # use distance to instead of rpn_cls_probs
+        #  rpn_cls_probs = self.get_rpn_cls_probs(rpn_bbox_preds)
+
         ###############################
         # Proposal
         ###############################
         # note that proposals_order is used for track transform of propsoals
-        proposals_batch, proposals_order = self.generate_proposal(
+        proposals_batch, proposals_order, fg_probs, distance = self.generate_proposal(
             rpn_cls_probs, anchors, rpn_bbox_preds, im_info)
         batch_idx = torch.arange(batch_size).view(batch_size, 1).expand(
             -1, proposals_batch.shape[1]).type_as(proposals_batch)
@@ -222,27 +248,24 @@ class RPNModel(Model):
         if self.training:
             rois_batch = self.append_gt(rois_batch, gt_boxes)
 
+        # postprocess
         rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
                                              rpn_cls_scores.shape[2],
                                              rpn_cls_scores.shape[3])
         rpn_cls_scores = rpn_cls_scores.permute(
             0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
 
-        # postprocess
-        rpn_cls_probs = rpn_cls_probs.view(
-            batch_size, 2, -1, rpn_cls_probs.shape[2], rpn_cls_probs.shape[3])
-        rpn_cls_probs = rpn_cls_probs.permute(0, 3, 4, 2, 1).contiguous().view(
-            batch_size, -1, 2)
         predict_dict = {
             'proposals_batch': proposals_batch,
-            'rpn_cls_scores': rpn_cls_scores,
             'rois_batch': rois_batch,
             'anchors': anchors,
 
             # used for loss
             'rpn_bbox_preds': rpn_bbox_preds,
-            'rpn_cls_probs': rpn_cls_probs,
+            'rpn_cls_scores': rpn_cls_scores,
             'proposals_order': proposals_order,
+            'fg_probs': fg_probs,
+            'distance': distance
         }
 
         return predict_dict
@@ -283,10 +306,10 @@ class RPNModel(Model):
         ################################
         # subsample
         ################################
-        rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
-        cls_criterion = rpn_cls_probs
+        rpn_cls_probs = prediction_dict['fg_probs']
         pos_indicator = rpn_cls_targets > 0
         indicator = rpn_cls_weights > 0
+        cls_criterion = rpn_cls_probs
 
         batch_sampled_mask = self.sampler.subsample_batch(
             self.rpn_batch_size,
@@ -296,8 +319,8 @@ class RPNModel(Model):
         batch_sampled_mask = batch_sampled_mask.type_as(rpn_cls_weights)
         rpn_cls_weights = rpn_cls_weights * batch_sampled_mask
         rpn_reg_weights = rpn_reg_weights * batch_sampled_mask
-        num_cls_coeff = rpn_cls_weights.type(torch.cuda.ByteTensor).sum(dim=1)
-        num_reg_coeff = rpn_reg_weights.type(torch.cuda.ByteTensor).sum(dim=1)
+        num_cls_coeff = (rpn_cls_weights > 0).sum(dim=1)
+        num_reg_coeff = (rpn_reg_weights > 0).sum(dim=1)
         # check
         #  assert num_cls_coeff, 'bug happens'
         #  assert num_reg_coeff, 'bug happens'
@@ -307,13 +330,24 @@ class RPNModel(Model):
             num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
         # cls loss
-        rpn_cls_score = prediction_dict['rpn_cls_scores']
-        # rpn_cls_loss = self.rpn_cls_loss(rpn_cls_score, rpn_cls_targets)
-        rpn_cls_loss = self.rpn_cls_loss(
-            rpn_cls_score.view(-1, 2), rpn_cls_targets.view(-1))
+        rpn_cls_scores = prediction_dict['rpn_cls_scores']
+        rpn_cls_loss = self.rpn_cls_loss(rpn_cls_scores, rpn_cls_targets)
         rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
         rpn_cls_loss *= rpn_cls_weights
         rpn_cls_loss = rpn_cls_loss.sum(dim=1) / num_cls_coeff.float()
+
+        #  rpn_cls_probs = prediction_dict['rpn_cls_probs']
+        #  fg_rpn_cls_probs = rpn_cls_probs.view(-1, 2)[:, 1]
+        #  # exp
+        #  fg_rpn_cls_probs = torch.exp(fg_rpn_cls_probs)
+        #  rpn_cls_targets = torch.exp(rpn_cls_targets)
+
+        #  # rpn_cls_loss = self.rpn_cls_loss(rpn_cls_score, rpn_cls_targets)
+        #  rpn_cls_loss = self.rpn_cls_loss(fg_rpn_cls_probs,
+        #  rpn_cls_targets.view(-1))
+        #  rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
+        #  rpn_cls_loss *= rpn_cls_weights
+        #  rpn_cls_loss = rpn_cls_loss.sum(dim=1) / num_cls_coeff.float()
 
         # bbox loss
         # shape(N,num,4)

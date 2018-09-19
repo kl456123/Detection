@@ -6,10 +6,9 @@ import torch.nn.functional as F
 
 from core.model import Model
 from core.anchor_generators.anchor_generator import AnchorGenerator
-# from core.samplers.hard_negative_sampler import HardNegativeSampler
-# from core.samplers.balanced_sampler import BalancedSampler
-from core.samplers.detection_sampler import DetectionSampler
-from core.target_assigner import TargetAssigner
+from core.samplers.hard_negative_sampler import HardNegativeSampler
+from core.samplers.balanced_sampler import BalancedSampler
+from core.refine_target_assigner import RefineTargetAssigner
 from core.filler import Filler
 from core.models.focal_loss import FocalLoss
 
@@ -18,7 +17,7 @@ from lib.model.nms.nms_wrapper import nms
 import functools
 
 
-class RPNModel(Model):
+class RefineRPNModel(Model):
     def init_param(self, model_config):
         self.in_channels = model_config['din']
         self.post_nms_topN = model_config['post_nms_topN']
@@ -29,9 +28,8 @@ class RPNModel(Model):
         self.use_focal_loss = model_config['use_focal_loss']
 
         # sampler
-        # self.sampler = HardNegativeSampler(model_config['sampler_config'])
+        self.sampler = HardNegativeSampler(model_config['sampler_config'])
         # self.sampler = BalancedSampler(model_config['sampler_config'])
-        self.sampler = DetectionSampler(model_config['sampler_config'])
 
         # anchor generator
         self.anchor_generator = AnchorGenerator(
@@ -41,7 +39,7 @@ class RPNModel(Model):
         self.nc_score_out = self.num_anchors * 2
 
         # target assigner
-        self.target_assigner = TargetAssigner(
+        self.target_assigner = RefineTargetAssigner(
             model_config['target_assigner_config'])
 
         # bbox coder
@@ -75,11 +73,13 @@ class RPNModel(Model):
         self.rpn_bbox_loss = nn.modules.loss.SmoothL1Loss(reduce=False)
 
         # cls
-        if self.use_focal_loss:
-            self.rpn_cls_loss = FocalLoss(2)
-        else:
-            self.rpn_cls_loss = functools.partial(
-                F.cross_entropy, reduce=False)
+        # if self.use_focal_loss:
+        # self.rpn_cls_loss = FocalLoss(2)
+        # else:
+        # self.rpn_cls_loss = functools.partial(
+        # F.cross_entropy, reduce=False)
+
+        self.rpn_cls_loss = nn.MSELoss(reduce=False)
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
@@ -222,12 +222,6 @@ class RPNModel(Model):
         if self.training:
             rois_batch = self.append_gt(rois_batch, gt_boxes)
 
-        rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
-                                             rpn_cls_scores.shape[2],
-                                             rpn_cls_scores.shape[3])
-        rpn_cls_scores = rpn_cls_scores.permute(
-            0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
-
         # postprocess
         rpn_cls_probs = rpn_cls_probs.view(
             batch_size, 2, -1, rpn_cls_probs.shape[2], rpn_cls_probs.shape[3])
@@ -235,7 +229,6 @@ class RPNModel(Model):
             batch_size, -1, 2)
         predict_dict = {
             'proposals_batch': proposals_batch,
-            'rpn_cls_scores': rpn_cls_scores,
             'rois_batch': rois_batch,
             'anchors': anchors,
 
@@ -283,10 +276,11 @@ class RPNModel(Model):
         ################################
         # subsample
         ################################
+        # IoU here
         rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
-        cls_criterion = rpn_cls_probs
         pos_indicator = rpn_cls_targets > 0
         indicator = rpn_cls_weights > 0
+        cls_criterion = 1 - rpn_cls_probs
 
         batch_sampled_mask = self.sampler.subsample_batch(
             self.rpn_batch_size,
@@ -307,10 +301,15 @@ class RPNModel(Model):
             num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
         # cls loss
-        rpn_cls_score = prediction_dict['rpn_cls_scores']
+        rpn_cls_probs = prediction_dict['rpn_cls_probs']
+        fg_rpn_cls_probs = rpn_cls_probs.view(-1, 2)[:, 1]
+        # exp
+        fg_rpn_cls_probs = torch.exp(fg_rpn_cls_probs)
+        rpn_cls_targets = torch.exp(rpn_cls_targets)
+
         # rpn_cls_loss = self.rpn_cls_loss(rpn_cls_score, rpn_cls_targets)
-        rpn_cls_loss = self.rpn_cls_loss(
-            rpn_cls_score.view(-1, 2), rpn_cls_targets.view(-1))
+        rpn_cls_loss = self.rpn_cls_loss(fg_rpn_cls_probs,
+                                         rpn_cls_targets.view(-1))
         rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
         rpn_cls_loss *= rpn_cls_weights
         rpn_cls_loss = rpn_cls_loss.sum(dim=1) / num_cls_coeff.float()

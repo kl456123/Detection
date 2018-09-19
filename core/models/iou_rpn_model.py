@@ -9,7 +9,7 @@ from core.anchor_generators.anchor_generator import AnchorGenerator
 # from core.samplers.hard_negative_sampler import HardNegativeSampler
 # from core.samplers.balanced_sampler import BalancedSampler
 from core.samplers.detection_sampler import DetectionSampler
-from core.target_assigner import TargetAssigner
+from core.iou_target_assigner import IoUTargetAssigner
 from core.filler import Filler
 from core.models.focal_loss import FocalLoss
 
@@ -18,7 +18,7 @@ from lib.model.nms.nms_wrapper import nms
 import functools
 
 
-class RPNModel(Model):
+class IoURPNModel(Model):
     def init_param(self, model_config):
         self.in_channels = model_config['din']
         self.post_nms_topN = model_config['post_nms_topN']
@@ -27,6 +27,7 @@ class RPNModel(Model):
         self.use_score = model_config['use_score']
         self.rpn_batch_size = model_config['rpn_batch_size']
         self.use_focal_loss = model_config['use_focal_loss']
+        self.iou_criterion = model_config['iou_criterion']
 
         # sampler
         # self.sampler = HardNegativeSampler(model_config['sampler_config'])
@@ -41,7 +42,7 @@ class RPNModel(Model):
         self.nc_score_out = self.num_anchors * 2
 
         # target assigner
-        self.target_assigner = TargetAssigner(
+        self.target_assigner = IoUTargetAssigner(
             model_config['target_assigner_config'])
 
         # bbox coder
@@ -75,11 +76,12 @@ class RPNModel(Model):
         self.rpn_bbox_loss = nn.modules.loss.SmoothL1Loss(reduce=False)
 
         # cls
-        if self.use_focal_loss:
-            self.rpn_cls_loss = FocalLoss(2)
-        else:
-            self.rpn_cls_loss = functools.partial(
-                F.cross_entropy, reduce=False)
+        # if self.use_focal_loss:
+        # self.rpn_cls_loss = FocalLoss(2)
+        # else:
+        # self.rpn_cls_loss = functools.partial(
+        # F.cross_entropy, reduce=False)
+        self.rpn_cls_loss = nn.MSELoss(reduce=False)
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
@@ -283,9 +285,12 @@ class RPNModel(Model):
         ################################
         # subsample
         ################################
-        rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
-        cls_criterion = rpn_cls_probs
-        pos_indicator = rpn_cls_targets > 0
+        if self.iou_criterion:
+            cls_criterion = self.target_assigner.matcher.assigned_overlaps_batch
+        else:
+            rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
+            cls_criterion = rpn_cls_probs
+        pos_indicator = rpn_reg_weights > 0
         indicator = rpn_cls_weights > 0
 
         batch_sampled_mask = self.sampler.subsample_batch(
@@ -307,10 +312,10 @@ class RPNModel(Model):
             num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
         # cls loss
-        rpn_cls_score = prediction_dict['rpn_cls_scores']
+        rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
         # rpn_cls_loss = self.rpn_cls_loss(rpn_cls_score, rpn_cls_targets)
         rpn_cls_loss = self.rpn_cls_loss(
-            rpn_cls_score.view(-1, 2), rpn_cls_targets.view(-1))
+            rpn_cls_probs.view(-1), rpn_cls_targets.view(-1))
         rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
         rpn_cls_loss *= rpn_cls_weights
         rpn_cls_loss = rpn_cls_loss.sum(dim=1) / num_cls_coeff.float()

@@ -2,6 +2,7 @@
 
 from core.similarity_calc.scale_similarity_calc import ScaleSimilarityCalc
 from core.similarity_calc.center_similarity_calc import CenterSimilarityCalc
+from core.similarity_calc.distance_similarity_calc import DistanceSimilarityCalc
 
 
 def build(similarity_calc_config):
@@ -10,5 +11,7 @@ def build(similarity_calc_config):
         return ScaleSimilarityCalc()
     elif similarity_calc_type == 'center':
         return CenterSimilarityCalc()
+    elif similarity_calc_type == 'distance':
+        return DistanceSimilarityCalc()
     else:
         raise ValueError('unsupported type of similarity_calc!')

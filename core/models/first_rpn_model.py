@@ -9,6 +9,7 @@ from core.anchor_generators.anchor_generator import AnchorGenerator
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.target_assigner import TargetAssigner
+from core.new_target_assigner import NewTargetAssigner
 from core.filler import Filler
 from core.models.focal_loss import FocalLoss
 
@@ -40,7 +41,7 @@ class FirstRPNModel(Model):
         self.nc_score_out = self.num_anchors * 2
 
         # target assigner
-        self.target_assigner = TargetAssigner(
+        self.target_assigner = NewTargetAssigner(
             model_config['target_assigner_config'])
 
         # bbox coder
