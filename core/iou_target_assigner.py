@@ -174,3 +174,4 @@ class IoUTargetAssigner(object):
         cls_targets_batch = match_quality_matrix.view(
             -1, M)[row, match.view(-1)].view_as(match)
         return cls_targets_batch
+

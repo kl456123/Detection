@@ -9,7 +9,7 @@ from core.anchor_generators.anchor_generator import AnchorGenerator
 # from core.samplers.hard_negative_sampler import HardNegativeSampler
 # from core.samplers.balanced_sampler import BalancedSampler
 from core.samplers.detection_sampler import DetectionSampler
-from core.iou_target_assigner import IoUTargetAssigner
+from core.LED_target_assigner import LEDTargetAssigner
 from core.filler import Filler
 from core.models.focal_loss import FocalLoss
 
@@ -28,6 +28,8 @@ class IoURPNModel(Model):
         self.rpn_batch_size = model_config['rpn_batch_size']
         self.use_focal_loss = model_config['use_focal_loss']
         self.iou_criterion = model_config['iou_criterion']
+        self.theta = 1.0
+        self.alpha = 0.6
 
         # sampler
         # self.sampler = HardNegativeSampler(model_config['sampler_config'])
@@ -42,7 +44,7 @@ class IoURPNModel(Model):
         self.nc_score_out = self.num_anchors * 2
 
         # target assigner
-        self.target_assigner = IoUTargetAssigner(
+        self.target_assigner = LEDTargetAssigner(
             model_config['target_assigner_config'])
 
         # bbox coder
@@ -62,6 +64,10 @@ class IoURPNModel(Model):
         # define bg/fg classifcation score layer
         self.rpn_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)
 
+        self.rpn_iou = nn.Conv2d(512, self.nc_score_out // 2, 1, 1, 0)
+        self.rpn_iod = nn.Conv2d(512, self.nc_score_out // 2, 1, 1, 0)
+        self.rpn_iog = nn.Conv2d(512, self.nc_score_out // 2, 1, 1, 0)
+
         # define anchor box offset prediction layer
 
         if self.use_score:
@@ -76,25 +82,25 @@ class IoURPNModel(Model):
         self.rpn_bbox_loss = nn.modules.loss.SmoothL1Loss(reduce=False)
 
         # cls
-        # if self.use_focal_loss:
-        # self.rpn_cls_loss = FocalLoss(2)
-        # else:
-        # self.rpn_cls_loss = functools.partial(
-        # F.cross_entropy, reduce=False)
-        self.rpn_cls_loss = nn.MSELoss(reduce=False)
+        if self.use_focal_loss:
+            self.rpn_cls_loss = FocalLoss(2)
+        else:
+            self.rpn_cls_loss = functools.partial(
+                F.cross_entropy, reduce=False)
+        self.rpn_iou_loss = nn.MSELoss(reduce=False)
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
         # TODO create a new Function
         """
         Args:
-        rpn_cls_probs: FloatTensor,shape(N,2*num_anchors,H,W)
-        rpn_bbox_preds: FloatTensor,shape(N,num_anchors*4,H,W)
-        anchors: FloatTensor,shape(N,4,H,W)
+            rpn_cls_probs: FloatTensor,shape(N,2*num_anchors,H,W)
+            rpn_bbox_preds: FloatTensor,shape(N,num_anchors*4,H,W)
+            anchors: FloatTensor,shape(N,4,H,W)
 
         Returns:
-        proposals_batch: FloatTensor, shape(N,post_nms_topN,4)
-        fg_probs_batch: FloatTensor, shape(N,post_nms_topN)
+            proposals_batch: FloatTensor, shape(N,post_nms_topN,4)
+            fg_probs_batch: FloatTensor, shape(N,post_nms_topN)
         """
         # assert len(
         # rpn_bbox_preds) == 1, 'just one feature maps is supported now'
@@ -125,9 +131,7 @@ class IoURPNModel(Model):
         proposals = box_ops.clip_boxes(proposals, im_info)
 
         # fg prob
-        fg_probs = rpn_cls_probs[:, self.num_anchors:, :, :]
-        fg_probs = fg_probs.permute(0, 2, 3, 1).contiguous().view(batch_size,
-                                                                  -1)
+        fg_probs = rpn_cls_probs
 
         # sort fg
         _, fg_probs_order = torch.sort(fg_probs, dim=1, descending=True)
@@ -169,6 +173,23 @@ class IoURPNModel(Model):
             proposals_order[i, :num_proposal] = fg_order_single
         return proposals_batch, proposals_order
 
+    def iox_pred(self, rpn_conv, rpn_iou):
+        batch_size = rpn_conv.shape[0]
+        rpn_iou = rpn_iou(rpn_conv)
+        rpn_iou = F.sigmoid(rpn_iou)
+        rpn_iou = rpn_iou.view(batch_size, 2, self.num_anchors, -1).permute(
+            0, 3, 2, 1).contiguous().view(batch_size, -1)
+        return rpn_iou
+
+    def iou_pred(self, rpn_conv):
+        return self.iox_pred(rpn_conv, self.rpn_iou)
+
+    def iog_pred(self, rpn_conv):
+        return self.iox_pred(rpn_conv, self.rpn_iog)
+
+    def iod_pred(self, rpn_conv):
+        return self.iox_pred(rpn_conv, self.rpn_iod)
+
     def forward(self, bottom_blobs):
         base_feat = bottom_blobs['base_feat']
         batch_size = base_feat.shape[0]
@@ -182,12 +203,24 @@ class IoURPNModel(Model):
         # shape(N,2*num_anchors,H,W)
         rpn_cls_scores = self.rpn_cls_score(rpn_conv)
 
+        # iox
+        rpn_iod = self.iod_pred(rpn_conv)
+        rpn_iog = self.iog_pred(rpn_conv)
+        rpn_iou = self.iou_pred(rpn_conv)
+        rpn_iou_indirect = self.calculate_iou(rpn_iog, rpn_iod)
+        rpn_iou_final = (1 - self.alpha
+                         ) * rpn_iou_indirect + self.alpha * rpn_iou
+
         # rpn cls prob shape(N,2*num_anchors,H,W)
         rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
         rpn_cls_probs = F.softmax(rpn_cls_score_reshape, dim=1)
         rpn_cls_probs = rpn_cls_probs.view_as(rpn_cls_scores)
-        # import ipdb
-        # ipdb.set_trace()
+        rpn_cls_probs = rpn_cls_probs.view(
+            batch_size, 2, self.num_anchors, -1).permute(
+                0, 3, 2, 1).contiguous().view(batch_size, -1, 2)
+
+        rpn_fg_probs_final = rpn_cls_probs[:, :, 1] * torch.exp(-torch.pow(
+            (1 - rpn_iou_final), 2) / self.theta)
 
         # rpn bbox pred
         # shape(N,4*num_anchors,H,W)
@@ -215,7 +248,7 @@ class IoURPNModel(Model):
         ###############################
         # note that proposals_order is used for track transform of propsoals
         proposals_batch, proposals_order = self.generate_proposal(
-            rpn_cls_probs, anchors, rpn_bbox_preds, im_info)
+            rpn_fg_probs_final, anchors, rpn_bbox_preds, im_info)
         batch_idx = torch.arange(batch_size).view(batch_size, 1).expand(
             -1, proposals_batch.shape[1]).type_as(proposals_batch)
         rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
@@ -224,17 +257,11 @@ class IoURPNModel(Model):
         if self.training:
             rois_batch = self.append_gt(rois_batch, gt_boxes)
 
-        rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
-                                             rpn_cls_scores.shape[2],
-                                             rpn_cls_scores.shape[3])
+        rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, self.num_anchors,
+                                             -1)
         rpn_cls_scores = rpn_cls_scores.permute(
-            0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
+            0, 3, 2, 1).contiguous().view(batch_size, -1, 2)
 
-        # postprocess
-        rpn_cls_probs = rpn_cls_probs.view(
-            batch_size, 2, -1, rpn_cls_probs.shape[2], rpn_cls_probs.shape[3])
-        rpn_cls_probs = rpn_cls_probs.permute(0, 3, 4, 2, 1).contiguous().view(
-            batch_size, -1, 2)
         predict_dict = {
             'proposals_batch': proposals_batch,
             'rpn_cls_scores': rpn_cls_scores,
@@ -245,9 +272,21 @@ class IoURPNModel(Model):
             'rpn_bbox_preds': rpn_bbox_preds,
             'rpn_cls_probs': rpn_cls_probs,
             'proposals_order': proposals_order,
+            'rpn_iou': rpn_iou,
+            'rpn_iod': rpn_iod,
+            'rpn_iog': rpn_iog,
+            'rpn_fg_probs_final': rpn_fg_probs_final,
         }
 
         return predict_dict
+
+    def calculate_iou(self, iog, iod):
+        mask = ~(iod == 0)
+        iou_indirect = torch.zeros_like(iog)
+        iod = iod[mask]
+        iog = iog[mask]
+        iou_indirect[mask] = (iod * iog) / (iod + iog - iod * iog)
+        return iou_indirect
 
     def append_gt(self, rois_batch, gt_boxes):
         ################################
@@ -301,8 +340,8 @@ class IoURPNModel(Model):
         batch_sampled_mask = batch_sampled_mask.type_as(rpn_cls_weights)
         rpn_cls_weights = rpn_cls_weights * batch_sampled_mask
         rpn_reg_weights = rpn_reg_weights * batch_sampled_mask
-        num_cls_coeff = rpn_cls_weights.type(torch.cuda.ByteTensor).sum(dim=1)
-        num_reg_coeff = rpn_reg_weights.type(torch.cuda.ByteTensor).sum(dim=1)
+        num_cls_coeff = (rpn_cls_weights > 0).sum(dim=1)
+        num_reg_coeff = (rpn_reg_weights > 0).sum(dim=1)
         # check
         #  assert num_cls_coeff, 'bug happens'
         #  assert num_reg_coeff, 'bug happens'
@@ -311,11 +350,37 @@ class IoURPNModel(Model):
         if num_reg_coeff == 0:
             num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
+        # iou loss
+        rpn_iou = prediction_dict['rpn_iou']
+        rpn_iou_targets = self.target_assigner.matcher.assigned_overlaps_batch
+        rpn_iou_loss = self.rpn_iou_loss(
+            rpn_iou.view(-1), rpn_iou_targets.view(-1))
+        rpn_iou_loss = rpn_iou_loss.view_as(rpn_cls_weights)
+        rpn_iou_loss *= rpn_cls_weights
+        rpn_iou_loss = rpn_iou_loss.sum(dim=1) / num_cls_coeff.float()
+
+        # iog loss
+        rpn_iog = prediction_dict['rpn_iog']
+        rpn_iog_targets = self.target_assigner.matcher.assigned_iog_batch
+        rpn_iog_loss = self.rpn_iou_loss(
+            rpn_iog.view(-1), rpn_iog_targets.view(-1))
+        rpn_iog_loss = rpn_iog_loss.view_as(rpn_cls_weights)
+        rpn_iog_loss *= rpn_cls_weights
+        rpn_iog_loss = rpn_iog_loss.sum(dim=1) / num_cls_coeff.float()
+
+        # iod loss
+        rpn_iod = prediction_dict['rpn_iod']
+        rpn_iod_targets = self.target_assigner.matcher.assigned_iod_batch
+        rpn_iod_loss = self.rpn_iou_loss(
+            rpn_iod.view(-1), rpn_iod_targets.view(-1))
+        rpn_iod_loss = rpn_iod_loss.view_as(rpn_cls_weights)
+        rpn_iod_loss *= rpn_cls_weights
+        rpn_iod_loss = rpn_iod_loss.sum(dim=1) / num_cls_coeff.float()
+
         # cls loss
-        rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
-        # rpn_cls_loss = self.rpn_cls_loss(rpn_cls_score, rpn_cls_targets)
+        rpn_cls_probs = prediction_dict['rpn_cls_scores']
         rpn_cls_loss = self.rpn_cls_loss(
-            rpn_cls_probs.view(-1), rpn_cls_targets.view(-1))
+            rpn_cls_probs.view(-1, 2), rpn_cls_targets.view(-1))
         rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
         rpn_cls_loss *= rpn_cls_weights
         rpn_cls_loss = rpn_cls_loss.sum(dim=1) / num_cls_coeff.float()
@@ -333,4 +398,7 @@ class IoURPNModel(Model):
 
         loss_dict['rpn_cls_loss'] = rpn_cls_loss
         loss_dict['rpn_bbox_loss'] = rpn_reg_loss
+        loss_dict['rpn_iou_loss'] = rpn_iou_loss
+        loss_dict['rpn_iod_loss'] = rpn_iod_loss
+        loss_dict['rpn_iog_loss'] = rpn_iog_loss
         return loss_dict

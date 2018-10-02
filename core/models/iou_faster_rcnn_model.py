@@ -10,10 +10,10 @@ from core.models.focal_loss import FocalLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 
 from core.filler import Filler
-from core.iou_target_assigner import IoUTargetAssigner
+from core.LED_target_assigner import LEDTargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
-from core.models.feature_extractor_model import FeatureExtractor
+from core.models.feature_extractors.resnet import ResNetFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
 
 import functools
@@ -47,17 +47,47 @@ class IoUFasterRCNN(Model):
 
         # shape(N,C,1,1)
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
+        ########################################
+        # semantic map
+        ########################################
+        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
+        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
+        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
+        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
         # shape(N,C)
-        pooled_feat = pooled_feat.mean(3).mean(2)
+        rcnn_bbox_feat = pooled_feat * saliency_map[:, 1:, :, :]
+        rcnn_bbox_feat = rcnn_bbox_feat.mean(3).mean(2)
 
-        rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
-        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
+        rcnn_bbox_preds = self.rcnn_bbox_pred(rcnn_bbox_feat)
 
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
-        prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
+        # iou
+        rcnn_iou = self.rcnn_iou(rcnn_bbox_feat)
+        rcnn_iou = F.sigmoid(rcnn_iou)
+
+        # iog
+        rcnn_iog = self.rcnn_iog(rcnn_bbox_feat)
+        rcnn_iog = F.sigmoid(rcnn_iog)
+
+        # iod
+        rcnn_iod = self.rcnn_iog(rcnn_bbox_feat)
+        rcnn_iod = F.sigmoid(rcnn_iod)
+
+        rcnn_iou_indirect = self.calculate_iou(rcnn_iog, rcnn_iod)
+        rcnn_iou_final = (1 - self.alpha
+                          ) * rcnn_iou_indirect + self.alpha * rcnn_iou
+
+        rcnn_fg_probs_final = rcnn_cls_probs[:, 1:] * torch.exp(-torch.pow(
+            (1 - rcnn_iou_final[:, 1:]), 2) / self.theta)
+
+        prediction_dict['rcnn_cls_probs'] = torch.cat(
+            [rcnn_fg_probs_final, rcnn_fg_probs_final], dim=-1)
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
         prediction_dict['rcnn_cls_scores'] = rcnn_cls_scores
+        prediction_dict['rcnn_iou'] = rcnn_iou
+        prediction_dict['rcnn_iog'] = rcnn_iog
+        prediction_dict['rcnn_iod'] = rcnn_iod
 
         # used for track
         proposals_order = prediction_dict['proposals_order']
@@ -65,6 +95,14 @@ class IoUFasterRCNN(Model):
             proposals_order]
 
         return prediction_dict
+
+    def calculate_iou(self, iog, iod):
+        mask = ~(iod == 0)
+        iou_indirect = torch.zeros_like(iog)
+        iod = iod[mask]
+        iog = iog[mask]
+        iou_indirect[mask] = (iod * iog) / (iod + iog - iod * iog)
+        return iou_indirect
 
     def init_weights(self):
         # submodule init weights
@@ -74,25 +112,41 @@ class IoUFasterRCNN(Model):
         Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
+        # freeze module
+        # self.freeze_modules()
+        # # unfreeze some layers
+        # unfreeze_params = [
+
+    # self.rpn_model.rpn_iou.bias, self.rpn_model.rpn_iou.weight,
+    # self.rcnn_iou.bias, self.rcnn_iou.weight
+    # ]
+    # for param in unfreeze_params:
+    # param.requires_grad = True
+
     def init_modules(self):
-        self.feature_extractor = FeatureExtractor(
+        self.feature_extractor = ResNetFeatureExtractor(
             self.feature_extractor_config)
         self.rpn_model = IoURPNModel(self.rpn_config)
         self.rcnn_pooling = RoIAlignAvg(self.pooling_size, self.pooling_size,
                                         1.0 / 16.0)
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
+        in_channels = 2048
+        self.rcnn_iou = nn.Linear(in_channels, self.n_classes)
+        self.rcnn_iog = nn.Linear(in_channels, self.n_classes)
+        self.rcnn_iod = nn.Linear(in_channels, self.n_classes)
+
         if self.class_agnostic:
-            self.rcnn_bbox_pred = nn.Linear(2048, 4)
+            self.rcnn_bbox_pred = nn.Linear(in_channels, 4)
         else:
-            self.rcnn_bbox_pred = nn.Linear(2048, 4 * self.n_classes)
+            self.rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
 
         # loss module
-        # if self.use_focal_loss:
-        # self.rcnn_cls_loss = FocalLoss(2)
-        # else:
-        # self.rcnn_cls_loss = functools.partial(
-        # F.cross_entropy, reduce=False)
-        self.rcnn_cls_loss = nn.MSELoss(reduce=False)
+        if self.use_focal_loss:
+            self.rcnn_cls_loss = FocalLoss(2)
+        else:
+            self.rcnn_cls_loss = functools.partial(
+                F.cross_entropy, reduce=False)
+        self.rcnn_iou_loss = nn.MSELoss(reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
@@ -106,18 +160,21 @@ class IoUFasterRCNN(Model):
         self.crop_resize_with_max_pool = model_config[
             'crop_resize_with_max_pool']
         self.truncated = model_config['truncated']
+        self.theta = 1.0
+        self.alpha = 0.6
 
         self.use_focal_loss = model_config['use_focal_loss']
         self.subsample_twice = model_config['subsample_twice']
         self.rcnn_batch_size = model_config['rcnn_batch_size']
         self.iou_criterion = model_config['iou_criterion']
+        self.use_cls_pred = model_config['use_cls_pred']
 
         # some submodule config
         self.feature_extractor_config = model_config['feature_extractor_config']
         self.rpn_config = model_config['rpn_config']
 
         # assigner
-        self.target_assigner = IoUTargetAssigner(
+        self.target_assigner = LEDTargetAssigner(
             model_config['target_assigner_config'])
 
         # sampler
@@ -171,6 +228,8 @@ class IoUFasterRCNN(Model):
             'rcnn_reg_weights'] = rcnn_reg_weights / num_reg_coeff.float()
         prediction_dict['rcnn_cls_targets'] = rcnn_cls_targets[
             batch_sampled_mask]
+        # import ipdb
+        # ipdb.set_trace()
         prediction_dict['rcnn_reg_targets'] = rcnn_reg_targets[
             batch_sampled_mask]
 
@@ -184,6 +243,21 @@ class IoUFasterRCNN(Model):
 
             prediction_dict['proposals_order'] = proposals_order[
                 batch_sampled_mask]
+
+        # iou targets
+        rcnn_iou_targets = self.target_assigner.matcher.assigned_overlaps_batch
+        prediction_dict['rcnn_iou_targets'] = rcnn_iou_targets[
+            batch_sampled_mask]
+
+        # iog targets
+        rcnn_iog_targets = self.target_assigner.matcher.assigned_iog_batch
+        prediction_dict['rcnn_iog_targets'] = rcnn_iog_targets[
+            batch_sampled_mask]
+
+        # iod targets
+        rcnn_iod_targets = self.target_assigner.matcher.assigned_iod_batch
+        prediction_dict['rcnn_iod_targets'] = rcnn_iod_targets[
+            batch_sampled_mask]
 
     def loss(self, prediction_dict, feed_dict):
         """
@@ -202,11 +276,38 @@ class IoUFasterRCNN(Model):
         rcnn_cls_targets = prediction_dict['rcnn_cls_targets']
         rcnn_reg_targets = prediction_dict['rcnn_reg_targets']
 
+        # iou loss
+        rcnn_iou = prediction_dict['rcnn_iou'][:, 1]
+        rcnn_iou_targets = prediction_dict['rcnn_iou_targets']
+        rcnn_iou = torch.exp(rcnn_iou)
+        rcnn_iou_targets = torch.exp(rcnn_iou_targets)
+        rcnn_iou_loss = self.rcnn_iou_loss(rcnn_iou, rcnn_iou_targets)
+        rcnn_iou_loss *= rcnn_cls_weights
+        rcnn_iou_loss = rcnn_iou_loss.sum(dim=-1)
+
+        # iog loss
+        rcnn_iog = prediction_dict['rcnn_iog'][:, 1]
+        rcnn_iog_targets = prediction_dict['rcnn_iog_targets']
+        rcnn_iog = torch.exp(rcnn_iog)
+        rcnn_iog_targets = torch.exp(rcnn_iog_targets)
+        rcnn_iog_loss = self.rcnn_iou_loss(rcnn_iog, rcnn_iog_targets)
+        rcnn_iog_loss *= rcnn_cls_weights
+        rcnn_iog_loss = rcnn_iog_loss.sum(dim=-1)
+
+        # iod loss
+        rcnn_iod = prediction_dict['rcnn_iod'][:, 1]
+        rcnn_iod_targets = prediction_dict['rcnn_iod_targets']
+        rcnn_iod = torch.exp(rcnn_iod)
+        rcnn_iod_targets = torch.exp(rcnn_iod_targets)
+        rcnn_iod_loss = self.rcnn_iou_loss(rcnn_iod, rcnn_iod_targets)
+        rcnn_iod_loss *= rcnn_cls_weights
+        rcnn_iod_loss = rcnn_iod_loss.sum(dim=-1)
+
         # classification loss
-        rcnn_cls_scores = prediction_dict['rcnn_cls_probs'][:, 1]
+        rcnn_cls_scores = prediction_dict['rcnn_cls_scores']
         # exp
-        rcnn_cls_scores = torch.exp(rcnn_cls_scores)
-        rcnn_cls_targets = torch.exp(rcnn_cls_targets)
+        # rcnn_cls_scores = torch.exp(rcnn_cls_scores)
+        # rcnn_cls_targets = torch.exp(rcnn_cls_targets)
 
         rcnn_cls_loss = self.rcnn_cls_loss(rcnn_cls_scores, rcnn_cls_targets)
         rcnn_cls_loss *= rcnn_cls_weights
@@ -223,8 +324,11 @@ class IoUFasterRCNN(Model):
         # loss weights has no gradients
         loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
         loss_dict['rcnn_bbox_loss'] = rcnn_bbox_loss
+        loss_dict['rcnn_iou_loss'] = rcnn_iou_loss
+        loss_dict['rcnn_iod_loss'] = rcnn_iod_loss
+        loss_dict['rcnn_iog_loss'] = rcnn_iog_loss
 
         # add rcnn_cls_targets to get the statics of rpn
-        loss_dict['rcnn_cls_targets'] = rcnn_cls_targets
+        # loss_dict['rcnn_cls_targets'] = rcnn_cls_targets
 
         return loss_dict

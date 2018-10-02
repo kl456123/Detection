@@ -2,13 +2,20 @@
 
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
-from core.models.faster_rcnn_model import FasterRCNN
-from core.models.two_rpn_model import TwoRPNModel
-from core.models.new_faster_rcnn_model import NewFasterRCNN
-from core.models.distance_faster_rcnn_model import DistanceFasterRCNN
-from core.models.refine_faster_rcnn_model import RefineFasterRCNN
-from core.models.gate_faster_rcnn_model import GateFasterRCNN
 from core.models.iou_faster_rcnn_model import IoUFasterRCNN
+from core.models.faster_rcnn_model import FasterRCNN
+# from core.models.two_rpn_model import TwoRPNModel
+# from core.models.new_faster_rcnn_model import NewFasterRCNN
+# from core.models.distance_faster_rcnn_model import DistanceFasterRCNN
+# from core.models.refine_faster_rcnn_model import RefineFasterRCNN
+# from core.models.gate_faster_rcnn_model import GateFasterRCNN
+# from core.models.rfcn_model import RFCNModel
+from core.models.semantic_faster_rcnn_model import SemanticFasterRCNN
+from core.models.overlaps_faster_rcnn_model import OverlapsFasterRCNN
+from core.models.semantic_both_faster_rcnn_model import SemanticBothFasterRCNN
+from core.models.new_semantic_faster_rcnn_model import NewSemanticFasterRCNN
+from core.models.LED_model import LEDFasterRCNN
+from core.models.loss_faster_rcnn_model import LossFasterRCNN
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -42,6 +49,20 @@ def build(model_config, training=True):
         fasterRCNN = GateFasterRCNN(model_config)
     elif net_arch == 'iou_faster_rcnn':
         fasterRCNN = IoUFasterRCNN(model_config)
+    elif net_arch == 'rfcn':
+        fasterRCNN = RFCNModel(model_config)
+    elif net_arch == 'semantic':
+        fasterRCNN = SemanticFasterRCNN(model_config)
+    elif net_arch == 'overlaps':
+        fasterRCNN = OverlapsFasterRCNN(model_config)
+    elif net_arch == 'semantic_both':
+        fasterRCNN = SemanticBothFasterRCNN(model_config)
+    elif net_arch == 'new_semantic':
+        fasterRCNN = NewSemanticFasterRCNN(model_config)
+    elif net_arch == 'LED':
+        fasterRCNN = LEDFasterRCNN(model_config)
+    elif net_arch == 'loss':
+        fasterRCNN = LossFasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

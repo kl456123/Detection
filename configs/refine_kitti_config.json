@@ -13,8 +13,8 @@
         "name": "kitti",
         "transform_config": {
             "crop_size": [
-                384,
-                512
+                576,
+                1920
             ],
             "normal_mean": [
                 0.485,
@@ -84,7 +84,8 @@
                 0.229,
                 0.224,
                 0.225
-            ]
+            ],
+            "crop_size":[576,1920]
         }
     },
     "model_config": {
@@ -101,7 +102,7 @@
                 "Car"
             ],
             "img_channels": 3,
-            "pretained_model": "",
+            "pretrained_model": "",
             "pretrained": true
         },
         "num_classes": 2,
@@ -109,6 +110,7 @@
         "pooling_size": 7,
         "rcnn_batch_size": 512,
         "rpn_config": {
+            "use_iou":false,
             "use_focal_loss":true,
             "anchor_generator_config": {
                 "anchor_offset": [
@@ -126,6 +128,7 @@
                 ],
                 "base_anchor_size": 16,
                 "scales": [
+                    2,
                     4,
                     8,
                     16
@@ -147,7 +150,7 @@
                     "type":"center"
                 },
                 "fg_thresh": 0.3,
-                "bg_thresh":0.7,
+                "bg_thresh":0.3,
                 "coder_config": {
                     "type":"center",
                     "bbox_normalize_targets_precomputed": false
@@ -166,7 +169,7 @@
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh": 0.5,
+            "fg_thresh": 0.7,
             "bg_thresh":0.5,
             "coder_config": {
                 "type":"center",
@@ -205,7 +208,7 @@
         ],
         "disp_interval": 100,
         "mGPUs": true,
-        "max_epochs": 100,
+        "max_epochs": 200,
         "optimizer_config": {
             "lr": 0.001,
             "momentum": 0.9,

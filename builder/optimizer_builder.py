@@ -13,7 +13,12 @@ class OptimizerBuilder(object):
         This method can be overload
         """
 
-        return self.module.parameters()
+        #  return self.module.parameters()
+        all_params = self.module.parameters()
+        learnable_params = [
+            param for param in all_params if param.requires_grad
+        ]
+        return learnable_params
 
     def build(self):
         cfg = self.optim_config

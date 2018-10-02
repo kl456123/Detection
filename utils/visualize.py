@@ -105,7 +105,10 @@ def visualize_bbox(img,
             cv2.imwrite(img_path, img)
 
 
-def read_kitti(label_file, classes=['Car'], pred=True):
+def read_kitti(label_file, classes=['Car'], pred=True, use_3d=False):
+    """
+    Car 0.00 0 1.85 387.63 181.54 423.81 203.12 1.67 1.87 3.69 -16.53 2.39 58.49 1.57
+    """
     with open(label_file, 'r') as f:
         lines = f.readlines()
 
@@ -123,7 +126,13 @@ def read_kitti(label_file, classes=['Car'], pred=True):
             conf = float(obj[-1])
         else:
             conf = 1.0
-        boxes.append([xmin, ymin, xmax, ymax, conf])
+        if use_3d:
+            h = float(obj[8])
+            w = float(obj[9])
+            l = float(obj[10])
+            boxes.append([xmin, ymin, xmax, ymax, h, w, l, conf])
+        else:
+            boxes.append([xmin, ymin, xmax, ymax, conf])
     return np.asarray(boxes)
 
 

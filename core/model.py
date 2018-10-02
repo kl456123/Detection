@@ -15,6 +15,9 @@ class Model(nn.Module):
         # init weights
         self.init_weights()
 
+        # freeze modules
+        #  self.freeze_modules()
+
     def loss(self):
         pass
 
@@ -26,3 +29,7 @@ class Model(nn.Module):
 
     def init_param(self, model_config):
         pass
+
+    def freeze_modules(self):
+        for param in self.parameters():
+            param.requires_grad = False

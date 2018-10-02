@@ -21,7 +21,15 @@ class Saver():
         for name, module in list(params_dict.items()):
             if name in checkpoint:
                 if hasattr(module, 'load_state_dict'):
-                    module.load_state_dict(checkpoint[name])
+                    module_dict = module.state_dict()
+                    checkpoint_dict = {
+                        k: v
+                        for k, v in checkpoint[name].items()
+                        if k in module_dict
+                    }
+                    module_dict.update(checkpoint_dict)
+                    module.load_state_dict(module_dict)
+                    # module.load_state_dict(checkpoint[name])
                 else:
                     params_dict[name] = checkpoint[name]
             else:

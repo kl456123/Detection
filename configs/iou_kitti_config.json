@@ -103,7 +103,7 @@
                 "Car"
             ],
             "img_channels": 3,
-            "pretained_model": "",
+            "pretrained_model": "",
             "pretrained": true
         },
         "num_classes": 2,
@@ -150,13 +150,13 @@
                     "type":"center"
                 },
                 "fg_thresh": 0.3,
-                "bg_thresh":0.7,
+                "bg_thresh":0.3,
                 "coder_config": {
                     "type":"center",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "bipartitle"
+                    "type": "LED_bipartitle"
                 }
             },
             "use_score": false
@@ -169,7 +169,7 @@
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh": 0.5,
+            "fg_thresh": 0.7,
             "bg_thresh":0.5,
             "coder_config": {
                 "type":"center",
@@ -194,7 +194,7 @@
                 "bbox_normalize_targets_precomputed": true
             },
             "matcher_config": {
-                "type": "argmax"
+                "type": "LED_argmax"
             }
         },
         "truncated": false,

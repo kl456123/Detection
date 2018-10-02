@@ -55,10 +55,11 @@ class KittiDataset(DetDataset):
         # bbox = torch.cat(
         # (bbox, torch.ones(self.max_num_gt_boxes - num_boxes, 5)),
         # dim=0)
-
+        h, w = transform_sample['img'].shape[-2:]
         training_sample = {}
         training_sample['img'] = transform_sample['img']
         training_sample['im_info'] = img_info
+        training_sample['input_size'] = torch.FloatTensor([h, w])
         training_sample['img_name'] = transform_sample['img_name']
         training_sample['im_scale'] = im_scale
         training_sample['gt_boxes'] = bbox[:, :4]
@@ -176,6 +177,7 @@ class KittiDataset(DetDataset):
 
     def make_label_list(self, dataset_file):
         train_list_path = os.path.join(self.root_path, dataset_file)
+        # train_list_path = './train.txt'
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]

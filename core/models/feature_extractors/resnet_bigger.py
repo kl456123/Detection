@@ -5,9 +5,11 @@ import torch
 
 from torchvision import models
 from core.model import Model
+import copy
+from torchvision.models.resnet import Bottleneck
 
 
-class FeatureExtractor(Model):
+class ResNetFeatureExtractor(Model):
     def init_weights(self):
         pass
 
@@ -19,6 +21,8 @@ class FeatureExtractor(Model):
         self.class_agnostic = model_config['class_agnostic']
         self.classes = model_config['classes']
         self.img_channels = model_config['img_channels']
+
+        self.use_cascade = model_config.get('use_cascade')
 
     def init_modules(self):
         resnet = models.resnet50()
@@ -50,4 +54,10 @@ class FeatureExtractor(Model):
 
         self.first_stage_feature = nn.Sequential(*base_features)
 
-        self.second_stage_feature = nn.Sequential(resnet.layer4)
+        import ipdb
+        ipdb.set_trace()
+        # self.second_stage_feature = nn.Sequential(resnet.layer4)
+        self.second_stage_feature = nn.Sequential(
+            * [Bottleneck(512, 512, 1), Bottleneck(1024, 512, 1)])
+        if self.use_cascade:
+            self.third_stage_feature = copy.deepcopy(self.second_stage_feature)

@@ -27,11 +27,11 @@
     # --net distance_faster_rcnn \
     # --load_dir /data/object/liangxiong/distance_center
 
-CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    --checkpoint 3257 \
-    --checkepoch 46 \
-    --net faster_rcnn \
-    --load_dir /data/object/liangxiong/faster_rcnn_detection
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 53 \
+    # --net faster_rcnn \
+    # --load_dir /data/object/liangxiong/faster_rcnn_detection
 
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
@@ -45,8 +45,67 @@ CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --net new_faster_rcnn \
     # --load_dir /data/object/liangxiong/exp_iouweights_hem_great
 
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 2 \
+    # --net rfcn \
+    # --load_dir /data/object/liangxiong/rfcn
+
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
-    # --checkepoch 37 \
-    # --net iou_faster_rcnn \
-    # --load_dir /data/object/liangxiong/iou_exp
+    # --checkepoch 163 \
+    # --net semantic \
+    # --load_dir /data/object/liangxiong/semantic
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 40 \
+    # --net semantic \
+    # --load_dir /data/object/liangxiong/semantic_05
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 8 \
+    # --net faster_rcnn \
+    # --load_dir /data/object/liangxiong/use_iou
+
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 24 \
+    # --net semantic \
+    # --load_dir /data/object/liangxiong/semantic_anchors
+
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 24 \
+    # --net semantic \
+    # --load_dir /data/object/liangxiong/semantic_weights
+
+CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    --checkpoint 3257 \
+    --checkepoch 2 \
+    --net iou_faster_rcnn \
+    --load_dir /data/object/liangxiong/iou_exp
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+# --net loss \
+# --load_dir /data/object/liangxiong/loss \
+# --checkpoint 3257 \
+# --checkepoch 7
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net LED \
+    # --load_dir /data/object/liangxiong/LED_clip \
+    # --checkpoint 3257 \
+    # --checkepoch 10
+
+# CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --net semantic \
+    # --load_dir /data/object/liangxiong/semantic \
+    # --checkpoint 3257 \
+    # --checkepoch 13
+
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 82 \
+    # --net overlaps \
+    # --load_dir /data/object/liangxiong/overlaps

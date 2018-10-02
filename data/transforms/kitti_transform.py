@@ -103,7 +103,7 @@ class RandomSampleCrop(object):
             None,
             # Sample a patch s.t. MIN jaccard w/ obj in .1,.3,.4,.7,.9.
             # (0.1, None),
-            (0.3, None),
+            #  (0.3, None),
             (0.5, None),
             (0.7, None),
             (0.9, None),
@@ -336,12 +336,14 @@ class Resize(object):
         PIL.Image: Rescaled image.
         """
         img = sample['img']
-        bbox = sample['bbox']
         w, h = img.size
-        bbox[:, 2] /= w
-        bbox[:, 0] /= w
-        bbox[:, 1] /= h
-        bbox[:, 3] /= h
+        if sample.get('bbox') is not None:
+            bbox = sample['bbox']
+            bbox[:, 2] /= w
+            bbox[:, 0] /= w
+            bbox[:, 1] /= h
+            bbox[:, 3] /= h
+            sample['bbox'] = bbox
         if w > h:
             im_scale = float(self.target_size) / h
             target_shape = (im_scale * w, self.target_size)
@@ -352,7 +354,8 @@ class Resize(object):
         target_shape = (int(target_shape[0]), int(target_shape[1]))
 
         sample['img'] = img.resize(target_shape, self.interpolation)
-        sample['bbox'] = bbox
+        sample['im_scale'] = im_scale
+
         return sample
 
 

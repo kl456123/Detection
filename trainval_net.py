@@ -28,7 +28,8 @@ from builder.scheduler_builder import SchedulerBuilder
 from builder import model_builder
 from core import trainer
 from core.saver import Saver
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
+from core.summary_writer import SummaryWriter
 
 
 def parse_args():

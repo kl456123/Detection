@@ -24,7 +24,7 @@ expect_anchors = generate_anchors(
     ratios=np.array(anchor_generator_config['aspect_ratios']),
     scales=np.array(anchor_generator_config['scales']))
 
-img = read_img('/data/object/training/image_2/000008.png')
+img = read_img('/data/object/training/image_2/000117.png')
 
 
 def vis_help(anchors, expect_anchors):
@@ -52,4 +52,4 @@ def analysis(all_boxes):
     data_vis(h)
 
 
-analysis(anchors[0])
+# analysis(anchors[0])

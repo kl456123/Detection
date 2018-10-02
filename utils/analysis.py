@@ -14,11 +14,11 @@ from utils.visualize import read_kitti
 kitti_label_dir = '/data/object/training/label_2'
 
 
-def read_boxes_from_label(kitti_label_dir):
+def read_boxes_from_label(kitti_label_dir, use_3d=False):
     all_boxes = []
     for label_file in os.listdir(kitti_label_dir):
         label_path = os.path.join(kitti_label_dir, label_file)
-        boxes = read_kitti(label_path, pred=False)
+        boxes = read_kitti(label_path, pred=False, use_3d=use_3d)
         if boxes.size == 0:
             continue
         all_boxes.append(boxes)
@@ -68,7 +68,8 @@ def read_anchors():
     return anchors[0].cpu().numpy()
 
 
-all_boxes = read_boxes_from_label(kitti_label_dir)
-anchors = read_anchors()
-# all_boxes = np.concatenate([all_boxes, anchors])
-analysis(all_boxes, anchors=anchors)
+if __name__ == '__main__':
+    all_boxes = read_boxes_from_label(kitti_label_dir)
+    anchors = read_anchors()
+    # all_boxes = np.concatenate([all_boxes, anchors])
+    analysis(all_boxes, anchors=anchors)

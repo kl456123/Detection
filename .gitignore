@@ -8,3 +8,4 @@
 *.png
 env/
 results
+data/pretrained_model

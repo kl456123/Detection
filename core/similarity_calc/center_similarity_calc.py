@@ -8,7 +8,7 @@ class CenterSimilarityCalc(object):
     def __init__(self):
         pass
 
-    def compare(self, anchors, gt_boxes):
+    def compare(self, anchors, gt_boxes,input_size=None):
         """
         anchors: (N, 4) ndarray of float
         gt_boxes: (K, 4) ndarray of float
@@ -17,6 +17,9 @@ class CenterSimilarityCalc(object):
         """
         N = anchors.size(0)
         K = gt_boxes.size(0)
+        if input_size:
+            # clip anchors
+            anchors = anchors.clone()
 
         gt_boxes_area = ((gt_boxes[:, 2] - gt_boxes[:, 0] + 1) *
                          (gt_boxes[:, 3] - gt_boxes[:, 1] + 1)).view(1, K)
