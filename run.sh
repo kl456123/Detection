@@ -26,10 +26,15 @@
     # --net double_iou_second \
     # --out_path /data/object/liangxiong/double_iou_second_both \
     # --config configs/double_iou_kitti_config.json
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net double_iou_second \
+    # --out_path /data/object/liangxiong/double_iou_second \
+    # --config configs/double_iou_kitti_config.json
+
 CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
-    --net double_iou_second \
-    --out_path /data/object/liangxiong/double_iou_second \
-    --config configs/double_iou_kitti_config.json
+    --net fpn \
+    --out_path /data/object/liangxiong/fpn \
+    --config configs/fpn_config.json
 
 # CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     # --net double_iou_second \

@@ -60,11 +60,11 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             # rois = prediction['rois_batch'][0]
             # proposals_batch = rois.data[:, 1:5]
             # print('num of bbox: {}'.format(proposals_batch.shape[0]))
-            #  anchors = prediction['anchors'][0]
+            # anchors = prediction['anchors']
             # img = data['img'].permute(0, 2, 3, 1)
 
             # visualize_bbox(
-            # img.cpu().numpy()[0], proposals_batch.cpu().numpy(), save=True)
+            # img.cpu().numpy()[0], anchors.cpu().numpy(), save=True)
 
             # loss
             loss_dict = model.loss(prediction, data)

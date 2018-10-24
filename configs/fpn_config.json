@@ -115,6 +115,7 @@
             "use_focal_loss":true,
             "anchor_generator_config": {
                 "input_size":[384,1280],
+                "use_pyramid":false,
                 "anchor_offset": [
                     0,
                     0
@@ -130,12 +131,13 @@
                 ],
                 "base_anchor_size": 16,
                 "scales": [
+                    2,
                     4,
                     8,
                     16
                 ]
             },
-            "din": 1024,
+            "din": 256,
             "min_size": 16,
             "nms_thresh": 0.7,
             "num_bbox_samples": 500,

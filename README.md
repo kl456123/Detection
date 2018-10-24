@@ -60,7 +60,7 @@ CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
 --config configs/iou_kitti_config.json
 ```
 * There are many options that can be used
-    * --net: specify net arch
+    * --net: specify net arch, there are many models supported now,like ```fpn,cascade,faster-rcnn,ssd ```
     * --out_path: all output file will put there
     * --config: config file
     * --cuda: enable gpu

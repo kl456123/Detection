@@ -7,7 +7,6 @@
 
 
 
-import _init_paths
 import os
 
 import numpy as np
@@ -19,9 +18,9 @@ import torch
 import torch.nn as nn
 
 # will depercated in the future
+import sys
+sys.path.append('./lib')
 
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
 from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
 from builder.optimizer_builder import OptimizerBuilder
 from builder.scheduler_builder import SchedulerBuilder

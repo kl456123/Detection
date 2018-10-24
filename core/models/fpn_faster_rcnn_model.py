@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from core.model import Model
-from core.models.rpn_model import RPNModel
+from core.models.fpn_rpn_model import RPNModel
 from core.models.focal_loss import FocalLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
@@ -21,23 +21,29 @@ import functools
 
 
 class FPNFasterRCNN(Model):
-    def calulate_roi_level(self, rois_batch):
+    def calculate_roi_level(self, rois_batch):
         h = rois_batch[:, 4] - rois_batch[:, 2] + 1
         w = rois_batch[:, 3] - rois_batch[:, 1] + 1
         roi_level = torch.log(torch.sqrt(w * h) / 224.0)
         roi_level = torch.round(roi_level + 4)
         roi_level[roi_level < 2] = 2
         roi_level[roi_level > 5] = 5
+        return roi_level
 
     def pyramid_rcnn_pooling(self, rcnn_feat_maps, rois_batch):
+        import ipdb
+        ipdb.set_trace()
         pooled_feats = []
         # determine which layer to get feat
         roi_level = self.calculate_roi_level(rois_batch)
         for idx, rcnn_feat_map in enumerate(rcnn_feat_maps):
             idx += 2
             mask = roi_level == idx
+            rois_batch_per_stage = rois_batch[mask]
+            if rois_batch_per_stage.shape[0] == 0:
+                continue
             pooled_feats.append(
-                self.rcnn_pooling(rcnn_feat_map, rois_batch[mask]))
+                self.rcnn_pooling(rcnn_feat_map, rois_batch_per_stage))
         return torch.cat(pooled_feats, dim=0)
 
     def forward(self, feed_dict):
@@ -84,7 +90,7 @@ class FPNFasterRCNN(Model):
 
         # used for track
         proposals_order = prediction_dict['proposals_order']
-        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][0][
+        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
             proposals_order]
 
         return prediction_dict
@@ -110,9 +116,9 @@ class FPNFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        self.rcnn_cls_pred = nn.Linear(1024, self.n_classes)
         if self.reduce:
-            in_channels = 2048
+            in_channels = 1024
         else:
             in_channels = 2048 * 4 * 4
         if self.class_agnostic:

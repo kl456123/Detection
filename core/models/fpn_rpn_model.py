@@ -171,6 +171,8 @@ class RPNModel(Model):
         rpn_cls_scores = []
         rpn_cls_probs = []
         rpn_bbox_preds = []
+        # import ipdb
+        # ipdb.set_trace()
 
         for rpn_feat_map in rpn_feat_maps:
             # rpn conv
@@ -178,14 +180,14 @@ class RPNModel(Model):
 
             # rpn cls score
             # shape(N,2*num_anchors,H,W)
-            rpn_cls_score = self.rpn_cls_scores(rpn_conv)
+            rpn_cls_score = self.rpn_cls_score(rpn_conv)
 
             # rpn cls prob shape(N,2*num_anchors,H,W)
-            rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
+            rpn_cls_score_reshape = rpn_cls_score.view(batch_size, 2, -1)
             rpn_cls_prob = F.softmax(rpn_cls_score_reshape, dim=1)
             rpn_cls_prob = rpn_cls_prob.view_as(rpn_cls_score)
 
-            rpn_cls_prob = rpn_cls_probs.view(batch_size, 2, -1,
+            rpn_cls_prob = rpn_cls_prob.view(batch_size, 2, -1,
                                               rpn_cls_prob.shape[2],
                                               rpn_cls_prob.shape[3])
             rpn_cls_prob = rpn_cls_prob.permute(
@@ -215,7 +217,6 @@ class RPNModel(Model):
             base_feat.size()[-2:] for base_feat in rpn_feat_maps
         ]
         anchors = self.anchor_generator.generate(feature_map_list)
-        anchors = torch.cat(anchors, dim=1)
 
         ###############################
         # Proposal
@@ -267,13 +268,15 @@ class RPNModel(Model):
 
         anchors = prediction_dict['anchors']
 
-        assert len(anchors) == 1, 'just one feature maps is supported now'
-        anchors = anchors[0]
+        # assert len(anchors) == 1, 'just one feature maps is supported now'
+        # anchors = anchors[0]
 
         #################################
         # target assigner
         ################################
         # no need gt labels here,it just a binary classifcation problem
+        # import ipdb
+        # ipdb.set_trace()
         rpn_cls_targets, rpn_reg_targets, \
             rpn_cls_weights, rpn_reg_weights = \
             self.target_assigner.assign(anchors, gt_boxes, gt_labels=None)
@@ -321,7 +324,6 @@ class RPNModel(Model):
         # bbox loss
         # shape(N,num,4)
         rpn_bbox_preds = prediction_dict['rpn_bbox_preds']
-        rpn_bbox_preds = rpn_bbox_preds.permute(0, 2, 3, 1).contiguous()
         # shape(N,H*W*num_anchors,4)
         rpn_bbox_preds = rpn_bbox_preds.view(rpn_bbox_preds.shape[0], -1, 4)
         rpn_reg_loss = self.rpn_bbox_loss(rpn_bbox_preds, rpn_reg_targets)

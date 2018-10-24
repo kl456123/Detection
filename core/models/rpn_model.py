@@ -99,9 +99,7 @@ class RPNModel(Model):
         # assert len(
         # rpn_bbox_preds) == 1, 'just one feature maps is supported now'
         # rpn_bbox_preds = rpn_bbox_preds[0]
-        anchors = anchors[0]
         # do not backward
-        anchors = anchors
         rpn_cls_probs = rpn_cls_probs.detach()
         rpn_bbox_preds = rpn_bbox_preds.detach()
 
@@ -268,9 +266,6 @@ class RPNModel(Model):
         gt_boxes = feed_dict['gt_boxes']
 
         anchors = prediction_dict['anchors']
-
-        assert len(anchors) == 1, 'just one feature maps is supported now'
-        anchors = anchors[0]
 
         #################################
         # target assigner

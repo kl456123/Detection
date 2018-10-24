@@ -48,34 +48,34 @@ class SemanticFasterRCNN(Model):
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
 
         # semantic map
-        if self.use_self_attention:
-            pooled_feat_cls = pooled_feat.mean(3).mean(2)
-            rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
-            rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+        # if self.use_self_attention:
+        # pooled_feat_cls = pooled_feat.mean(3).mean(2)
+        # rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
+        # rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
-            # self-attention
-            channel_attention = self.generate_channel_attention(pooled_feat)
-            spatial_attention = self.generate_spatial_attention(pooled_feat)
-            pooled_feat_reg = pooled_feat * channel_attention
-            pooled_feat_reg = pooled_feat * spatial_attention
-            pooled_feat_reg = pooled_feat_reg.mean(3).mean(2)
+        # # self-attention
+        # channel_attention = self.generate_channel_attention(pooled_feat)
+        # spatial_attention = self.generate_spatial_attention(pooled_feat)
+        # pooled_feat_reg = pooled_feat * channel_attention
+        # pooled_feat_reg = pooled_feat * spatial_attention
+        # pooled_feat_reg = pooled_feat_reg.mean(3).mean(2)
 
-            rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat_reg)
-        else:
-            rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
-            rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
-            saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
-            rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
-            # rcnn_cls_probs = rcnn_cls_probs_map.mean(3).mean(2)
-            # shape(N,C)
-            rcnn_bbox_feat = pooled_feat * saliency_map[:, 1:, :, :]
-            # rcnn_bbox_feat = torch.cat([rcnn_bbox_feat, pooled_feat], dim=1)
-            rcnn_bbox_feat = rcnn_bbox_feat.mean(3).mean(2)
+        # rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat_reg)
+        # else:
+        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
+        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
+        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
+        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+        # rcnn_cls_probs = rcnn_cls_probs_map.mean(3).mean(2)
+        # shape(N,C)
+        rcnn_bbox_feat = pooled_feat * saliency_map[:, 1:, :, :]
+        # rcnn_bbox_feat = torch.cat([rcnn_bbox_feat, pooled_feat], dim=1)
+        rcnn_bbox_feat = rcnn_bbox_feat.mean(3).mean(2)
 
-            # if self.use_score:
-            # pooled_feat =
+        # if self.use_score:
+        # pooled_feat =
 
-            rcnn_bbox_preds = self.rcnn_bbox_pred(rcnn_bbox_feat)
+        rcnn_bbox_preds = self.rcnn_bbox_pred(rcnn_bbox_feat)
 
         prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
@@ -83,7 +83,7 @@ class SemanticFasterRCNN(Model):
 
         # used for track
         proposals_order = prediction_dict['proposals_order']
-        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][0][
+        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
             proposals_order]
 
         return prediction_dict

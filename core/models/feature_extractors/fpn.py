@@ -11,7 +11,7 @@ class FPNFeatureExtractor(Model):
     def init_param(self, model_config):
         self.model_path = model_config['pretrained_model']
         self.pretrained = model_config['pretrained']
-        self.pooled_size = model_config['pooled_size']
+        self.pooled_size = model_config['pooling_size']
 
     def upsample_add(self, x, y):
         _, _, H, W = y.size()
@@ -53,7 +53,7 @@ class FPNFeatureExtractor(Model):
         self.toplayer = nn.Conv2d(2048, 256, 1, 1, 0)
         self.maxpool2d = nn.MaxPool2d(1, stride=2)
 
-        self.second_stage_feature = nn.Sequential([
+        self.second_stage_feature = nn.Sequential(*[
             nn.Conv2d(
                 256,
                 1024,
@@ -76,14 +76,14 @@ class FPNFeatureExtractor(Model):
 
         # top down
         p5 = self.toplayer(c5)
-        p4 = self.upsample_add(p5, self.self.lateral4(c4))
+        p4 = self.upsample_add(p5, self.lateral4(c4))
         p4 = self.smooth4(p4)
         p3 = self.upsample_add(p4, self.lateral3(c3))
         p3 = self.smooth3(p3)
         p2 = self.upsample_add(p3, self.lateral2(c2))
         p2 = self.smooth2(p2)
-        p6 = self.maxpool2d(p5)
-        rpn_feature_maps = [p2, p3, p4, p5, p6]
+        # p6 = self.maxpool2d(p5)
+        rpn_feature_maps = [p4]
         mrcnn_feature_maps = [p2, p3, p4, p5]
         return rpn_feature_maps, mrcnn_feature_maps
 

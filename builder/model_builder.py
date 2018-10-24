@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
 from core.models.iou_faster_rcnn_model import IoUFasterRCNN
 from core.models.faster_rcnn_model import FasterRCNN
 # from core.models.two_rpn_model import TwoRPNModel
@@ -25,6 +23,7 @@ from core.models.three_iou_faster_rcnn_model_org_ohem import OrgOHEMThreeIoUFast
 from core.models.cascade_faster_rcnn_model import CascadeFasterRCNN
 from core.models.double_iou_faster_rcnn_model_second_stage import DoubleIoUSecondStageFasterRCNN
 from core.models.three_iou_faster_rcnn_model_org_ohem_second import OrgOHEMThreeIoUSecondStageFasterRCNN
+from core.models.fpn_faster_rcnn_model import FPNFasterRCNN
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -46,6 +45,8 @@ def build(model_config, training=True):
             training, )
     elif net_arch == 'faster_rcnn':
         fasterRCNN = FasterRCNN(model_config)
+    elif net_arch == 'fpn':
+        fasterRCNN = FPNFasterRCNN(model_config)
     elif net_arch == 'two_rpn':
         fasterRCNN = TwoRPNModel(model_config)
     elif net_arch == 'new_faster_rcnn':
