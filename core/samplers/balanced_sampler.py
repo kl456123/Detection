@@ -24,6 +24,7 @@ class BalancedSampler(Sampler):
             num_samples
         """
         num_fg = int(num_samples * self.fg_fraction)
+        pos_indicator = indicator & pos_indicator
         fg_inds = torch.nonzero(pos_indicator).view(-1)
         sum_fg = fg_inds.numel()
         if sum_fg > num_fg:

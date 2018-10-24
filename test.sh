@@ -5,7 +5,7 @@
     # --net faster_rcnn \
     # --load_dir /data/object/liangxiong/nofocal \
     # --config /data/object/liangxiong/nofocal/faster_rcnn/kitti/kitti_config.json
-    # --rois_vis
+# --rois_vis
 
 # baseline 89.2
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
@@ -51,11 +51,11 @@
     # --net rfcn \
     # --load_dir /data/object/liangxiong/rfcn
 
-# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    # --checkpoint 3257 \
-    # --checkepoch 163 \
-    # --net semantic \
-    # --load_dir /data/object/liangxiong/semantic
+CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    --checkpoint 3257 \
+    --checkepoch 140 \
+    --net semantic \
+    --load_dir /data/object/liangxiong/semantic
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 40 \
@@ -68,11 +68,11 @@
     # --net faster_rcnn \
     # --load_dir /data/object/liangxiong/use_iou
 
-# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
-    # --checkepoch 24 \
+    # --checkepoch 25 \
     # --net semantic \
-    # --load_dir /data/object/liangxiong/semantic_anchors
+    # --load_dir /data/object/liangxiong/part05
 
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
@@ -80,17 +80,47 @@
     # --net semantic \
     # --load_dir /data/object/liangxiong/semantic_weights
 
-CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
-    --checkpoint 3257 \
-    --checkepoch 2 \
-    --net iou_faster_rcnn \
-    --load_dir /data/object/liangxiong/iou_exp
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 38 \
+    # --net three_iou \
+    # --load_dir /data/object/liangxiong/three_iou_slow_ohem
 
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
-# --net loss \
-# --load_dir /data/object/liangxiong/loss \
+# --net three_iou_org_ohem \
+# --load_dir /data/object/liangxiong/three_iou_best_attention \
 # --checkpoint 3257 \
-# --checkepoch 7
+# --checkepoch 24
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 48 \
+    # --net double_iou_second \
+    # --load_dir /data/object/liangxiong/double_iou_second
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 42 \
+    # --net three_iou_org_ohem_second \
+    # --load_dir /data/object/liangxiong/three_iou_best_second
+
+
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 2 \
+    # --net single_iou \
+    # --load_dir /data/object/liangxiong/single_iou
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 60 \
+    # --net iou_faster_rcnn \
+    # --load_dir /data/object/liangxiong/iou
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net loss \
+    # --load_dir /data/object/liangxiong/loss \
+    # --checkpoint 3257 \
+    # --checkepoch 7
 
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --net LED \
@@ -98,11 +128,11 @@ CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 10
 
-# CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    # --net semantic \
-    # --load_dir /data/object/liangxiong/semantic \
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net three_iou_org_ohem \
+    # --load_dir /data/object/liangxiong/delta \
     # --checkpoint 3257 \
-    # --checkepoch 13
+    # --checkepoch 18
 
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \

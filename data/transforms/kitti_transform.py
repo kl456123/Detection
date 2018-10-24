@@ -461,3 +461,4 @@ class Compose(object):
         for t in self.transforms:
             sample = t(sample)
         return sample
+

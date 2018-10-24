@@ -16,6 +16,7 @@ from core.models.focal_loss import FocalLoss
 from utils import box_ops
 from lib.model.nms.nms_wrapper import nms
 import functools
+from core.models.proposal import Proposal
 
 
 class RPNModel(Model):
@@ -83,158 +84,77 @@ class RPNModel(Model):
             self.rpn_cls_loss = functools.partial(
                 F.cross_entropy, reduce=False)
 
-    def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
-                          im_info):
-        # TODO create a new Function
-        """
-        Args:
-        rpn_cls_probs: FloatTensor,shape(N,2*num_anchors,H,W)
-        rpn_bbox_preds: FloatTensor,shape(N,num_anchors*4,H,W)
-        anchors: FloatTensor,shape(N,4,H,W)
-
-        Returns:
-        proposals_batch: FloatTensor, shape(N,post_nms_topN,4)
-        fg_probs_batch: FloatTensor, shape(N,post_nms_topN)
-        """
-        # assert len(
-        # rpn_bbox_preds) == 1, 'just one feature maps is supported now'
-        # rpn_bbox_preds = rpn_bbox_preds[0]
-        # do not backward
-        anchors = anchors
-        rpn_cls_probs = rpn_cls_probs.detach()
-        rpn_bbox_preds = rpn_bbox_preds.detach()
-
-        batch_size = rpn_bbox_preds.shape[0]
-        # apply deltas to anchors to decode
-        # loop here due to many features maps
-        # proposals = []
-        # for rpn_bbox_preds_single_map, anchors_single_map in zip(
-        # rpn_bbox_preds, anchors):
-        # proposals.append(
-        # self.bbox_coder.decode(rpn_bbox_preds_single_map,
-        # anchors_single_map))
-        # proposals = torch.cat(proposals, dim=1)
-
-        proposals = self.bbox_coder.decode_batch(rpn_bbox_preds, anchors)
-
-        # filer and clip
-        proposals = box_ops.clip_boxes(proposals, im_info)
-
-        # fg prob
-        fg_probs = rpn_cls_probs[:, :, 1]
-
-        # sort fg
-        _, fg_probs_order = torch.sort(fg_probs, dim=1, descending=True)
-
-        # fg_probs_batch = torch.zeros(batch_size,
-        # self.post_nms_topN).type_as(rpn_cls_probs)
-        proposals_batch = torch.zeros(batch_size, self.post_nms_topN,
-                                      4).type_as(rpn_bbox_preds)
-        proposals_order = torch.zeros(
-            batch_size, self.post_nms_topN).fill_(-1).type_as(fg_probs_order)
-
-        for i in range(batch_size):
-            proposals_single = proposals[i]
-            fg_probs_single = fg_probs[i]
-            fg_order_single = fg_probs_order[i]
-            # pre nms
-            if self.pre_nms_topN > 0:
-                fg_order_single = fg_order_single[:self.pre_nms_topN]
-            proposals_single = proposals_single[fg_order_single]
-            fg_probs_single = fg_probs_single[fg_order_single]
-
-            # nms
-            keep_idx_i = nms(
-                torch.cat((proposals_single, fg_probs_single.unsqueeze(1)), 1),
-                self.nms_thresh)
-            keep_idx_i = keep_idx_i.long().view(-1)
-
-            # post nms
-            if self.post_nms_topN > 0:
-                keep_idx_i = keep_idx_i[:self.post_nms_topN]
-            proposals_single = proposals_single[keep_idx_i, :]
-            fg_probs_single = fg_probs_single[keep_idx_i]
-            fg_order_single = fg_order_single[keep_idx_i]
-
-            # padding 0 at the end.
-            num_proposal = keep_idx_i.numel()
-            proposals_batch[i, :num_proposal, :] = proposals_single
-            proposals_order[i, :num_proposal] = fg_order_single
-        return proposals_batch, proposals_order
+    # def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
+    # im_info):
+    # pass
 
     def forward(self, bottom_blobs):
-        rpn_feat_maps = bottom_blobs['rpn_feat_maps']
-        batch_size = rpn_feat_maps[0].shape[0]
+        base_feat = bottom_blobs['base_feat']
+        batch_size = base_feat.shape[0]
         gt_boxes = bottom_blobs['gt_boxes']
         im_info = bottom_blobs['im_info']
 
-        rpn_cls_scores = []
-        rpn_cls_probs = []
-        rpn_bbox_preds = []
+        # rpn conv
+        rpn_conv = F.relu(self.rpn_conv(base_feat), inplace=True)
 
-        for rpn_feat_map in rpn_feat_maps:
-            # rpn conv
-            rpn_conv = F.relu(self.rpn_conv(rpn_feat_map), inplace=True)
+        # rpn cls score
+        # shape(N,2*num_anchors,H,W)
+        rpn_cls_scores = self.rpn_cls_score(rpn_conv)
 
-            # rpn cls score
-            # shape(N,2*num_anchors,H,W)
-            rpn_cls_score = self.rpn_cls_scores(rpn_conv)
+        # rpn cls prob shape(N,2*num_anchors,H,W)
+        rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
+        rpn_cls_probs = F.softmax(rpn_cls_score_reshape, dim=1)
+        rpn_cls_probs = rpn_cls_probs.view_as(rpn_cls_scores)
+        # import ipdb
+        # ipdb.set_trace()
 
-            # rpn cls prob shape(N,2*num_anchors,H,W)
-            rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
-            rpn_cls_prob = F.softmax(rpn_cls_score_reshape, dim=1)
-            rpn_cls_prob = rpn_cls_prob.view_as(rpn_cls_score)
-
-            rpn_cls_prob = rpn_cls_probs.view(batch_size, 2, -1,
-                                              rpn_cls_prob.shape[2],
-                                              rpn_cls_prob.shape[3])
-            rpn_cls_prob = rpn_cls_prob.permute(
-                0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
-
-            rpn_cls_score = rpn_cls_score.view(batch_size, 2, -1,
-                                               rpn_cls_score.shape[2],
-                                               rpn_cls_score.shape[3])
-            rpn_cls_score = rpn_cls_score.permute(
-                0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
-            rpn_bbox_pred = self.rpn_bbox_pred(rpn_conv)
-            rpn_bbox_pred = rpn_bbox_pred.permute(0, 2, 3, 1).contiguous()
-            # shape(N,H*W*num_anchors,4)
-            rpn_bbox_pred = rpn_bbox_pred.view(batch_size, -1, 4)
-
-            rpn_cls_probs.append(rpn_cls_prob)
-            rpn_cls_scores.append(rpn_cls_score)
+        # rpn bbox pred
+        # shape(N,4*num_anchors,H,W)
+        if self.use_score:
+            # shape (N,2,num_anchoros*H*W)
+            rpn_cls_scores = rpn_cls_score_reshape.permute(0, 2, 1)
+            rpn_bbox_preds = []
+            for i in range(self.num_anchors):
+                rpn_bbox_feat = torch.cat(
+                    [rpn_conv, rpn_cls_scores[:, ::self.num_anchors, :, :]],
+                    dim=1)
+                rpn_bbox_preds.append(self.rpn_bbox_pred(rpn_bbox_feat))
+            rpn_bbox_preds = torch.cat(rpn_bbox_preds, dim=1)
+        else:
             # get rpn offsets to the anchor boxes
-            rpn_bbox_preds.append(rpn_bbox_pred)
+            rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
+            # rpn_bbox_preds = [rpn_bbox_preds]
 
-        rpn_cls_scores = torch.cat(rpn_cls_scores, dim=1)
-        rpn_cls_probs = torch.cat(rpn_cls_probs, dim=1)
-        rpn_bbox_preds = torch.cat(rpn_bbox_preds, dim=1)
-
-        # generate pyramid anchors
-        feature_map_list = [
-            base_feat.size()[-2:] for base_feat in rpn_feat_maps
-        ]
+        # generate anchors
+        feature_map_list = [base_feat.size()[-2:]]
         anchors = self.anchor_generator.generate(feature_map_list)
-        anchors = torch.cat(anchors, dim=1)
 
         ###############################
         # Proposal
         ###############################
         # note that proposals_order is used for track transform of propsoals
-        proposals_batch, proposals_order = self.generate_proposal(
-            rpn_cls_probs, anchors, rpn_bbox_preds, im_info)
-        batch_idx = torch.arange(batch_size).view(batch_size, 1).expand(
-            -1, proposals_batch.shape[1]).type_as(proposals_batch)
-        rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
-                               dim=2)
+        rois_batch, proposals_order = Proposal.apply(rpn_cls_probs, anchors,
+                                                     rpn_bbox_preds, im_info)
+        # batch_idx = torch.arange(batch_size).view(batch_size, 1).expand(
+        # -1, proposals_batch.shape[1]).type_as(proposals_batch)
+        # rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
+        # dim=2)
 
         if self.training:
             rois_batch = self.append_gt(rois_batch, gt_boxes)
 
-        # postprocess
+        rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
+                                             rpn_cls_scores.shape[2],
+                                             rpn_cls_scores.shape[3])
+        rpn_cls_scores = rpn_cls_scores.permute(
+            0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
 
+        # postprocess
+        rpn_cls_probs = rpn_cls_probs.view(
+            batch_size, 2, -1, rpn_cls_probs.shape[2], rpn_cls_probs.shape[3])
+        rpn_cls_probs = rpn_cls_probs.permute(0, 3, 4, 2, 1).contiguous().view(
+            batch_size, -1, 2)
         predict_dict = {
-            'proposals_batch': proposals_batch,
             'rpn_cls_scores': rpn_cls_scores,
             'rois_batch': rois_batch,
             'anchors': anchors,
@@ -274,6 +194,8 @@ class RPNModel(Model):
         # target assigner
         ################################
         # no need gt labels here,it just a binary classifcation problem
+        #  import ipdb
+        #  ipdb.set_trace()
         rpn_cls_targets, rpn_reg_targets, \
             rpn_cls_weights, rpn_reg_weights = \
             self.target_assigner.assign(anchors, gt_boxes, gt_labels=None)

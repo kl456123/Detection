@@ -24,81 +24,89 @@ class TargetAssigner(object):
         self.matcher = matcher_builder.build(assigner_config['matcher_config'])
         self.analyzer = Analyzer()
 
-        self.fg_thresh = assigner_config['fg_thresh']
-        self.bg_thresh = assigner_config['bg_thresh']
-        # self.clobber_positives = assigner_config['clobber_positives']
+        # cls thresh
+        self.fg_thresh_cls = assigner_config['fg_thresh_cls']
+        self.bg_thresh_cls = assigner_config['bg_thresh_cls']
+
+        # bbox thresh
+        self.fg_thresh_reg = assigner_config['fg_thresh_reg']
+        # self.bg_thresh_reg = assigner_config['bg_thresh_reg']
 
     @property
     def stat(self):
         return self.analyzer.stat
 
-    def assign(self,
-               bboxes,
-               gt_boxes,
-               gt_labels=None,
-               cls_prob=None,
-               match=None):
+    def assign(self, bboxes, gt_boxes, gt_labels=None, cls_prob=None):
         """
         Assign each bboxes with label and bbox targets for training
 
         Args:
-        bboxes: shape(N,K,4), encoded by xxyy
-        gt_boxes: shape(N,M,4), encoded likes as bboxes
+            bboxes: shape(N,K,4), encoded by xxyy
+            gt_boxes: shape(N,M,4), encoded likes as bboxes
         """
-        # import ipdb
-        # ipdb.set_trace()
 
         # usually IoU overlaps is used as metric
         bboxes = bboxes.detach()
         match_quality_matrix = self.similarity_calc.compare_batch(bboxes,
                                                                   gt_boxes)
+
         # match 0.7 for truly recall calculation
-        if self.fg_thresh < 0.7:
-            fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
-            self.analyzer.analyze(fake_match, gt_boxes.shape[1])
-        # match
-        # shape(N,K)
-        match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
-        assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
+        #  if self.fg_thresh_cls < 0.7:
+        fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
+        self.analyzer.analyze(fake_match, gt_boxes.shape[1])
 
-        # self.analyzer.analyze(match, gt_boxes.shape[1])
-        # else:
-        # # fake data
-        # assigned_overlaps_batch = torch.zeros_like(match).float()
-        # true_match = self.matcher.match_batch(match_quality_matrix, 0.7)
-        # self.analyzer.analyze(true_match, gt_boxes.shape[1])
+        #################################
+        # handle cls
+        #################################
+        #  cls_match = self.matcher.match_batch(match_quality_matrix,
+        #  self.fg_thresh_cls)
+        #  iou_assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
 
-        # get assigned infomation
-        # shape (num_batch,num_boxes)
+        #  # assign classification targets
+        #  cls_targets = self._assign_classification_targets(cls_match, gt_labels)
+        #  cls_targets = iou_assigned_overlaps_batch
 
-        # assign regression targets
-        reg_targets = self._assign_regression_targets(match, bboxes, gt_boxes)
+        #  # create classification weights
+        #  cls_weights = self._create_classification_weights(
+        #  cls_assigned_overlaps_batch)
 
-        # assign classification targets
-        cls_targets = self._assign_classification_targets(match, gt_labels)
-
-        # create regression weights
-        reg_weights = self._create_regression_weights(assigned_overlaps_batch)
-
-        # create classification weights
-        cls_weights = self._create_classification_weights(
-            assigned_overlaps_batch)
-
-        ####################################
-        # postprocess
-        ####################################
-        # match == -1 means unmatched
-        reg_targets[match == -1] = 0
-        cls_targets[match == -1] = 0
-        reg_weights[match == -1] = 0
+        #  cls_targets[cls_match == -1] = 0
 
         # as for cls weights, ignore according to bg_thresh
-        if self.bg_thresh > 0:
-            ignored_bg = (assigned_overlaps_batch > self.bg_thresh) & (
-                match == -1)
-            cls_weights[ignored_bg] = 0
+        #  if self.bg_thresh_cls > 0:
+        #  ignored_bg = (cls_assigned_overlaps_batch > self.bg_thresh_cls) & (
+        #  cls_match == -1)
+        #  cls_weights[ignored_bg] = 0
 
-        return cls_targets, reg_targets, cls_weights, reg_weights
+        ##################################
+        # handle reg
+        ##################################
+        reg_match = self.matcher.match_batch(match_quality_matrix,
+                                             self.fg_thresh_reg)
+        reg_assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
+
+        # assign regression targets
+        reg_targets = self._assign_regression_targets(reg_match, bboxes,
+                                                      gt_boxes)
+
+        # create regression weights
+        reg_weights = self._create_regression_weights(
+            reg_assigned_overlaps_batch)
+
+        reg_targets[reg_match == -1] = 0
+        reg_weights[reg_match == -1] = 0
+
+        ##################################
+        # handle iou
+        ##################################
+        iou_targets = reg_assigned_overlaps_batch.clone()
+        iou_weights = self._create_classification_weights(
+            reg_assigned_overlaps_batch)
+        # suppress bg
+        iou_targets[reg_assigned_overlaps_batch < self.bg_thresh_cls] = 0
+        iou_targets[reg_assigned_overlaps_batch > self.fg_thresh_cls] = 1
+
+        return iou_targets, reg_targets, iou_weights, reg_weights
 
     def _create_regression_weights(self, assigned_overlaps_batch):
         """

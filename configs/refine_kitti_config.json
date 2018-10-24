@@ -13,8 +13,8 @@
         "name": "kitti",
         "transform_config": {
             "crop_size": [
-                576,
-                1920
+                384,
+                1280
             ],
             "normal_mean": [
                 0.485,
@@ -84,11 +84,11 @@
                 0.229,
                 0.224,
                 0.225
-            ],
-            "crop_size":[576,1920]
+            ]
         }
     },
     "model_config": {
+        "use_self_attention":false,
         "class_agnostic": true,
         "classes": [
             "bg",
@@ -108,7 +108,7 @@
         "num_classes": 2,
         "pooling_mode": "align",
         "pooling_size": 7,
-        "rcnn_batch_size": 512,
+        "rcnn_batch_size": 1024,
         "rpn_config": {
             "use_iou":false,
             "use_focal_loss":true,
@@ -128,7 +128,6 @@
                 ],
                 "base_anchor_size": 16,
                 "scales": [
-                    2,
                     4,
                     8,
                     16
@@ -169,7 +168,7 @@
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh": 0.7,
+            "fg_thresh": 0.5,
             "bg_thresh":0.5,
             "coder_config": {
                 "type":"center",

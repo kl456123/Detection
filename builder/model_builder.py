@@ -16,6 +16,15 @@ from core.models.semantic_both_faster_rcnn_model import SemanticBothFasterRCNN
 from core.models.new_semantic_faster_rcnn_model import NewSemanticFasterRCNN
 from core.models.LED_model import LEDFasterRCNN
 from core.models.loss_faster_rcnn_model import LossFasterRCNN
+from core.models.single_iou_model import SingleIoUFasterRCNN
+from core.models.double_iou_faster_rcnn_model import DoubleIoUFasterRCNN
+from core.models.double_iou_faster_rcnn_model_slow import SlowDoubleIoUFasterRCNN
+from core.models.three_iou_faster_rcnn_model import ThreeIoUFasterRCNN
+from core.models.three_iou_faster_rcnn_model_org import OrgThreeIoUFasterRCNN
+from core.models.three_iou_faster_rcnn_model_org_ohem import OrgOHEMThreeIoUFasterRCNN
+from core.models.cascade_faster_rcnn_model import CascadeFasterRCNN
+from core.models.double_iou_faster_rcnn_model_second_stage import DoubleIoUSecondStageFasterRCNN
+from core.models.three_iou_faster_rcnn_model_org_ohem_second import OrgOHEMThreeIoUSecondStageFasterRCNN
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -63,6 +72,24 @@ def build(model_config, training=True):
         fasterRCNN = LEDFasterRCNN(model_config)
     elif net_arch == 'loss':
         fasterRCNN = LossFasterRCNN(model_config)
+    elif net_arch == 'single_iou':
+        fasterRCNN = SingleIoUFasterRCNN(model_config)
+    elif net_arch == 'double_iou':
+        fasterRCNN = DoubleIoUFasterRCNN(model_config)
+    elif net_arch == 'double_iou_slow':
+        fasterRCNN = SlowDoubleIoUFasterRCNN(model_config)
+    elif net_arch == 'three_iou':
+        fasterRCNN = ThreeIoUFasterRCNN(model_config)
+    elif net_arch == 'three_iou_org':
+        fasterRCNN = OrgThreeIoUFasterRCNN(model_config)
+    elif net_arch == 'three_iou_org_ohem':
+        fasterRCNN = OrgOHEMThreeIoUFasterRCNN(model_config)
+    elif net_arch == 'cascade':
+        fasterRCNN = CascadeFasterRCNN(model_config)
+    elif net_arch == 'double_iou_second':
+        fasterRCNN = DoubleIoUSecondStageFasterRCNN(model_config)
+    elif net_arch == 'three_iou_org_ohem_second':
+        fasterRCNN = OrgOHEMThreeIoUSecondStageFasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

@@ -9,6 +9,8 @@ import numpy as np
 import argparse
 import pickle
 from utils.generate_anchors import generate_anchors
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 def expand_anchors(anchors, feat_size=(24, 79), feat_stride=16):
@@ -91,7 +93,7 @@ def visualize_bbox(img,
                     str(box[4]), (int(box[0]), int(box[1])),
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                     fontScale=0.5,
-                    color=(255, 0, 0))
+                    color=(0, 255, 0))
         for i, box in enumerate(gt_bboxes):
             cv2.rectangle(
                 img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
@@ -103,6 +105,24 @@ def visualize_bbox(img,
         if save:
             img_path = 'res_%d.jpg' % idx
             cv2.imwrite(img_path, img)
+
+
+def vis_featmap(featmap):
+    """
+    Args:
+        featmap:Tensor(H,W,C)
+    """
+
+    if len(featmap.shape) == 3:
+        featmap = featmap.sum(axis=-1)
+
+    import ipdb
+    ipdb.set_trace()
+    assert len(featmap.shape) == 2
+    sns.set()
+    ax = sns.heatmap(featmap)
+    plt.show()
+    return ax
 
 
 def read_kitti(label_file, classes=['Car'], pred=True, use_3d=False):

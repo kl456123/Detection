@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import copy
 
 from core.model import Model
-from core.models.rpn_model import RPNModel
+from core.models.cascade_rpn_model import RPNModel
 from core.models.focal_loss import FocalLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
@@ -17,13 +17,15 @@ from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
+from core.models.proposal import Proposal
 
 import functools
 
 
-class FasterRCNN(Model):
+class CascadeFasterRCNN(Model):
     def forward(self, feed_dict):
-
+        import ipdb
+        ipdb.set_trace()
         prediction_dict = {}
 
         # base model
@@ -72,17 +74,25 @@ class FasterRCNN(Model):
         # second stage
         ###########################
         if self.training:
-            self.pre_subsample(prediction_dict, feed_dict, stage_idx='2')
-        rois_batch_2 = prediction_dict['rois_batch_2']
-        rois_batch_2 = self.bbox_coder.decode_batch(rcnn_bbox_preds,
-                                                    rois_batch_2)
+            self.pre_subsample(prediction_dict, feed_dict, stage_idx=2)
+
+        rois_batch_2 = prediction_dict['rois_batch']
+        # proposal
+        rois_batch_2 = Proposal.apply(rcnn_cls_probs, rois_batch_2,
+                                      rcnn_bbox_preds, feed_dict['im_info'])
+
+        # pooling
         pooled_feat_2 = self.rcnn_pooling(base_feat, rois_batch_2.view(-1, 5))
         pooled_feat_2 = pooled_feat_2.mean(3).mean(2)
+
+        # rcnn conv
         pooled_feat_2 = self.feature_extractor.third_stage_feature(
             pooled_feat_2)
-        rcnn_bbox_preds_2 = self.rcnn_bbox_pred(pooled_feat_2)
-        rcnn_cls_scores_2 = self.rcnn_cls_pred(pooled_feat_2)
 
+        # reg and cls
+        rcnn_bbox_preds_2 = self.rcnn_bbox_pred(pooled_feat_2)
+
+        rcnn_cls_scores_2 = self.rcnn_cls_pred(pooled_feat_2)
         rcnn_cls_probs_2 = F.softmax(rcnn_cls_scores_2, dim=1)
 
         prediction_dict['rcnn_cls_probs_2'] = rcnn_cls_probs_2
@@ -153,6 +163,8 @@ class FasterRCNN(Model):
         self.use_focal_loss = model_config['use_focal_loss']
         self.subsample_twice = model_config['subsample_twice']
         self.rcnn_batch_size = model_config['rcnn_batch_size']
+        self.fg_thresh_arr = model_config['fg_thresh_arr']
+        self.bg_thresh_arr = model_config['bg_thresh_arr']
 
         # some submodule config
         self.feature_extractor_config = model_config['feature_extractor_config']
@@ -172,15 +184,21 @@ class FasterRCNN(Model):
         self.reduce = True
 
     def pre_subsample(self, prediction_dict, feed_dict, stage_idx=0):
-        rois_batch = prediction_dict['rois_batch_' + stage_idx]
+        # if stage_idx:
+        # rois_batch = prediction_dict['rois_batch_' + str(stage_idx)]
+        # else:
+        rois_batch = prediction_dict['rois_batch']
         gt_boxes = feed_dict['gt_boxes']
         gt_labels = feed_dict['gt_labels']
 
         ##########################
         # assigner
         ##########################
-        #  import ipdb
-        #  ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
+        self.target_assigner.fg_thresh = self.fg_thresh_arr[stage_idx]
+        self.target_assigner.bg_thresh = self.bg_thresh_arr[stage_idx]
+        stage_idx = str(stage_idx)
         rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights = self.target_assigner.assign(
             rois_batch[:, :, 1:], gt_boxes, gt_labels)
 
@@ -218,8 +236,8 @@ class FasterRCNN(Model):
             batch_sampled_mask]
 
         # update rois_batch
-        prediction_dict['rois_batch_' + stage_idx] = rois_batch[
-            batch_sampled_mask].view(rois_batch.shape[0], -1, 5)
+        prediction_dict['rois_batch'] = rois_batch[batch_sampled_mask].view(
+            rois_batch.shape[0], -1, 5)
 
         if not self.training:
             # used for track

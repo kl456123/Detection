@@ -12,12 +12,24 @@ class HardNegativeSampler(Sampler):
         confidence or IoU e,c
         """
 
+    # def subsample(self,
+    # num_samples,
+    # pos_indicator,
+    # criterion=None,
+    # indicator=None):
+    # sorted_loss, order = torch.sort(criterion, descending=True)
+    # keep = order[:num_samples]
+    # sample_mask = torch.zeros_like(pos_indicator)
+    # sample_mask[keep] = 1
+    # return sample_mask
+
     def subsample(self,
                   num_samples,
                   pos_indicator,
                   criterion=None,
                   indicator=None):
         fg_num_for_sample = int(self.fg_fraction * num_samples)
+        pos_indicator = indicator & pos_indicator
         fg_inds = torch.nonzero(pos_indicator).view(-1)
         if fg_inds.numel() > fg_num_for_sample:
             sorted_scores, order = torch.sort(criterion, descending=False)

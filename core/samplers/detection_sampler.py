@@ -18,6 +18,7 @@ class DetectionSampler(Sampler):
                   criterion=None,
                   indicator=None):
         fg_num_for_sample = int(self.fg_fraction * num_samples)
+        pos_indicator = indicator & pos_indicator
         fg_inds = torch.nonzero(pos_indicator).view(-1)
         if fg_inds.numel() > fg_num_for_sample:
             sorted_scores, order = torch.sort(criterion, descending=True)

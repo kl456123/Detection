@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from core.model import Model
-from core.models.rpn_model import RPNModel
+from core.models.single_iou_rpn_model import SingleIoURPNModel
 from core.models.focal_loss import FocalLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
@@ -20,7 +20,7 @@ from core.samplers.detection_sampler import DetectionSampler
 import functools
 
 
-class SemanticFasterRCNN(Model):
+class SingleIoUFasterRCNN(Model):
     def forward(self, feed_dict):
 
         prediction_dict = {}
@@ -48,34 +48,20 @@ class SemanticFasterRCNN(Model):
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
 
         # semantic map
-        if self.use_self_attention:
-            pooled_feat_cls = pooled_feat.mean(3).mean(2)
-            rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
-            rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
+        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
+        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
+        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+        # rcnn_cls_probs = rcnn_cls_probs_map.mean(3).mean(2)
+        # shape(N,C)
+        rcnn_bbox_feat = pooled_feat * saliency_map[:, 1:, :, :]
+        # rcnn_bbox_feat = torch.cat([rcnn_bbox_feat, pooled_feat], dim=1)
+        rcnn_bbox_feat = rcnn_bbox_feat.mean(3).mean(2)
 
-            # self-attention
-            channel_attention = self.generate_channel_attention(pooled_feat)
-            spatial_attention = self.generate_spatial_attention(pooled_feat)
-            pooled_feat_reg = pooled_feat * channel_attention
-            pooled_feat_reg = pooled_feat * spatial_attention
-            pooled_feat_reg = pooled_feat_reg.mean(3).mean(2)
+        # if self.use_score:
+        # pooled_feat =
 
-            rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat_reg)
-        else:
-            rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
-            rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
-            saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
-            rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
-            # rcnn_cls_probs = rcnn_cls_probs_map.mean(3).mean(2)
-            # shape(N,C)
-            rcnn_bbox_feat = pooled_feat * saliency_map[:, 1:, :, :]
-            # rcnn_bbox_feat = torch.cat([rcnn_bbox_feat, pooled_feat], dim=1)
-            rcnn_bbox_feat = rcnn_bbox_feat.mean(3).mean(2)
-
-            # if self.use_score:
-            # pooled_feat =
-
-            rcnn_bbox_preds = self.rcnn_bbox_pred(rcnn_bbox_feat)
+        rcnn_bbox_preds = self.rcnn_bbox_pred(rcnn_bbox_feat)
 
         prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
@@ -88,12 +74,6 @@ class SemanticFasterRCNN(Model):
 
         return prediction_dict
 
-    def generate_channel_attention(self, feat):
-        return feat.mean(3, keepdim=True).mean(2, keepdim=True)
-
-    def generate_spatial_attention(self, feat):
-        return self.spatial_attention(feat)
-
     def init_weights(self):
         # submodule init weights
         self.feature_extractor.init_weights()
@@ -105,7 +85,7 @@ class SemanticFasterRCNN(Model):
     def init_modules(self):
         self.feature_extractor = ResNetFeatureExtractor(
             self.feature_extractor_config)
-        self.rpn_model = RPNModel(self.rpn_config)
+        self.rpn_model = SingleIoURPNModel(self.rpn_config)
         if self.pooling_mode == 'align':
             self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
                                             self.pooling_size, 1.0 / 16.0)
@@ -115,10 +95,8 @@ class SemanticFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        if self.use_self_attention:
-            self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
-        else:
-            self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
+        # self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
         if self.class_agnostic:
             self.rcnn_bbox_pred = nn.Linear(2048, 4)
             # self.rcnn_bbox_pred = nn.Conv2d(2048,4,3,1,1)
@@ -134,10 +112,6 @@ class SemanticFasterRCNN(Model):
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
-        # attention
-        if self.use_self_attention:
-            self.spatial_attention = nn.Conv2d(2048, 1, 3, 1, 1)
-
     def init_param(self, model_config):
         classes = model_config['classes']
         self.classes = classes
@@ -152,7 +126,6 @@ class SemanticFasterRCNN(Model):
         self.use_focal_loss = model_config['use_focal_loss']
         self.subsample_twice = model_config['subsample_twice']
         self.rcnn_batch_size = model_config['rcnn_batch_size']
-        self.use_self_attention = model_config.get('use_self_attention')
 
         # some submodule config
         self.feature_extractor_config = model_config['feature_extractor_config']
@@ -170,13 +143,18 @@ class SemanticFasterRCNN(Model):
         gt_boxes = feed_dict['gt_boxes']
         gt_labels = feed_dict['gt_labels']
 
+        match = self.rpn_model.target_assigner.matcher.assignments
+        proposals_order = prediction_dict['proposals_order']
+        match = match[0][proposals_order]
+        last_match = torch.arange(
+            gt_labels.shape[1]).view_as(gt_labels).type_as(match)
+        match = torch.cat([match, last_match], dim=1)
         ##########################
         # assigner
         ##########################
-        #  import ipdb
-        #  ipdb.set_trace()
+        # use match result of rpn model
         rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights = self.target_assigner.assign(
-            rois_batch[:, :, 1:], gt_boxes, gt_labels)
+            rois_batch[:, :, 1:], gt_boxes, gt_labels, match=match)
 
         ##########################
         # subsampler

@@ -15,7 +15,7 @@
         "transform_config": {
             "crop_size": [
                 384,
-                512
+                1280
             ],
             "normal_mean": [
                 0.485,
@@ -32,10 +32,7 @@
             "resize_range": [
                 0.2,
                 0.4
-            ],
-            "keep_size":false,
-            "keep_aspect":true,
-            "target_size":[384,1280]
+            ]
         }
     },
     "eval_config": {
@@ -92,8 +89,6 @@
         }
     },
     "model_config": {
-        "use_iox":false,
-        "iou_criterion":false,
         "class_agnostic": true,
         "classes": [
             "bg",
@@ -113,10 +108,9 @@
         "num_classes": 2,
         "pooling_mode": "align",
         "pooling_size": 7,
-        "rcnn_batch_size": 512,
+        "rcnn_batch_size": 256,
         "rpn_config": {
-            "use_iox":false,
-            "iou_criterion":false,
+            "use_iou":false,
             "use_focal_loss":true,
             "anchor_generator_config": {
                 "anchor_offset": [
@@ -143,40 +137,44 @@
             "din": 1024,
             "min_size": 16,
             "nms_thresh": 0.7,
-            "num_bbox_samples": 500,
-            "num_cls_samples": 2000,
             "post_nms_topN": 2000,
             "pre_nms_topN": 12000,
             "rpn_batch_size": 1024,
+            "num_reg_samples":1024,
+            "num_cls_samples":512,
             "sampler_config": {
-                "fg_fraction": 0.25
+                "fg_fraction": 0.5
             },
             "target_assigner_config": {
                 "similarity_calc_config":{
                     "type":"center"
                 },
-                "fg_thresh": 0.3,
-                "bg_thresh":0.3,
+                "fg_thresh_cls": 0.6,
+                "bg_thresh_cls":0.3,
+                "fg_thresh_reg":0.1,
                 "coder_config": {
                     "type":"center",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "LED_bipartitle"
+                    "type": "bipartitle"
                 }
             },
             "use_score": false
         },
         "sampler_config": {
-            "fg_fraction": 0.25
+            "fg_fraction": 0.5
         },
+        "num_cls_samples":256,
+        "num_reg_samples":512,
         "subsample_twice": false,
         "target_assigner_config": {
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh": 0.7,
-            "bg_thresh":0.5,
+            "fg_thresh_cls": 0.5,
+            "bg_thresh_cls":0.5,
+            "fg_thresh_reg":0.1,
             "coder_config": {
                 "type":"center",
                 "bbox_inside_weights": [
@@ -200,7 +198,7 @@
                 "bbox_normalize_targets_precomputed": true
             },
             "matcher_config": {
-                "type": "LED_argmax"
+                "type": "argmax"
             }
         },
         "truncated": false,
@@ -214,7 +212,7 @@
         ],
         "disp_interval": 100,
         "mGPUs": true,
-        "max_epochs": 100,
+        "max_epochs": 200,
         "optimizer_config": {
             "lr": 0.001,
             "momentum": 0.9,

@@ -28,6 +28,7 @@ class IoURPNModel(Model):
         self.rpn_batch_size = model_config['rpn_batch_size']
         self.use_focal_loss = model_config['use_focal_loss']
         self.iou_criterion = model_config['iou_criterion']
+        self.use_iox = model_config['use_iox']
         self.theta = 1.0
         self.alpha = 0.6
 
@@ -203,13 +204,16 @@ class IoURPNModel(Model):
         # shape(N,2*num_anchors,H,W)
         rpn_cls_scores = self.rpn_cls_score(rpn_conv)
 
-        # iox
-        rpn_iod = self.iod_pred(rpn_conv)
-        rpn_iog = self.iog_pred(rpn_conv)
         rpn_iou = self.iou_pred(rpn_conv)
-        rpn_iou_indirect = self.calculate_iou(rpn_iog, rpn_iod)
-        rpn_iou_final = (1 - self.alpha
-                         ) * rpn_iou_indirect + self.alpha * rpn_iou
+        if self.use_iox:
+            # iox
+            rpn_iod = self.iod_pred(rpn_conv)
+            rpn_iog = self.iog_pred(rpn_conv)
+            rpn_iou_indirect = self.calculate_iou(rpn_iog, rpn_iod)
+            rpn_iou_final = (1 - self.alpha
+                             ) * rpn_iou_indirect + self.alpha * rpn_iou
+        else:
+            rpn_iou_final = rpn_iou
 
         # rpn cls prob shape(N,2*num_anchors,H,W)
         rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
@@ -273,10 +277,11 @@ class IoURPNModel(Model):
             'rpn_cls_probs': rpn_cls_probs,
             'proposals_order': proposals_order,
             'rpn_iou': rpn_iou,
-            'rpn_iod': rpn_iod,
-            'rpn_iog': rpn_iog,
             'rpn_fg_probs_final': rpn_fg_probs_final,
         }
+        if self.use_iox:
+            predict_dict['rpn_iod'] = rpn_iod
+            predict_dict['rpn_iog'] = rpn_iog
 
         return predict_dict
 
@@ -359,23 +364,26 @@ class IoURPNModel(Model):
         rpn_iou_loss *= rpn_cls_weights
         rpn_iou_loss = rpn_iou_loss.sum(dim=1) / num_cls_coeff.float()
 
-        # iog loss
-        rpn_iog = prediction_dict['rpn_iog']
-        rpn_iog_targets = self.target_assigner.matcher.assigned_iog_batch
-        rpn_iog_loss = self.rpn_iou_loss(
-            rpn_iog.view(-1), rpn_iog_targets.view(-1))
-        rpn_iog_loss = rpn_iog_loss.view_as(rpn_cls_weights)
-        rpn_iog_loss *= rpn_cls_weights
-        rpn_iog_loss = rpn_iog_loss.sum(dim=1) / num_cls_coeff.float()
+        if self.use_iox:
+            # iog loss
+            rpn_iog = prediction_dict['rpn_iog']
+            rpn_iog_targets = self.target_assigner.matcher.assigned_iog_batch
+            rpn_iog_loss = self.rpn_iou_loss(
+                rpn_iog.view(-1), rpn_iog_targets.view(-1))
+            rpn_iog_loss = rpn_iog_loss.view_as(rpn_cls_weights)
+            rpn_iog_loss *= rpn_cls_weights
+            rpn_iog_loss = rpn_iog_loss.sum(dim=1) / num_cls_coeff.float()
 
-        # iod loss
-        rpn_iod = prediction_dict['rpn_iod']
-        rpn_iod_targets = self.target_assigner.matcher.assigned_iod_batch
-        rpn_iod_loss = self.rpn_iou_loss(
-            rpn_iod.view(-1), rpn_iod_targets.view(-1))
-        rpn_iod_loss = rpn_iod_loss.view_as(rpn_cls_weights)
-        rpn_iod_loss *= rpn_cls_weights
-        rpn_iod_loss = rpn_iod_loss.sum(dim=1) / num_cls_coeff.float()
+            # iod loss
+            rpn_iod = prediction_dict['rpn_iod']
+            rpn_iod_targets = self.target_assigner.matcher.assigned_iod_batch
+            rpn_iod_loss = self.rpn_iou_loss(
+                rpn_iod.view(-1), rpn_iod_targets.view(-1))
+            rpn_iod_loss = rpn_iod_loss.view_as(rpn_cls_weights)
+            rpn_iod_loss *= rpn_cls_weights
+            rpn_iod_loss = rpn_iod_loss.sum(dim=1) / num_cls_coeff.float()
+            loss_dict['rpn_iod_loss'] = rpn_iod_loss
+            loss_dict['rpn_iog_loss'] = rpn_iog_loss
 
         # cls loss
         rpn_cls_probs = prediction_dict['rpn_cls_scores']
@@ -399,6 +407,5 @@ class IoURPNModel(Model):
         loss_dict['rpn_cls_loss'] = rpn_cls_loss
         loss_dict['rpn_bbox_loss'] = rpn_reg_loss
         loss_dict['rpn_iou_loss'] = rpn_iou_loss
-        loss_dict['rpn_iod_loss'] = rpn_iod_loss
-        loss_dict['rpn_iog_loss'] = rpn_iog_loss
+
         return loss_dict

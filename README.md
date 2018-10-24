@@ -1,8 +1,8 @@
 ### TwoStageDetector
 ```
 @misc{CV2018,
-  author =       {zhixiangduan (zhixiangduan@deepmotion.ai)},
-  howpublished = {{http://gitlab.deepmotion.ai/zhixiang/TwoStageDetector}},
+  author =       {liangxiong (liangxiong@deepmotion.ai)},
+  howpublished = {{http://gitlab.deepmotion.ai/xiongliang/Detection}},
   year =         {2018}
 }
 ```
@@ -12,10 +12,17 @@
 * ```Three Pooling Methods```: roi-pooling, roi-align, roi-crop
 
 ### Main Results
-| methods           |     ap   |
+* dataset: kitti
+use train.txt for training, use val.txt for test
+
+| methods           |     ap(moderate)   |
 |-------------------|----------|
 | baseline          |   89.21% |
-| better_subsample  |   89.38% |
+| semantic   |   89.72% |
+| semantic(finetune) | 89.82% |
+| iou       | 88.02%    |
+
+The details about models can be seen on wiki page.
 
 ### Set up the environment
 * This repo has been test on Python3.5 and Pytorch 0.4.0
@@ -57,9 +64,10 @@ CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     * --out_path: all output file will put there
     * --config: config file
     * --cuda: enable gpu
+    * --model: load pretrained model if you have your own one
 
 * To resume from checkpoint,run
-```
+```bash
 CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
  --net two_rpn \
  --out_path /data/object/liangxiong/two_rpn \
@@ -79,12 +87,15 @@ CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
 --net iou_faster_rcnn \
 --load_dir /data/object/liangxiong/iou_exp
 ```
-note that dont need to specify config file for test, 
-the script will find it in the directory of experiments
+note that dont need to specify config file for test,
+the script will find it in the directory of experiments.
+
+after that, results will be generated in 'result/data' directory
 
 
 ### Visualization
 After running test,result will be put in results/data/ directory.
+Make sure that the results file exsits in that directory first.
 ```bash
 python vis_all.py
 ```
@@ -97,19 +108,27 @@ just run sh eval.sh, then you can get three 2D aps for easy,moderate,hard
 * The directory structure of project is like
 ```
 build/
-    xxxx_builder.py
+    -  xxxx_builder.py
 core/
-    models/
-    similarity_cals/
-    bbox_coders/
-    losses/
-    ops/
+    -  models/
+    -  similarity_cals/
+    -  bbox_coders/
+    -  losses/
+    -  ops/
+    target_assigner.py
 ```
 * structure description
-    * all models will put in models/(e.g. rpn_model.py,faster_rcnn_model.py).
-    * similarity_cals/ is used for calculating similarity between bboxes and gt_boxes
-    * some common pytorch operators will put in ops/(e.g. meshgrid)
-    * all builder func will be put in build/
+    * modules for training(xxxx_builder)
+        * optmizer, how to optimize
+        * scheduler, how to change leanring rate,
+        * summary_writer, how to visualize some data
+
+    * modules for model
+        * target_assigner, used for assigning each bbox labels for training
+        * similarity_cals, used for calculating similarity between bboxes and gt_boxes(e.g. calculating iou)
+        * bbox_coder, used for representing bbox(can be 3d bbox)
+        * model, (e.g. rpn_model.py, faster_rcnn_model.py)
+        * sampler, all subsample methods, (e.g. balanced subsample, hard negative subsample,...)
 
 If you want to develop a custom model, inherit from core/model.py and realize some abstract functions
 like ```init_params```,```init_modules``` and others

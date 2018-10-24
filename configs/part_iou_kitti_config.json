@@ -33,7 +33,7 @@
                 0.2,
                 0.4
             ],
-            "keep_size":false,
+            "keep_size":true,
             "keep_aspect":true,
             "target_size":[384,1280]
         }
@@ -155,7 +155,7 @@
                 "similarity_calc_config":{
                     "type":"center"
                 },
-                "fg_thresh": 0.3,
+                "fg_thresh": 0.1,
                 "bg_thresh":0.3,
                 "coder_config": {
                     "type":"center",
@@ -175,7 +175,7 @@
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh": 0.7,
+            "fg_thresh": 0.55,
             "bg_thresh":0.5,
             "coder_config": {
                 "type":"center",
@@ -200,7 +200,7 @@
                 "bbox_normalize_targets_precomputed": true
             },
             "matcher_config": {
-                "type": "LED_argmax"
+                "type": "argmax"
             }
         },
         "truncated": false,

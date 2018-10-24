@@ -14,21 +14,40 @@ from core.filler import Filler
 from core.target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
-from core.models.feature_extractors.resnet import ResNetFeatureExtractor
+from core.models.feature_extractors.fpn import FPNFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
 
 import functools
 
 
-class FasterRCNN(Model):
+class FPNFasterRCNN(Model):
+    def calulate_roi_level(self, rois_batch):
+        h = rois_batch[:, 4] - rois_batch[:, 2] + 1
+        w = rois_batch[:, 3] - rois_batch[:, 1] + 1
+        roi_level = torch.log(torch.sqrt(w * h) / 224.0)
+        roi_level = torch.round(roi_level + 4)
+        roi_level[roi_level < 2] = 2
+        roi_level[roi_level > 5] = 5
+
+    def pyramid_rcnn_pooling(self, rcnn_feat_maps, rois_batch):
+        pooled_feats = []
+        # determine which layer to get feat
+        roi_level = self.calculate_roi_level(rois_batch)
+        for idx, rcnn_feat_map in enumerate(rcnn_feat_maps):
+            idx += 2
+            mask = roi_level == idx
+            pooled_feats.append(
+                self.rcnn_pooling(rcnn_feat_map, rois_batch[mask]))
+        return torch.cat(pooled_feats, dim=0)
+
     def forward(self, feed_dict):
 
         prediction_dict = {}
 
         # base model
-        base_feat = self.feature_extractor.first_stage_feature(
+        rpn_feat_maps, rcnn_feat_maps, = self.feature_extractor.first_stage_feature(
             feed_dict['img'])
-        feed_dict.update({'base_feat': base_feat})
+        feed_dict.update({'rpn_feat_maps': rpn_feat_maps})
         # batch_size = base_feat.shape[0]
 
         # rpn model
@@ -42,7 +61,9 @@ class FasterRCNN(Model):
         rois_batch = prediction_dict['rois_batch']
 
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
-        pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
+        # pooled_feat = self.rcnn_pooling(rcnn_feat_maps, rois_batch.view(-1, 5))
+        pooled_feat = self.pyramid_rcnn_pooling(rcnn_feat_maps,
+                                                rois_batch.view(-1, 5))
 
         # shape(N,C,1,1)
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
@@ -77,7 +98,7 @@ class FasterRCNN(Model):
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
     def init_modules(self):
-        self.feature_extractor = ResNetFeatureExtractor(
+        self.feature_extractor = FPNFeatureExtractor(
             self.feature_extractor_config)
         self.rpn_model = RPNModel(self.rpn_config)
         if self.pooling_mode == 'align':

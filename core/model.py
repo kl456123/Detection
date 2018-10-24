@@ -33,3 +33,6 @@ class Model(nn.Module):
     def freeze_modules(self):
         for param in self.parameters():
             param.requires_grad = False
+
+    def unloaded_parameters(self):
+        return []

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import warnings
 
 analysis_dir = './results/analysis'
 label_dir = '/data/object/training/label_2'
@@ -59,16 +60,16 @@ def handle(path, use_dir, sets):
             if box_id < len(boxes_str):
                 dedup_boxes_str.append(boxes_str[box_id])
             else:
-                 #  Warning("some errors happened, ignored here!")
-                 pass
+                warnings.warn("some errors happened, ignored here!")
 
     # nothing need to be saved,remove it directly
     if len(dedup_boxes_str) == 0:
         os.remove(path)
-    # save to file
-    # override files in analysis dir
-    with open(path, 'w') as f:
-        f.write('\n'.join(dedup_boxes_str))
+    else:
+        # save to file
+        # override files in analysis dir
+        with open(path, 'w') as f:
+            f.write('\n'.join(dedup_boxes_str))
 
 
 def listDir(dir_path):
