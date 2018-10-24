@@ -111,17 +111,25 @@ build/
     -  xxxx_builder.py
 core/
     -  models/
+        - feature_extractors/
     -  similarity_cals/
     -  bbox_coders/
     -  losses/
     -  ops/
     target_assigner.py
+    filler.py
+    saver.py
+    trainer.py
+    tester.py
+    analyzer.py
 ```
 * structure description
     * modules for training(xxxx_builder)
         * optmizer, how to optimize
         * scheduler, how to change leanring rate,
         * summary_writer, how to visualize some data
+        * saver, how to load and store model weights
+        * trainer and tester, exploit all modules above to train and test
 
     * modules for model
         * target_assigner, used for assigning each bbox labels for training
@@ -129,6 +137,10 @@ core/
         * bbox_coder, used for representing bbox(can be 3d bbox)
         * model, (e.g. rpn_model.py, faster_rcnn_model.py)
         * sampler, all subsample methods, (e.g. balanced subsample, hard negative subsample,...)
+        * feature_extractors, use classic backbone to extract features
+        * matcher, used for matching bbox and gt box
+        * filler, used for weights initialization
+        * analyzer, used for get statistics of intermedia results
 
 If you want to develop a custom model, inherit from core/model.py and realize some abstract functions
 like ```init_params```,```init_modules``` and others
