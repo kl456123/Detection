@@ -51,9 +51,9 @@
     # --net rfcn \
     # --load_dir /data/object/liangxiong/rfcn
 
-CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     --checkpoint 3257 \
-    --checkepoch 140 \
+    --checkepoch 103 \
     --net semantic \
     --load_dir /data/object/liangxiong/semantic
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \

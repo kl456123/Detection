@@ -4,7 +4,8 @@
 # Written by Jiasen Lu, Jianwei Yang, based on code from Ross Girshick
 # --------------------------------------------------------
 
-import _init_paths
+import sys
+sys.path.append('./lib')
 import os
 import numpy as np
 import argparse

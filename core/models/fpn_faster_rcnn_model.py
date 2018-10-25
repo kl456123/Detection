@@ -28,11 +28,10 @@ class FPNFasterRCNN(Model):
         roi_level = torch.round(roi_level + 4)
         roi_level[roi_level < 2] = 2
         roi_level[roi_level > 5] = 5
+        roi_level[...] = 4
         return roi_level
 
     def pyramid_rcnn_pooling(self, rcnn_feat_maps, rois_batch):
-        import ipdb
-        ipdb.set_trace()
         pooled_feats = []
         # determine which layer to get feat
         roi_level = self.calculate_roi_level(rois_batch)

@@ -1,11 +1,4 @@
 ### TwoStageDetector
-```
-@misc{CV2018,
-  author =       {liangxiong (liangxiong@deepmotion.ai)},
-  howpublished = {{http://gitlab.deepmotion.ai/xiongliang/Detection}},
-  year =         {2018}
-}
-```
 
 ### Features
 * ```Pure Pytorch Code```
