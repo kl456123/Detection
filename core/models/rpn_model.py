@@ -52,13 +52,18 @@ class RPNModel(Model):
     def init_weights(self):
         self.truncated = False
 
-        Filler.normal_init(self.rpn_conv, 0, 0.01, self.truncated)
+        Filler.normal_init(self.rpn_conv_cls, 0, 0.01, self.truncated)
+        Filler.normal_init(self.rpn_conv_bbox, 0, 0.01, self.truncated)
         Filler.normal_init(self.rpn_cls_score, 0, 0.01, self.truncated)
         Filler.normal_init(self.rpn_bbox_pred, 0, 0.01, self.truncated)
 
     def init_modules(self):
         # define the convrelu layers processing input feature map
-        self.rpn_conv = nn.Conv2d(self.in_channels, 512, 3, 1, 1, bias=True)
+        self.rpn_conv_bbox = nn.Conv2d(
+            self.in_channels, 512, 3, 1, 1, bias=True)
+
+        self.rpn_conv_cls = nn.Conv2d(
+            self.in_channels, 512, 3, 1, 1, bias=True)
 
         # define bg/fg classifcation score layer
         self.rpn_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)
@@ -174,11 +179,11 @@ class RPNModel(Model):
         im_info = bottom_blobs['im_info']
 
         # rpn conv
-        rpn_conv = F.relu(self.rpn_conv(base_feat), inplace=True)
+        rpn_conv_cls = F.relu(self.rpn_conv_cls(base_feat), inplace=True)
 
         # rpn cls score
         # shape(N,2*num_anchors,H,W)
-        rpn_cls_scores = self.rpn_cls_score(rpn_conv)
+        rpn_cls_scores = self.rpn_cls_score(rpn_conv_cls)
 
         # rpn cls prob shape(N,2*num_anchors,H,W)
         rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
@@ -189,20 +194,23 @@ class RPNModel(Model):
 
         # rpn bbox pred
         # shape(N,4*num_anchors,H,W)
-        if self.use_score:
-            # shape (N,2,num_anchoros*H*W)
-            rpn_cls_scores = rpn_cls_score_reshape.permute(0, 2, 1)
-            rpn_bbox_preds = []
-            for i in range(self.num_anchors):
-                rpn_bbox_feat = torch.cat(
-                    [rpn_conv, rpn_cls_scores[:, ::self.num_anchors, :, :]],
-                    dim=1)
-                rpn_bbox_preds.append(self.rpn_bbox_pred(rpn_bbox_feat))
-            rpn_bbox_preds = torch.cat(rpn_bbox_preds, dim=1)
-        else:
-            # get rpn offsets to the anchor boxes
-            rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
-            # rpn_bbox_preds = [rpn_bbox_preds]
+        # if self.use_score:
+        # # shape (N,2,num_anchoros*H*W)
+        # rpn_cls_scores = rpn_cls_score_reshape.permute(0, 2, 1)
+        # rpn_bbox_preds = []
+        # for i in range(self.num_anchors):
+        # rpn_bbox_feat = torch.cat(
+        # [rpn_conv, rpn_cls_scores[:, ::self.num_anchors, :, :]],
+        # dim=1)
+        # rpn_bbox_preds.append(self.rpn_bbox_pred(rpn_bbox_feat))
+        # rpn_bbox_preds = torch.cat(rpn_bbox_preds, dim=1)
+        # else:
+        # # get rpn offsets to the anchor boxes
+        # rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
+        # rpn_bbox_preds = [rpn_bbox_preds]
+
+        rpn_conv_bbox = F.relu(self.rpn_conv_bbox(base_feat), inplace=True)
+        rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv_bbox)
 
         # generate anchors
         feature_map_list = [base_feat.size()[-2:]]

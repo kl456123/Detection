@@ -175,12 +175,13 @@ class RPNModel(Model):
         gt_boxes = bottom_blobs['gt_boxes']
         im_info = bottom_blobs['im_info']
 
+        # separate cls featmap and bbox featmap
         # rpn conv
-        rpn_conv = F.relu(self.rpn_conv(base_feat), inplace=True)
+        rpn_conv_cls = F.relu(self.rpn_conv_cls(base_feat), inplace=True)
 
         # rpn cls score
         # shape(N,2*num_anchors,H,W)
-        rpn_cls_scores = self.rpn_cls_score(rpn_conv)
+        rpn_cls_scores = self.rpn_cls_score(rpn_conv_cls)
 
         # rpn cls prob shape(N,2*num_anchors,H,W)
         rpn_cls_score_reshape = rpn_cls_scores.view(batch_size, 2, -1)
@@ -191,20 +192,23 @@ class RPNModel(Model):
 
         # rpn bbox pred
         # shape(N,4*num_anchors,H,W)
-        if self.use_score:
-            # shape (N,2,num_anchoros*H*W)
-            rpn_cls_scores = rpn_cls_score_reshape.permute(0, 2, 1)
-            rpn_bbox_preds = []
-            for i in range(self.num_anchors):
-                rpn_bbox_feat = torch.cat(
-                    [rpn_conv, rpn_cls_scores[:, ::self.num_anchors, :, :]],
-                    dim=1)
-                rpn_bbox_preds.append(self.rpn_bbox_pred(rpn_bbox_feat))
-            rpn_bbox_preds = torch.cat(rpn_bbox_preds, dim=1)
-        else:
-            # get rpn offsets to the anchor boxes
-            rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
-            # rpn_bbox_preds = [rpn_bbox_preds]
+        # if self.use_score:
+        # # shape (N,2,num_anchoros*H*W)
+        # rpn_cls_scores = rpn_cls_score_reshape.permute(0, 2, 1)
+        # rpn_bbox_preds = []
+        # for i in range(self.num_anchors):
+        # rpn_bbox_feat = torch.cat(
+        # [rpn_conv, rpn_cls_scores[:, ::self.num_anchors, :, :]],
+        # dim=1)
+        # rpn_bbox_preds.append(self.rpn_bbox_pred(rpn_bbox_feat))
+        # rpn_bbox_preds = torch.cat(rpn_bbox_preds, dim=1)
+        # else:
+        # # get rpn offsets to the anchor boxes
+        # rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
+        # # rpn_bbox_preds = [rpn_bbox_preds]
+
+        rpn_conv_bbox = F.relu(self.rpn_conv_bbox(base_feat), inplace=True)
+        rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv_bbox)
 
         # generate anchors
         feature_map_list = [base_feat.size()[-2:]]
@@ -291,7 +295,6 @@ class RPNModel(Model):
 
         rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
         cls_criterion = rpn_cls_probs
-
 
         batch_sampled_mask = self.sampler.subsample_batch(
             self.rpn_batch_size,

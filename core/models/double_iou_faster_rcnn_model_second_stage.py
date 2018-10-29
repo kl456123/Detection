@@ -44,23 +44,27 @@ class DoubleIoUSecondStageFasterRCNN(Model):
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
         pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
 
+        # classification
+        pooled_feat_cls = self.feature_extractor.third_stage_feature(
+            pooled_feat)
+        # semantic map
+        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat_cls)
+        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
+        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
+        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+
+        # pooled_feat_cls = pooled_feat_cls.mean(3).mean(2)
+        # rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
+        # rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+
         # regression
-        # shape(N,C,1,1)
         pooled_feat_reg = self.feature_extractor.second_stage_feature(
             pooled_feat)
-        # shape(N,C)
-        # if self.reduce:
+        # fusion in top rcnn(not bottom)
+        pooled_feat_reg = pooled_feat_reg * saliency_map[:, 1:, :, :]
         pooled_feat_reg = pooled_feat_reg.mean(3).mean(2)
 
         rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat_reg)
-
-        #  classification
-        pooled_feat_cls = self.feature_extractor.third_stage_feature(
-            pooled_feat)
-        pooled_feat_cls = pooled_feat_cls.mean(3).mean(2)
-        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
-
-        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
         prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
@@ -117,7 +121,8 @@ class DoubleIoUSecondStageFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        # self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
         if self.reduce:
             in_channels = 2048
         else:
@@ -252,7 +257,7 @@ class DoubleIoUSecondStageFasterRCNN(Model):
         # bounding box regression L1 loss
         rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']
         rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
-        rcnn_reg_targets).sum(dim=-1)
+                                             rcnn_reg_targets).sum(dim=-1)
         rcnn_bbox_loss *= rcnn_reg_weights
         rcnn_bbox_loss *= rcnn_reg_weights
         rcnn_bbox_loss = rcnn_bbox_loss.sum(dim=-1)

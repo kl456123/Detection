@@ -93,6 +93,10 @@ def parse_args():
         default='kitti')
     parser.add_argument(
         '--config', dest='config', help='config file(.json)', type=str)
+    parser.add_argument(
+        "--nms", dest='nms', help='nms to suppress bbox', type=float)
+    parser.add_argument(
+        "--thresh", dest="thresh", help='thresh for scores', type=float)
     args = parser.parse_args()
     return args
 
@@ -131,6 +135,12 @@ if __name__ == '__main__':
         data_config['name'] = args.dataset
 
     eval_config['rois_vis'] = args.rois_vis
+
+    if args.nms is not None:
+        eval_config['nms'] = args.nms
+
+    if args.thresh is not None:
+        eval_config['thresh'] = args.thresh
 
     if args.img_path:
         dataset_config = data_config['dataset_config']
