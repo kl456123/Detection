@@ -22,19 +22,23 @@
     # --net rfcn \
     # --out_path /data/object/liangxiong/rfcn \
     # --config configs/rfcn_kitti_config.json
-# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
-    # --net double_iou_second \
-    # --out_path /data/object/liangxiong/double_iou_second_both \
-    # --config configs/double_iou_kitti_config.json
+CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    --net double_iou_second \
+    --out_path /data/object/liangxiong/double_iou_second \
+    --config configs/double_iou_kitti_config.json
+
 # CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     # --net double_iou_second \
     # --out_path /data/object/liangxiong/double_iou_second \
-    # --config configs/double_iou_kitti_config.json
+    # --config configs/double_iou_kitti_config.json \
+    # --checkpoint 3257 \
+    # --checkepoch 13 \
+    # --r True
 
-CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
-    --net fpn \
-    --out_path /data/object/liangxiong/fpn \
-    --config configs/fpn_config.json
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net fpn \
+    # --out_path /data/object/liangxiong/fpn \
+    # --config configs/fpn_config.json
 
 # CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     # --net double_iou_second \
@@ -43,14 +47,14 @@ CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 1 \
     # --r True
-    # --model /data/object/liangxiong/double_iou_second/double_iou_second/kitti/faster_rcnn_45_3257.pth
-    
-    # --model /data/object/liangxiong/double_iou_new/double_iou/kitti/faster_rcnn_100_3257.pth
-    # --checkpoint 3257 \
+# --model /data/object/liangxiong/double_iou_second/double_iou_second/kitti/faster_rcnn_45_3257.pth
+
+# --model /data/object/liangxiong/double_iou_new/double_iou/kitti/faster_rcnn_100_3257.pth
+# --checkpoint 3257 \
     # --checkepoch 42 \
     # --r True
-    # --model /data/object/liangxiong/double_iou_new/double_iou/kitti/faster_rcnn_100_3257.pth
-    # --checkpoint 3257 \
+# --model /data/object/liangxiong/double_iou_new/double_iou/kitti/faster_rcnn_100_3257.pth
+# --checkpoint 3257 \
     # --checkepoch 62 \
     # --r True
 # --model /data/object/liangxiong/double_iou/double_iou/kitti/faster_rcnn_53_3257.pth \
@@ -72,11 +76,11 @@ CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     # --out_path /data/object/liangxiong/three_iou_best_second \
     # --config configs/org_three_iou_kitti_config.json \
     # --model /data/object/liangxiong/double_iou_new/double_iou/kitti/faster_rcnn_100_3257.pth
-    # --checkpoint 3257 \
+# --checkpoint 3257 \
     # --checkepoch 3 \
     # --r True
-    # --model /data/object/liangxiong/three_iou_best/three_iou_org_ohem/kitti/faster_rcnn_84_3257.pth
-    # --model /data/object/liangxiong/three_iou_/three_iou/kitti/faster_rcnn_39_3257.pth
+# --model /data/object/liangxiong/three_iou_best/three_iou_org_ohem/kitti/faster_rcnn_84_3257.pth
+# --model /data/object/liangxiong/three_iou_/three_iou/kitti/faster_rcnn_39_3257.pth
 # --checkpoint 3257 \
     # --checkepoch 7 \
     # --r True
@@ -92,7 +96,7 @@ CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     # --net three_iou_org_ohem \
     # --out_path /data/object/liangxiong/three_iou_attention \
     # --config configs/org_three_iou_kitti_config.json
-    # --checkepoch 44 \
+# --checkepoch 44 \
     # --checkpoint 3257 \
     # --r True
 
@@ -145,7 +149,7 @@ CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     # --out_path /data/object/liangxiong/part07 \
     # --config configs/refine_kitti_config.json \
     # --model /data/object/liangxiong/semantic/semantic/kitti/faster_rcnn_100_3257.pth
-    # --model /data/object/liangxiong/part05/semantic/kitti/faster_rcnn_24_3257.pth
+# --model /data/object/liangxiong/part05/semantic/kitti/faster_rcnn_24_3257.pth
 # --checkpoint 3257 \
     # --checkepoch 25 \
     # --r True

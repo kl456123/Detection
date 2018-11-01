@@ -16,12 +16,19 @@ from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
+from utils.visualizer import FeatVisualizer
 
 import functools
 
 
 class DoubleIoUSecondStageFasterRCNN(Model):
     def forward(self, feed_dict):
+        # import ipdb
+        # ipdb.set_trace()
+        # self.visualizer.visualize(
+        # feed_dict['img'],
+        # nn.Sequential(self.feature_extractor.first_stage_feature,
+        # self.feature_extractor.first_stage_cls_feature))
 
         prediction_dict = {}
 
@@ -29,12 +36,11 @@ class DoubleIoUSecondStageFasterRCNN(Model):
         base_feat = self.feature_extractor.first_stage_feature(
             feed_dict['img'])
         feed_dict.update({'base_feat': base_feat})
-        # batch_size = base_feat.shape[0]
+        self.add_feat('base_feat', base_feat)
 
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
 
-        # proposals = prediction_dict['proposals_batch']
         # shape(N,num_proposals,5)
         # pre subsample for reduce consume of memory
         if self.training:
@@ -43,25 +49,22 @@ class DoubleIoUSecondStageFasterRCNN(Model):
 
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
         pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
+        pooled_feat = F.relu(self.rcnn_conv(pooled_feat), inplace=True)
 
-        # classification
+        pooled_feat_cls = self.rcnn_pooled_feat_cls(pooled_feat.detach())
+        pooled_feat_bbox = self.rcnn_pooled_feat_bbox(pooled_feat)
+
+        #  classification
         pooled_feat_cls = self.feature_extractor.third_stage_feature(
-            pooled_feat)
-        # semantic map
-        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat_cls)
-        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
-        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
-        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+            pooled_feat_cls)
+        pooled_feat_cls = pooled_feat_cls.mean(3).mean(2)
+        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
 
-        # pooled_feat_cls = pooled_feat_cls.mean(3).mean(2)
-        # rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
-        # rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
         # regression
         pooled_feat_reg = self.feature_extractor.second_stage_feature(
-            pooled_feat)
-        # fusion in top rcnn(not bottom)
-        pooled_feat_reg = pooled_feat_reg * saliency_map[:, 1:, :, :]
+            pooled_feat_bbox)
         pooled_feat_reg = pooled_feat_reg.mean(3).mean(2)
 
         rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat_reg)
@@ -72,7 +75,7 @@ class DoubleIoUSecondStageFasterRCNN(Model):
 
         # used for track
         proposals_order = prediction_dict['proposals_order']
-        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][0][
+        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
             proposals_order]
 
         return prediction_dict
@@ -121,8 +124,7 @@ class DoubleIoUSecondStageFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        # self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
-        self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
+        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
         if self.reduce:
             in_channels = 2048
         else:
@@ -140,6 +142,11 @@ class DoubleIoUSecondStageFasterRCNN(Model):
                 F.cross_entropy, reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
+
+        # decouple cls and bbox
+        self.rcnn_conv = nn.Conv2d(1024, 512, 3, 1, 1, bias=True)
+        self.rcnn_pooled_feat_cls = nn.Conv2d(512, 1024, 1, 1, 0)
+        self.rcnn_pooled_feat_bbox = nn.Conv2d(512, 1024, 1, 1, 0)
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -170,6 +177,7 @@ class DoubleIoUSecondStageFasterRCNN(Model):
 
         # self.reduce = model_config.get('reduce')
         self.reduce = True
+        self.visualizer = FeatVisualizer()
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']

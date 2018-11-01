@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-data = pd.read_table('./pr_0.4.txt', delim_whitespace=True)
+data = pd.read_table('./pr_0.7.txt', delim_whitespace=True)
 
 tps = data['tp']
 fps = data['fp']

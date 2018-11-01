@@ -52,13 +52,17 @@ class RPNModel(Model):
     def init_weights(self):
         self.truncated = False
 
-        Filler.normal_init(self.rpn_conv, 0, 0.01, self.truncated)
+        Filler.normal_init(self.rpn_conv_cls, 0, 0.01, self.truncated)
+        # Filler.normal_init(self.rpn_conv_bbox, 0, 0.01, self.truncated)
         Filler.normal_init(self.rpn_cls_score, 0, 0.01, self.truncated)
         Filler.normal_init(self.rpn_bbox_pred, 0, 0.01, self.truncated)
 
     def init_modules(self):
         # define the convrelu layers processing input feature map
-        self.rpn_conv = nn.Conv2d(self.in_channels, 512, 3, 1, 1, bias=True)
+        self.rpn_conv_cls = nn.Conv2d(
+            self.in_channels, 512, 3, 1, 1, bias=True)
+        # self.rpn_conv_bbox = nn.Conv2d(
+        # self.in_channels, 512, 3, 1, 1, bias=True)
 
         # define bg/fg classifcation score layer
         self.rpn_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)
@@ -99,7 +103,6 @@ class RPNModel(Model):
         # assert len(
         # rpn_bbox_preds) == 1, 'just one feature maps is supported now'
         # rpn_bbox_preds = rpn_bbox_preds[0]
-        anchors = anchors[0]
         # do not backward
         anchors = anchors
         rpn_cls_probs = rpn_cls_probs.detach()
@@ -207,8 +210,9 @@ class RPNModel(Model):
         # rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
         # # rpn_bbox_preds = [rpn_bbox_preds]
 
-        rpn_conv_bbox = F.relu(self.rpn_conv_bbox(base_feat), inplace=True)
-        rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv_bbox)
+        # rpn_conv_bbox = F.relu(self.rpn_conv_bbox(base_feat), inplace=True)
+        # shared with cls
+        rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv_cls)
 
         # generate anchors
         feature_map_list = [base_feat.size()[-2:]]
@@ -273,8 +277,8 @@ class RPNModel(Model):
 
         anchors = prediction_dict['anchors']
 
-        assert len(anchors) == 1, 'just one feature maps is supported now'
-        anchors = anchors[0]
+        # assert len(anchors) == 1, 'just one feature maps is supported now'
+        # anchors = anchors[0]
 
         #################################
         # target assigner

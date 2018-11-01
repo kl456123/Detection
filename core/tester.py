@@ -101,6 +101,13 @@ def im_detect(model, data, eval_config, im_orig=None):
     im_info = data['im_info']
     with torch.no_grad():
         prediction = model(data)
+
+    if eval_config.get('feat_vis'):
+        featmaps_dict = model.get_feat()
+        from utils.visualizer import FeatVisualizer
+        feat_visualizer = FeatVisualizer()
+        feat_visualizer.visualize_maps(featmaps_dict)
+
     cls_prob = prediction['rcnn_cls_probs']
     rois = prediction['rois_batch']
     bbox_pred = prediction['rcnn_bbox_preds']

@@ -64,8 +64,10 @@ class DoubleIoUFasterRCNN(Model):
 
         # used for track
         proposals_order = prediction_dict['proposals_order']
-        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][0][
+        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
             proposals_order]
+        prediction_dict['rcnn_cls_probs'] = prediction_dict['rpn_cls_probs'][
+            0][proposals_order]
 
         return prediction_dict
 
@@ -139,6 +141,8 @@ class DoubleIoUFasterRCNN(Model):
 
         # self.reduce = model_config.get('reduce')
         self.reduce = True
+
+        self.featmaps_dict = {}
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']

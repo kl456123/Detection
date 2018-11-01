@@ -60,7 +60,7 @@
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
         "max_per_image": 100,
-        "nms": 0.7,
+        "nms": 0.5,
         "rng_seed": 3,
         "thresh": 0.5
     },
@@ -96,6 +96,7 @@
         ],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
+            "separate_feat":false,
             "use_cascade":true,
             "class_agnostic": true,
             "classes": [
@@ -104,7 +105,7 @@
             ],
             "img_channels": 3,
             "pretrained_model": "",
-            "pretrained": false
+            "pretrained": true
         },
         "num_classes": 2,
         "pooling_mode": "align",
@@ -114,6 +115,7 @@
             "use_iou":false,
             "use_focal_loss":true,
             "anchor_generator_config": {
+                "input_size":[384,1280],
                 "anchor_offset": [
                     0,
                     0

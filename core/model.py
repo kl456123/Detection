@@ -4,6 +4,8 @@ import torch.nn as nn
 
 
 class Model(nn.Module):
+    featmaps_dict = {}
+
     def __init__(self, model_config):
         super(Model, self).__init__()
         # store model_config
@@ -17,6 +19,14 @@ class Model(nn.Module):
 
         # freeze modules
         #  self.freeze_modules()
+
+    def add_feat(self, key, value):
+        self.featmaps_dict[key] = value
+
+    def get_feat(self, key=None):
+        if key is None:
+            return self.featmaps_dict
+        return self.featmaps_dict[key]
 
     def loss(self):
         pass

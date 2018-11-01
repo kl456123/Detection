@@ -86,6 +86,12 @@ def parse_args():
         help='if to visualize rois',
         action='store_true')
     parser.add_argument(
+        '--feat_vis',
+        dest='feat_vis',
+        help='visualize feat or not',
+        default=False,
+        type=bool)
+    parser.add_argument(
         '--dataset',
         dest='dataset',
         help='kitti or others',
@@ -130,6 +136,7 @@ if __name__ == '__main__':
 
     assert args.load_dir is not None, 'please choose a directory to load checkpoint'
     eval_config['load_dir'] = args.load_dir
+    eval_config['feat_vis'] = args.feat_vis
 
     if args.dataset is not None:
         data_config['name'] = args.dataset

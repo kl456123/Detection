@@ -6,10 +6,10 @@ from shutil import copyfile
 results_dir = './results/data'
 label_dir = '/data/object/training/label_2'
 
-# for fn in os.listdir(results_dir):
-# src = os.path.join(label_dir, fn)
-# dst = os.path.join(results_dir, fn)
-# copyfile(src, dst)
+for fn in os.listdir(results_dir):
+    src = os.path.join(label_dir, fn)
+    dst = os.path.join(results_dir, fn)
+    copyfile(src, dst)
 
 
 def add_scores():

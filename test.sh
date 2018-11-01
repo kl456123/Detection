@@ -57,12 +57,12 @@
     # --checkepoch 38 \
     # --load_dir /data/object/liangxiong/fpn
 
-CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    --checkpoint 3257 \
-    --checkepoch 88 \
-    --net semantic \
-    --load_dir /data/object/liangxiong/semantic \
-    --thresh 0.1
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 88 \
+    # --net semantic \
+    # --load_dir /data/object/liangxiong/semantic \
+    # --thresh 0.1
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 40 \
@@ -99,11 +99,13 @@ CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
 # --checkpoint 3257 \
 # --checkepoch 24
 
-# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
-    # --checkpoint 3257 \
-    # --checkepoch 48 \
-    # --net double_iou_second \
-    # --load_dir /data/object/liangxiong/double_iou_second
+CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    --checkpoint 3257 \
+    --checkepoch 50 \
+    --net double_iou \
+    --load_dir /data/object/liangxiong/double_iou \
+    --nms 0.7 \
+    --thresh 0.2
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \
