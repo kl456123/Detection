@@ -206,7 +206,8 @@ class RPNModel(Model):
 
         # generate anchors
         feature_map_list = [base_feat.size()[-2:]]
-        anchors = self.anchor_generator.generate(feature_map_list)
+        anchors = self.anchor_generator.generate(feature_map_list,
+                                                 im_info[0][:-1])
 
         ###############################
         # Proposal

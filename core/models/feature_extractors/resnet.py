@@ -14,7 +14,6 @@ class ResNetFeatureExtractor(Model):
 
     def init_param(self, model_config):
         #  self.model_path = 'data/pretrained_model/resnet50-19c8e357.pth'
-        self.mode_path = model_config['pretrained_model']
         self.dout_base_model = 1024
         self.pretrained = model_config['pretrained']
         self.class_agnostic = model_config['class_agnostic']
@@ -22,11 +21,25 @@ class ResNetFeatureExtractor(Model):
         self.img_channels = model_config['img_channels']
 
         self.use_cascade = model_config.get('use_cascade')
-        self.model_path = 'data/pretrained_model/resnet50-19c8e357.pth'
+        # self.model_path = 'data/pretrained_model/resnet50-19c8e357.pth'
+        # self.model_path = model_config['pretrained_model']
         self.separate_feat = model_config.get('separate_feat')
+        self.net_arch = model_config['net_arch']
+        self.net_arch_path_map = {
+            'res18': 'data/pretrained_model/resnet18-5c106cde.pth',
+            'res34': 'data/pretrained_model/resnet34-333f7ec4.pth',
+            'res50': 'data/pretrained_model/resnet50-19c8e357.pth'
+        }
+        self.net_arch_model_map = {
+            'res18': models.resnet18,
+            'res34': models.resnet34,
+            'res50': models.resnet50
+        }
+        self.model_path = self.net_arch_path_map[self.net_arch]
 
     def init_modules(self):
-        resnet = models.resnet50()
+        resnet = self.net_arch_model_map[self.net_arch]()
+
         # self.model_path = '/node01/jobs/io/pretrained/resnet50-19c8e357.pth'
         if self.training and self.pretrained:
             print(("Loading pretrained weights from %s" % (self.model_path)))

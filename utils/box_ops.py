@@ -46,3 +46,29 @@ def size_filter(boxes, min_size):
     hs = boxes[:, 3] - boxes[:, 1] + 1
     keep = torch.nonzero((ws >= min_size) & (hs >= min_size)).view(-1)
     return keep
+
+
+def intersection(bbox, gt_boxes):
+    """
+    Args:
+        bbox: shape(N,M,4)
+        gt_boxes: shape(N,M,4)
+    Returns:
+        intersection: shape(N,M,4)
+    """
+    xmin = torch.max(gt_boxes[:, :, 0], bbox[:, :, 0])
+    ymin = torch.max(gt_boxes[:, :, 1], bbox[:, :, 1])
+    xmax = torch.min(gt_boxes[:, :, 2], bbox[:, :, 2])
+    ymax = torch.min(gt_boxes[:, :, 3], bbox[:, :, 3])
+
+    # if no intersection
+    w = xmax - xmin + 1
+    h = ymax - ymin + 1
+    cond = (w < 0) | (h < 0)
+    # xmin[cond] = 0
+    # xmax[cond] = 0
+    # ymin[cond] = 0
+    # ymax[cond] = 0
+    inter_boxes = torch.stack([xmin, ymin, xmax, ymax], dim=-1)
+    inter_boxes[cond] = 0
+    return inter_boxes

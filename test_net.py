@@ -103,6 +103,8 @@ def parse_args():
         "--nms", dest='nms', help='nms to suppress bbox', type=float)
     parser.add_argument(
         "--thresh", dest="thresh", help='thresh for scores', type=float)
+    parser.add_argument(
+        "--model", dest="model", help="path to checkpoint", type=str)
     args = parser.parse_args()
     return args
 
@@ -180,8 +182,12 @@ if __name__ == '__main__':
     else:
         print('dir {} exist already!'.format(eval_out))
 
-    checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
-                                                     args.checkpoint)
+    if args.checkepoch is not None and args.checkpoint is not None:
+        checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
+                                                         args.checkpoint)
+    else:
+        assert args.model is not None, 'please determine model or checkpoint'
+        checkpoint_name = args.model
 
     # model
     # fasterRCNN = resnet(model_config)

@@ -31,7 +31,8 @@ class KittiDataLoaderBuilder(DataLoaderBuilder):
             ])
         else:
             self.transform = trans.Compose([
-                trans.ToTensor(), trans.Normalize(trans_cfg['normal_mean'],
-                                                  trans_cfg['normal_van'])
+                trans.Resize(trans_cfg['crop_size']), trans.ToTensor(),
+                trans.Normalize(trans_cfg['normal_mean'],
+                                trans_cfg['normal_van'])
             ])
         return self.transform

@@ -8,7 +8,7 @@
         },
         "dataset_config": {
             "cache_bev": false,
-            "dataset_file": "val.txt",
+            "dataset_file": "train.txt",
             "root_path": "/data/object/training"
         },
         "name": "kitti",
@@ -109,7 +109,7 @@
         },
         "num_classes": 2,
         "pooling_mode": "align",
-        "pooling_size": 7,
+        "pooling_size": 8,
         "rcnn_batch_size": 512,
         "rpn_config": {
             "use_iou":false,
@@ -209,7 +209,7 @@
             }
         },
         "truncated": false,
-        "use_focal_loss": true
+        "use_focal_loss": false
     },
     "train_config": {
         "checkpoint_interval": 10000,

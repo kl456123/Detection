@@ -90,7 +90,7 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             num_det += stat['num_det']
             num_tp += stat['num_tp']
             matched_thresh += stat['matched_thresh']
-            if step % disp_interval == 0:
+            if step and step % disp_interval == 0:
                 end = time.time()
 
                 # # summary loss

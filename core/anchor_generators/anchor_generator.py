@@ -30,7 +30,8 @@ class AnchorGenerator(object):
         else:
             self.num_anchors = self.aspect_ratios.numel() * self.scales.numel()
 
-        self.input_size = anchor_generator_config['input_size']
+        # depercated,it can make a bug easily
+        # self.input_size = anchor_generator_config['input_size']
 
     def generate_pyramid(self, feature_map_list):
         anchors_list = []
@@ -44,7 +45,7 @@ class AnchorGenerator(object):
 
         return torch.cat(anchors_list, dim=0)
 
-    def generate(self, feature_map_list):
+    def generate(self, feature_map_list, input_size):
         """
         Args:
             feature_map_list, list of (stride, ratio)
@@ -55,11 +56,12 @@ class AnchorGenerator(object):
         scales, aspect_ratios = ops.meshgrid(self.scales, self.aspect_ratios)
         for feature_map_shape in feature_map_list:
             anchors_list.append(
-                self._generate(feature_map_shape, scales, aspect_ratios))
+                self._generate(feature_map_shape, scales, aspect_ratios,
+                               input_size))
 
         return torch.cat(anchors_list, dim=0)
 
-    def _generate(self, feature_map_shape, scales, aspect_ratios):
+    def _generate(self, feature_map_shape, scales, aspect_ratios, input_size):
         """
         """
         # shape(A,)
@@ -68,8 +70,8 @@ class AnchorGenerator(object):
         heights = scales * ratios_sqrt * self.base_anchor_size
         widths = scales / ratios_sqrt * self.base_anchor_size
         anchor_stride = [
-            self.input_size[0] / feature_map_shape[0],
-            self.input_size[1] / feature_map_shape[1]
+            input_size[0] / feature_map_shape[0],
+            input_size[1] / feature_map_shape[1]
         ]
 
         y_ctrs = torch.arange(feature_map_shape[0]).cuda() * anchor_stride[

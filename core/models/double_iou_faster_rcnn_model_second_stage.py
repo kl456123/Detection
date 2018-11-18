@@ -11,7 +11,7 @@ from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
 
 from core.filler import Filler
-from core.target_assigner import TargetAssigner
+from core.double_iou_target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
@@ -23,12 +23,6 @@ import functools
 
 class DoubleIoUSecondStageFasterRCNN(Model):
     def forward(self, feed_dict):
-        # import ipdb
-        # ipdb.set_trace()
-        # self.visualizer.visualize(
-        # feed_dict['img'],
-        # nn.Sequential(self.feature_extractor.first_stage_feature,
-        # self.feature_extractor.first_stage_cls_feature))
 
         prediction_dict = {}
 
@@ -49,14 +43,10 @@ class DoubleIoUSecondStageFasterRCNN(Model):
 
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
         pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
-        pooled_feat = F.relu(self.rcnn_conv(pooled_feat), inplace=True)
-
-        pooled_feat_cls = self.rcnn_pooled_feat_cls(pooled_feat.detach())
-        pooled_feat_bbox = self.rcnn_pooled_feat_bbox(pooled_feat)
 
         #  classification
         pooled_feat_cls = self.feature_extractor.third_stage_feature(
-            pooled_feat_cls)
+            pooled_feat.detach())
         pooled_feat_cls = pooled_feat_cls.mean(3).mean(2)
         rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
 
@@ -64,7 +54,7 @@ class DoubleIoUSecondStageFasterRCNN(Model):
 
         # regression
         pooled_feat_reg = self.feature_extractor.second_stage_feature(
-            pooled_feat_bbox)
+            pooled_feat)
         pooled_feat_reg = pooled_feat_reg.mean(3).mean(2)
 
         rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat_reg)
@@ -144,9 +134,9 @@ class DoubleIoUSecondStageFasterRCNN(Model):
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
         # decouple cls and bbox
-        self.rcnn_conv = nn.Conv2d(1024, 512, 3, 1, 1, bias=True)
-        self.rcnn_pooled_feat_cls = nn.Conv2d(512, 1024, 1, 1, 0)
-        self.rcnn_pooled_feat_bbox = nn.Conv2d(512, 1024, 1, 1, 0)
+        # self.rcnn_conv = nn.Conv2d(1024, 512, 3, 1, 1, bias=True)
+        # self.rcnn_pooled_feat_cls = nn.Conv2d(512, 1024, 1, 1, 0)
+        # self.rcnn_pooled_feat_bbox = nn.Conv2d(512, 1024, 1, 1, 0)
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -177,7 +167,6 @@ class DoubleIoUSecondStageFasterRCNN(Model):
 
         # self.reduce = model_config.get('reduce')
         self.reduce = True
-        self.visualizer = FeatVisualizer()
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']
@@ -198,9 +187,11 @@ class DoubleIoUSecondStageFasterRCNN(Model):
         #  import ipdb
         #  ipdb.set_trace()
         cls_criterion = None
-        pos_indicator = rcnn_reg_weights > 0
-        indicator = rcnn_cls_weights > 0
-        #  indicator = None
+        # pos_indicator = rcnn_reg_weights > 0
+        # indicator = rcnn_cls_weights > 0
+        # indicator = None
+        pos_indicator = rcnn_cls_targets > 0
+        indicator = rcnn_reg_weights > 0
 
         # subsample from all
         # shape (N,M)
@@ -267,7 +258,6 @@ class DoubleIoUSecondStageFasterRCNN(Model):
         rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
                                              rcnn_reg_targets).sum(dim=-1)
         rcnn_bbox_loss *= rcnn_reg_weights
-        rcnn_bbox_loss *= rcnn_reg_weights
         rcnn_bbox_loss = rcnn_bbox_loss.sum(dim=-1)
 
         # loss weights has no gradients
@@ -282,7 +272,7 @@ class DoubleIoUSecondStageFasterRCNN(Model):
         num_gt = feed_dict['gt_labels'].numel()
         self.target_assigner.analyzer.analyze_ap(
             fake_match, rcnn_cls_probs[:, 1], num_gt, thresh=0.5)
-        #  prediction_dict['rcnn_reg_weights'] = rcnn_reg_weights
+        prediction_dict['rcnn_reg_weights'] = rcnn_reg_weights
 
         return loss_dict
 

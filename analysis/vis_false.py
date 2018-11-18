@@ -15,7 +15,7 @@ img_dir = '/data/object/training/image_2/'
 label_dir = '/data/object/training/label_2/'
 kitti_dir = './results/data'
 
-false_cases = ['fns', 'fps']
+false_cases = ['fns']
 
 fns_case = ['fns']
 fps_case = ['fps_bst', 'fps']

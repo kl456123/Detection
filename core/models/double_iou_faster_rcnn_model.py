@@ -29,6 +29,7 @@ class DoubleIoUFasterRCNN(Model):
         base_feat = self.feature_extractor.first_stage_feature(
             feed_dict['img'])
         feed_dict.update({'base_feat': base_feat})
+        self.add_feat('base_feat', base_feat)
         # batch_size = base_feat.shape[0]
 
         # rpn model
@@ -141,8 +142,6 @@ class DoubleIoUFasterRCNN(Model):
 
         # self.reduce = model_config.get('reduce')
         self.reduce = True
-
-        self.featmaps_dict = {}
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']

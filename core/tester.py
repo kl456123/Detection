@@ -99,6 +99,10 @@ def im_detect(model, data, eval_config, im_orig=None):
     # num_boxes = torch.Tensor(1)
     # gt_boxes, num_boxes = __change_into_variable([gt_boxes, num_boxes])
     im_info = data['im_info']
+    if eval_config.get('feat_vis'):
+        # enable it before forward pass
+        model.enable_feat_vis()
+
     with torch.no_grad():
         prediction = model(data)
 
@@ -114,6 +118,7 @@ def im_detect(model, data, eval_config, im_orig=None):
     anchors = prediction['second_rpn_anchors'][0]
     # anchors = prediction['anchors'][0]
     # anchors = None
+
 
     scores = cls_prob
     im_scale = im_info[0][2]

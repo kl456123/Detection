@@ -9,3 +9,4 @@
 env/
 results
 data/pretrained_model
+*.txt

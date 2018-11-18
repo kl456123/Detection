@@ -56,7 +56,8 @@ class FocalLoss(nn.Module):
                 is_print=False):
         """
         Args:
-            cls_preds: shape(N,num_classes)
+            cls_preds: shape(N[N1,N2,...],num_classes)
+            cls_targets: shape(N[N1,N2,...])
         """
 
         # shape(N*K,num_classes)

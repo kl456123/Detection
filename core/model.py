@@ -8,6 +8,7 @@ class Model(nn.Module):
 
     def __init__(self, model_config):
         super(Model, self).__init__()
+        self._enable_feat_vis = False
         # store model_config
         self.init_param(model_config)
 
@@ -20,8 +21,14 @@ class Model(nn.Module):
         # freeze modules
         #  self.freeze_modules()
 
+    def enable_feat_vis(self):
+        self._enable_feat_vis = True
+
     def add_feat(self, key, value):
-        self.featmaps_dict[key] = value
+        if self._enable_feat_vis:
+            self.featmaps_dict[key] = value
+        #  else:
+            #  print("please enable feat vis if you want to visualize featmaps")
 
     def get_feat(self, key=None):
         if key is None:

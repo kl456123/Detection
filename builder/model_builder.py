@@ -24,6 +24,10 @@ from core.models.cascade_faster_rcnn_model import CascadeFasterRCNN
 from core.models.double_iou_faster_rcnn_model_second_stage import DoubleIoUSecondStageFasterRCNN
 from core.models.three_iou_faster_rcnn_model_org_ohem_second import OrgOHEMThreeIoUSecondStageFasterRCNN
 from core.models.fpn_faster_rcnn_model import FPNFasterRCNN
+from core.models.detach_faster_rcnn_model import DetachFasterRCNN
+from core.models.cls_gate_faster_rcnn_model import ClsGateFasterRCNN
+from core.models.segment_faster_rcnn_model import SegmentFasterRCNN
+from core.models.nosegment_faster_rcnn_model import NoSegmentFasterRCNN
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -91,6 +95,14 @@ def build(model_config, training=True):
         fasterRCNN = DoubleIoUSecondStageFasterRCNN(model_config)
     elif net_arch == 'three_iou_org_ohem_second':
         fasterRCNN = OrgOHEMThreeIoUSecondStageFasterRCNN(model_config)
+    elif net_arch == 'detach':
+        fasterRCNN = DetachFasterRCNN(model_config)
+    elif net_arch == 'cls_gate':
+        fasterRCNN = ClsGateFasterRCNN(model_config)
+    elif net_arch == 'segment':
+        fasterRCNN = SegmentFasterRCNN(model_config)
+    elif net_arch == 'no_segment':
+        fasterRCNN = NoSegmentFasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 
