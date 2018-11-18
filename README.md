@@ -5,7 +5,7 @@
 * ```Three Pooling Methods```: roi-pooling, roi-align, roi-crop
 
 ### Main Results
-* dataset: kitti
+* dataset: kitti(val)
 use train.txt for training, use val.txt for test
 
 | methods           |     ap(moderate)   |
@@ -14,6 +14,9 @@ use train.txt for training, use val.txt for test
 | semantic   |   89.72% |
 | semantic(finetune) | 89.82% |
 | iou       | 88.02%    |
+
+* dataset: kitti(test)
+use trainval.txt and use test.txt for test, AP is `89.24` at present.
 
 The details about models can be seen on wiki page.
 
