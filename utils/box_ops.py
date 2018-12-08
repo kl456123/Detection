@@ -48,6 +48,30 @@ def size_filter(boxes, min_size):
     return keep
 
 
+def area(boxes):
+    """
+    Get Area of batch bboxes
+    Args:
+        boxes: shape(N,M,4)
+    """
+    w = boxes[:, :, 2] - boxes[:, :, 0] + 1
+    h = boxes[:, :, 3] - boxes[:, :, 1] + 1
+    return w * h
+
+
+def iou(boxes, gt_boxes):
+    """
+    Args:
+        boxes: shape(N,M,4)
+        gt_boxes: shape(N,M,4)
+    """
+    boxes_area = area(boxes)
+    gt_boxes_area = area(gt_boxes)
+    intersection_boxes = intersection(boxes, gt_boxes)
+    area_intersection = area(intersection_boxes)
+    return area_intersection / (boxes_area + gt_boxes_area - area_intersection)
+
+
 def intersection(bbox, gt_boxes):
     """
     Args:

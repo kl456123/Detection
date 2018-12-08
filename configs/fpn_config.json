@@ -114,7 +114,6 @@
             "use_iou":false,
             "use_focal_loss":true,
             "anchor_generator_config": {
-                "input_size":[384,1280],
                 "use_pyramid":false,
                 "anchor_offset": [
                     0,

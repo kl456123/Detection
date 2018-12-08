@@ -5,58 +5,59 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from core.model import Model
-from core.models.fpn_rpn_model import RPNModel
+from core.models.rpn_model import RPNModel
 from core.models.focal_loss import FocalLoss
-from model.roi_align.modules.roi_align import RoIAlignAvgAdaptive
+from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
 
 from core.filler import Filler
 from core.target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
-from core.models.feature_extractors.fpn import FPNFeatureExtractor
+from core.models.feature_extractors.resnet import ResNetFeatureExtractor
+from core.models.feature_extractors.mobilenet import MobileNetFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
+from builder import feature_extractors_builder
 
 import functools
 
 
-class FPNFasterRCNN(Model):
-    def calculate_roi_level(self, rois_batch):
-        h = rois_batch[:, 4] - rois_batch[:, 2] + 1
-        w = rois_batch[:, 3] - rois_batch[:, 1] + 1
-        roi_level = torch.log(torch.sqrt(w * h) / 224.0)
-        roi_level = torch.round(roi_level + 4)
-        roi_level[roi_level < 2] = 2
-        roi_level[roi_level > 5] = 5
-        roi_level[...] = 4
-        return roi_level
+class SemanticSINetModel(Model):
+    def collect_intermedia_layers(self, img):
+        feat2 = self.feature_extractor.first_stage_feature[:-1](img)
+        feat3 = self.feature_extractor.first_stage_feature[-1](feat2)
 
-    def calculate_stride_level(self, idx):
-        return 1 / ((idx + 1) * 8)
+        end_points = {'feat2': feat2, 'feat3': feat3}
+        return feat3, end_points
 
-    def pyramid_rcnn_pooling(self, rcnn_feat_maps, rois_batch):
+    def caroi_pooling(self, all_feats, rois_batch, out_channels):
+        # import ipdb
+        # ipdb.set_trace()
         pooled_feats = []
-        # determine which layer to get feat
-        roi_level = self.calculate_roi_level(rois_batch)
-        for idx, rcnn_feat_map in enumerate(rcnn_feat_maps):
-            idx += 2
-            mask = roi_level == idx
-            rois_batch_per_stage = rois_batch[mask]
-            if rois_batch_per_stage.shape[0] == 0:
+        for feat_name in all_feats:
+            if feat_name == 'feat2':
+                pooled_feat = self.rcnn_pooling2(all_feats[feat_name],
+                                                 rois_batch)
+            else:
                 continue
-            pooled_feats.append(
-                self.rcnn_pooling(rcnn_feat_map, rois_batch_per_stage,
-                                  self.calculate_stride_level(idx - 2)))
-        return torch.cat(pooled_feats, dim=0)
+            # else:
+                # pooled_feat = self.rcnn_pooling(all_feats[feat_name],
+                                                # rois_batch)
+            pooled_feats.append(pooled_feat)
+        pooled_feats = torch.cat(pooled_feats, dim=1)
+        if pooled_feats.shape[1] != out_channels:
+            # add 1x1 conv
+            pooled_feats = self.reduce_pooling(pooled_feats)
+        return pooled_feats
 
     def forward(self, feed_dict):
 
         prediction_dict = {}
 
         # base model
-        rpn_feat_maps, rcnn_feat_maps, = self.feature_extractor.first_stage_feature(
-            feed_dict['img'])
-        feed_dict.update({'rpn_feat_maps': rpn_feat_maps})
+        base_feat, all_feats = self.collect_intermedia_layers(feed_dict['img'])
+        feed_dict.update({'base_feat': base_feat})
+        self.add_feat('base_feat', base_feat)
         # batch_size = base_feat.shape[0]
 
         # rpn model
@@ -70,22 +71,42 @@ class FPNFasterRCNN(Model):
         rois_batch = prediction_dict['rois_batch']
 
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
-        # pooled_feat = self.rcnn_pooling(rcnn_feat_maps, rois_batch.view(-1, 5))
-        pooled_feat = self.pyramid_rcnn_pooling(rcnn_feat_maps,
-                                                rois_batch.view(-1, 5))
+        # pooled_feat = self.caroi_pooling(
+            # all_feats, rois_batch.view(-1, 5), out_channels=1024)
+        pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
 
         # shape(N,C,1,1)
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
-        # shape(N,C)
-        if self.reduce:
-            pooled_feat = pooled_feat.mean(3).mean(2)
-        else:
-            pooled_feat = pooled_feat.view(self.rcnn_batch_size, -1)
 
-        rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
-        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
+        # semantic map
+        # if self.use_self_attention:
+        # pooled_feat_cls = pooled_feat.mean(3).mean(2)
+        # rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
+        # rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
+        # # self-attention
+        # channel_attention = self.generate_channel_attention(pooled_feat)
+        # spatial_attention = self.generate_spatial_attention(pooled_feat)
+        # pooled_feat_reg = pooled_feat * channel_attention
+        # pooled_feat_reg = pooled_feat * spatial_attention
+        # pooled_feat_reg = pooled_feat_reg.mean(3).mean(2)
+
+        # rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat_reg)
+        # else:
+        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
+        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
+        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+        # rcnn_cls_probs = rcnn_cls_probs_map.mean(3).mean(2)
+        # shape(N,C)
+        rcnn_bbox_feat = pooled_feat * saliency_map[:, 1:, :, :]
+        # rcnn_bbox_feat = torch.cat([rcnn_bbox_feat, pooled_feat], dim=1)
+        rcnn_bbox_feat = rcnn_bbox_feat.mean(3).mean(2)
+
+        # if self.use_score:
+        # pooled_feat =
+
+        rcnn_bbox_preds = self.rcnn_bbox_pred(rcnn_bbox_feat)
 
         prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
@@ -98,6 +119,12 @@ class FPNFasterRCNN(Model):
 
         return prediction_dict
 
+    def generate_channel_attention(self, feat):
+        return feat.mean(3, keepdim=True).mean(2, keepdim=True)
+
+    def generate_spatial_attention(self, feat):
+        return self.spatial_attention(feat)
+
     def init_weights(self):
         # submodule init weights
         self.feature_extractor.init_weights()
@@ -107,42 +134,55 @@ class FPNFasterRCNN(Model):
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
     def init_modules(self):
-        self.feature_extractor = FPNFeatureExtractor(
+        self.feature_extractor = feature_extractors_builder.build(
             self.feature_extractor_config)
+        # self.feature_extractor = ResNetFeatureExtractor(
+        # self.feature_extractor_config)
+        # self.feature_extractor = MobileNetFeatureExtractor(
+        # self.feature_extractor_config)
         self.rpn_model = RPNModel(self.rpn_config)
         if self.pooling_mode == 'align':
-            self.rcnn_pooling = RoIAlignAvgAdaptive(self.pooling_size,
-                                                    self.pooling_size)
+            self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
+                                            self.pooling_size, 1.0 / 16.0)
         elif self.pooling_mode == 'ps':
             self.rcnn_pooling = PSRoIPool(7, 7, 1.0 / 16, 7, self.n_classes)
         elif self.pooling_mode == 'psalign':
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        self.rcnn_cls_pred = nn.Linear(1024, self.n_classes)
-        if self.reduce:
-            in_channels = 1024
+        if self.use_self_attention:
+            self.rcnn_cls_pred = nn.Linear(self.ndin, self.n_classes)
         else:
-            in_channels = 2048 * 4 * 4
+            self.rcnn_cls_pred = nn.Conv2d(self.ndin, self.n_classes, 3, 1, 1)
         if self.class_agnostic:
-            self.rcnn_bbox_pred = nn.Linear(in_channels, 4)
+            self.rcnn_bbox_pred = nn.Linear(self.ndin, 4)
+            # self.rcnn_bbox_pred = nn.Conv2d(2048,4,3,1,1)
         else:
-            self.rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
+            self.rcnn_bbox_pred = nn.Linear(self.ndin, 4 * self.n_classes)
 
         # loss module
         if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(2)
+            self.rcnn_cls_loss = FocalLoss(2, gamma=2, alpha=0.25)
         else:
             self.rcnn_cls_loss = functools.partial(
                 F.cross_entropy, reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
-        # TODO add feat scale adaptive roi pooling
+        # attention
+        if self.use_self_attention:
+            self.spatial_attention = nn.Conv2d(self.ndin, 1, 3, 1, 1)
+
         self.rcnn_pooling2 = RoIAlignAvg(self.pooling_size, self.pooling_size,
                                          1.0 / 8.0)
+        self.reduce_pooling = nn.Sequential(
+            nn.Conv2d(512, 1024, 1, 1, 0), nn.ReLU())
 
     def init_param(self, model_config):
+        if model_config.get('din'):
+            self.ndin = model_config['din']
+        else:
+            self.ndin = 512
         classes = model_config['classes']
         self.classes = classes
         self.n_classes = len(classes)
@@ -156,6 +196,7 @@ class FPNFasterRCNN(Model):
         self.use_focal_loss = model_config['use_focal_loss']
         self.subsample_twice = model_config['subsample_twice']
         self.rcnn_batch_size = model_config['rcnn_batch_size']
+        self.use_self_attention = model_config.get('use_self_attention')
 
         # some submodule config
         self.feature_extractor_config = model_config['feature_extractor_config']
@@ -167,9 +208,6 @@ class FPNFasterRCNN(Model):
 
         # sampler
         self.sampler = BalancedSampler(model_config['sampler_config'])
-
-        # self.reduce = model_config.get('reduce')
-        self.reduce = True
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']
@@ -213,6 +251,8 @@ class FPNFasterRCNN(Model):
         prediction_dict['rcnn_cls_targets'] = rcnn_cls_targets[
             batch_sampled_mask]
         prediction_dict['rcnn_reg_targets'] = rcnn_reg_targets[
+            batch_sampled_mask]
+        prediction_dict['fake_match'] = self.target_assigner.analyzer.match[
             batch_sampled_mask]
 
         # update rois_batch
@@ -263,5 +303,12 @@ class FPNFasterRCNN(Model):
 
         # add rcnn_cls_targets to get the statics of rpn
         # loss_dict['rcnn_cls_targets'] = rcnn_cls_targets
+
+        # analysis ap
+        rcnn_cls_probs = prediction_dict['rcnn_cls_probs']
+        num_gt = feed_dict['gt_labels'].numel()
+        fake_match = prediction_dict['fake_match']
+        self.target_assigner.analyzer.analyze_ap(
+            fake_match, rcnn_cls_probs[:, 1], num_gt, thresh=0.5)
 
         return loss_dict

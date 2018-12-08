@@ -16,10 +16,20 @@ class KittiDataset(DetDataset):
     def __init__(self, dataset_config, transforms=None, training=True):
         super(KittiDataset, self).__init__(training)
         self.root_path = dataset_config['root_path']
+        self.use_gt = dataset_config.get('use_gt')
+        if self.use_gt is None:
+            self.use_gt = False
+        # import ipdb
+        # ipdb.set_trace()
+
         # if self.training:
         if dataset_config['dataset_file'] is None:
             print('Demo mode enabled!')
             self.imgs = [dataset_config['demo_file']]
+            if self.use_gt:
+                sample_name = os.path.splitext(
+                    os.path.basename(self.imgs[0]))[0]
+                self.labels = [self.make_label(sample_name)]
         else:
             self.labels = self.make_label_list(dataset_config['dataset_file'])
             self.imgs = self.make_image_list()
@@ -35,7 +45,7 @@ class KittiDataset(DetDataset):
         h = img.size()[1]
         img_info = torch.FloatTensor([h, w, im_scale])
 
-        if self.training:
+        if self.training or self.use_gt:
             bbox = transform_sample['bbox']
             bbox[:, 2] *= w
             bbox[:, 0] *= w
@@ -73,9 +83,12 @@ class KittiDataset(DetDataset):
         img_file = self.imgs[index]
         img = Image.open(img_file)
 
-        if self.training:
+        if self.training or self.use_gt:
             lbl_file = self.labels[index]
             bbox, lbl = self.read_annotation(lbl_file)
+            if len(bbox) == 0:
+                bbox = numpy.zeros((1, 4))
+                lbl = numpy.zeros(1)
 
             # make sample
             transform_sample = {
@@ -175,6 +188,11 @@ class KittiDataset(DetDataset):
     def is_annotation(_name):
         return any(category == _name for category in OBJ_CLASSES)
 
+    def make_label(self, label):
+        label_path = os.path.join(self.root_path,
+                                  'label_2/{}.txt'.format(label))
+        return label_path
+
     def make_label_list(self, dataset_file):
         train_list_path = os.path.join(self.root_path, dataset_file)
         # train_list_path = './train.txt'
@@ -250,4 +268,3 @@ class KittiDataset(DetDataset):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cv2.imshow("test", img)
         cv2.waitKey(0)
-

@@ -1,26 +1,55 @@
 #!/bin/bash
 
-SAMPLE_IDX=000047
-CHECKEPOCH=55
-NMS=0.7
-THRESH=0.5
+SAMPLE_IDX=000063
+# SAMPLE_IDX=000052
+# SAMPLE_IDX=000008
+CHECKEPOCH=47
 
-# NET=faster_rcnn
-NET_NAME=double_iou_second
-NET_DIR=double_iou_second
+# dont use rpn
+NMS=0.6
+THRESH=0.1
 
-python test_net.py \
+# use results which stage
+USE_WHICH_RESULT=rpn
+FAKE_MATCH_THRESH=0.7
+
+# NET=semantic
+# NET_NAME=detach_double_iou
+NET_NAME=post_cls
+NET_DIR=detach_double_iou_cls_better_06
+USE_GT=True
+
+
+
+CUDA_VISIBLE_DEVICES=1 python test_net.py \
     --cuda \
     --net ${NET_NAME} \
-    --checkpoint 3257 \
     --nms ${NMS} \
     --thresh ${THRESH} \
-    --checkepoch ${CHECKEPOCH} \
     --load_dir /data/object/liangxiong/${NET_DIR} \
     --img_path /data/object/training/image_2/${SAMPLE_IDX}.png \
-    --feat_vis True
+    --checkpoint 3257 \
+    --checkepoch ${CHECKEPOCH} \
+    --use_which_result ${USE_WHICH_RESULT} \
+    --fake_match_thresh ${FAKE_MATCH_THRESH} \
+    --use_gt ${USE_GT}
+    # --feat_vis True
 
+# vis pred
 python utils/visualize.py \
     --kitti results/data/${SAMPLE_IDX}.txt \
-    --img /data/object/training/image_2/${SAMPLE_IDX}.png
+    --img /data/object/training/image_2/${SAMPLE_IDX}.png \
+    --title pred
+
+# vis rois
+python utils/visualize.py \
+    --kitti results/rois/${SAMPLE_IDX}.txt \
+    --img /data/object/training/image_2/${SAMPLE_IDX}.png \
+    --title rois
+
+# vis anchors
+python utils/visualize.py \
+    --kitti results/anchors/${SAMPLE_IDX}.txt \
+    --img /data/object/training/image_2/${SAMPLE_IDX}.png \
+    --title anchors
 

@@ -9,8 +9,10 @@ import numpy as np
 import argparse
 import pickle
 from utils.generate_anchors import generate_anchors
-import seaborn as sns
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except:
+    print("can not use visualization tools!")
 
 
 def expand_anchors(anchors, feat_size=(24, 79), feat_stride=16):
@@ -93,7 +95,7 @@ def visualize_bbox(img,
                     str(box[4]), (int(box[0]), int(box[1])),
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                     fontScale=0.5,
-                    color=(0, 255, 0))
+                    color=(0, 0, 255))
         for i, box in enumerate(gt_bboxes):
             cv2.rectangle(
                 img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
@@ -103,7 +105,7 @@ def visualize_bbox(img,
         cv2.waitKey(0)
 
         if save:
-            img_path = 'res_%d.jpg' % idx
+            img_path = '%s_%d.jpg' % (title, idx)
             cv2.imwrite(img_path, img)
 
 

@@ -28,6 +28,11 @@ from core.models.detach_faster_rcnn_model import DetachFasterRCNN
 from core.models.cls_gate_faster_rcnn_model import ClsGateFasterRCNN
 from core.models.segment_faster_rcnn_model import SegmentFasterRCNN
 from core.models.nosegment_faster_rcnn_model import NoSegmentFasterRCNN
+from core.models.sinet_model import SINetModel
+from core.models.semantic_sinet_model import SemanticSINetModel
+from core.models.detach_sinet_model import DetachSINetModel
+from core.models.detach_double_iou_faster_rcnn_model import DetachDoubleIOUFasterRCNN
+from core.models.post_cls_faster_rcnn_model import PostCLSFasterRCNN
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -103,6 +108,16 @@ def build(model_config, training=True):
         fasterRCNN = SegmentFasterRCNN(model_config)
     elif net_arch == 'no_segment':
         fasterRCNN = NoSegmentFasterRCNN(model_config)
+    elif net_arch == 'sinet':
+        fasterRCNN = SINetModel(model_config)
+    elif net_arch == 'semantic_sinet':
+        fasterRCNN = SemanticSINetModel(model_config)
+    elif net_arch == 'detach_sinet':
+        fasterRCNN = DetachSINetModel(model_config)
+    elif net_arch == 'detach_double_iou':
+        fasterRCNN = DetachDoubleIOUFasterRCNN(model_config)
+    elif net_arch == 'post_cls':
+        fasterRCNN = PostCLSFasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

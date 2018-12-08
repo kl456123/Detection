@@ -82,7 +82,8 @@ class RPNModel(Model):
 
         # cls
         if self.use_focal_loss:
-            self.rpn_cls_loss = FocalLoss(2)
+            self.rpn_cls_loss = FocalLoss(
+                2, alpha=0.2, gamma=2, auto_alpha=False)
         else:
             self.rpn_cls_loss = functools.partial(
                 F.cross_entropy, reduce=False)
@@ -216,7 +217,8 @@ class RPNModel(Model):
 
         # generate anchors
         feature_map_list = [base_feat.size()[-2:]]
-        anchors = self.anchor_generator.generate(feature_map_list)
+        anchors = self.anchor_generator.generate(
+            feature_map_list, input_size=im_info[0][:-1])
 
         ###############################
         # Proposal
@@ -228,9 +230,6 @@ class RPNModel(Model):
             -1, proposals_batch.shape[1]).type_as(proposals_batch)
         rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
                                dim=2)
-
-        if self.training:
-            rois_batch = self.append_gt(rois_batch, gt_boxes)
 
         rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
                                              rpn_cls_scores.shape[2],
@@ -257,18 +256,6 @@ class RPNModel(Model):
 
         return predict_dict
 
-    def append_gt(self, rois_batch, gt_boxes):
-        ################################
-        # append gt_boxes to rois_batch for losses
-        ################################
-        # may be some bugs here
-        gt_boxes_append = torch.zeros(gt_boxes.shape[0], gt_boxes.shape[1],
-                                      5).type_as(gt_boxes)
-        gt_boxes_append[:, :, 1:5] = gt_boxes[:, :, :4]
-        # cat gt_boxes to rois_batch
-        rois_batch = torch.cat([rois_batch, gt_boxes_append], dim=1)
-        return rois_batch
-
     def loss(self, prediction_dict, feed_dict):
         # loss for cls
         loss_dict = {}
@@ -287,7 +274,7 @@ class RPNModel(Model):
         #  import ipdb
         #  ipdb.set_trace()
         rpn_cls_targets, rpn_reg_targets, \
-            rpn_cls_weights, rpn_reg_weights = \
+            rpn_cls_weights, rpn_reg_weights, stats = \
             self.target_assigner.assign(anchors, gt_boxes, gt_labels=None)
 
         ################################

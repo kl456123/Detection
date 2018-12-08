@@ -1,8 +1,7 @@
 # --------------------------------------------------------
 # Tensorflow Faster R-CNN
 # Licensed under The MIT License [see LICENSE for details]
-# Written by Jiasen Lu, Jianwei Yang, based on code from Ross Girshick
-# --------------------------------------------------------
+# Written by Jiasen Lu, Jianwei Yang, based on code from Ross Girshick # --------------------------------------------------------
 
 import sys
 sys.path.append('./lib')
@@ -63,13 +62,11 @@ def parse_args():
         '--checkepoch',
         dest='checkepoch',
         help='checkepoch to load network',
-        default=1,
         type=int)
     parser.add_argument(
         '--checkpoint',
         dest='checkpoint',
         help='checkpoint to load network',
-        default=10021,
         type=int)
     parser.add_argument(
         '--vis', dest='vis', help='visualization mode', action='store_true')
@@ -105,6 +102,25 @@ def parse_args():
         "--thresh", dest="thresh", help='thresh for scores', type=float)
     parser.add_argument(
         "--model", dest="model", help="path to checkpoint", type=str)
+    parser.add_argument(
+        "--use_which_result",
+        dest="use_which_result",
+        help="use rpn results to leading the output",
+        type=str,
+        default='none')
+    parser.add_argument(
+        "--fake_match_thresh",
+        dest="fake_match_thresh",
+        help="eval the performance of bbox",
+        type=float,
+        default=0.7)
+    parser.add_argument(
+        "--use_gt",
+        dest="use_gt",
+        help='whether to use gt for analysis',
+        type=bool,
+        default=False)
+
     args = parser.parse_args()
     return args
 
@@ -118,7 +134,6 @@ def infer_config_fn(args):
 
 
 if __name__ == '__main__':
-
     args = parse_args()
     # assert args.config is not None, 'please select a config file(json)'
     if args.config is None:
@@ -132,18 +147,20 @@ if __name__ == '__main__':
     eval_config = config['eval_config']
 
     model_config['pretrained'] = False
+    model_config['target_assigner_config'][
+        'fake_match_thresh'] = args.fake_match_thresh
 
     assert args.net is not None, 'please select a base model'
     model_config['net'] = args.net
 
-    assert args.load_dir is not None, 'please choose a directory to load checkpoint'
-    eval_config['load_dir'] = args.load_dir
     eval_config['feat_vis'] = args.feat_vis
 
     if args.dataset is not None:
         data_config['name'] = args.dataset
 
     eval_config['rois_vis'] = args.rois_vis
+    eval_config['use_which_result'] = args.use_which_result
+    data_config['dataset_config']['use_gt'] = args.use_gt
 
     if args.nms is not None:
         eval_config['nms'] = args.nms
@@ -169,35 +186,50 @@ if __name__ == '__main__':
         'eval_config': eval_config
     })
 
-    input_dir = eval_config['load_dir'] + "/" + model_config[
-        'net'] + "/" + data_config['name']
-    if not os.path.exists(input_dir):
-        raise Exception(
-            'There is no input directory for loading network from {}'.format(
-                input_dir))
-
     eval_out = eval_config['eval_out']
     if not os.path.exists(eval_out):
         os.makedirs(eval_out)
     else:
         print('dir {} exist already!'.format(eval_out))
 
+    #restore from random or checkpoint
+    restore = True
+    # two methods to load model
+    # 1. load from training dir
+    # 2. load from any other dirs,it just needs config and model path
     if args.checkepoch is not None and args.checkpoint is not None:
         checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
                                                          args.checkpoint)
+
+        assert args.load_dir is not None, 'please choose a directory to load checkpoint'
+        eval_config['load_dir'] = args.load_dir
+        input_dir = eval_config['load_dir'] + "/" + model_config[
+            'net'] + "/" + data_config['name']
+        if not os.path.exists(input_dir):
+            raise Exception(
+                'There is no input directory for loading network from {}'.
+                format(input_dir))
+    elif args.model is not None:
+        # assert args.model is not None, 'please determine model or checkpoint'
+        # it should be a path to model
+        checkpoint_name = os.path.basename(args.model)
+        input_dir = os.path.dirname(args.model)
     else:
-        assert args.model is not None, 'please determine model or checkpoint'
-        checkpoint_name = args.model
+        restore = False
+
+    # log for restore
+    if restore:
+        print("restore from checkpoint")
+    else:
+        print("use pytorch default initialization")
 
     # model
-    # fasterRCNN = resnet(model_config)
-    # fasterRCNN.eval()
-    # fasterRCNN.create_architecture()
     fasterRCNN = model_builder.build(model_config, training=False)
 
-    # saver
-    saver = Saver(input_dir)
-    saver.load({'model': fasterRCNN}, checkpoint_name)
+    if restore:
+        # saver
+        saver = Saver(input_dir)
+        saver.load({'model': fasterRCNN}, checkpoint_name)
 
     if args.cuda:
         fasterRCNN.cuda()

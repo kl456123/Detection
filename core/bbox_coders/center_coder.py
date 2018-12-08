@@ -12,7 +12,15 @@ class CenterCoder(object):
             self.bbox_normalize_stds = torch.tensor(
                 coder_config['bbox_normalize_stds'])
 
-    def decode_batch(self, deltas, boxes):
+    def decode_batch(self, box_deltas, boxes):
+        if self.bbox_normalize_targets_precomputed:
+            type = box_deltas.type()
+            box_deltas = box_deltas * self.bbox_normalize_stds.expand_as(
+                box_deltas).type(type) + self.bbox_normalize_means.expand_as(
+                    box_deltas).type(type)
+        return self._decode_batch(box_deltas, boxes)
+
+    def _decode_batch(self, deltas, boxes):
         """
         Args:
             deltas: shape(N,K*A,4)

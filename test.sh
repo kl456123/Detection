@@ -57,11 +57,25 @@
     # --checkepoch 38 \
     # --load_dir /data/object/liangxiong/fpn
 
-CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    --checkpoint 6683 \
-    --checkepoch 29 \
-    --net semantic \
-    --load_dir /data/object/liangxiong/semantic_1920_res50
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net semantic_sinet \
+    # --model ./faster_rcnn_32_3257.pth \
+    # --config ./configs/refine_kitti_config.json
+
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --net semantic \
+    # --load_dir /data/object/liangxiong/SemanticRes101 \
+    # --model /data/object/liangxiong/SemanticRes101/faster_rcnn_20_3257.pth \
+    # --config /data/object/liangxiong/SemanticRes101/refine_kitti_config.json
+    # --checkpoint 3257 \
+    # --checkepoch 55
+    # --config configs/refine_kitti_config.json
+
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 20 \
+    # --net semantic_sinet \
+    # --load_dir /data/object/liangxiong/semantic_sdp \
     # --thresh 0.1
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
@@ -99,11 +113,23 @@ CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
 # --checkpoint 3257 \
 # --checkepoch 24
 
-# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --net post_cls \
+    # --load_dir /data/object/liangxiong/detach_double_iou_cls_better \
     # --checkpoint 3257 \
-    # --checkepoch 22 \
-    # --net detach \
-    # --load_dir /data/object/liangxiong/detach \
+    # --checkepoch 53
+CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    --checkpoint 3257 \
+    --checkepoch 47 \
+    --net post_cls \
+    --load_dir /data/object/liangxiong/detach_double_iou_cls_better_06 \
+    --use_gt True
+
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 24 \
+    # --net detach_double_iou \
+    # --load_dir /data/object/liangxiong/detach_double_iou_cls
     # --nms 0.7 \
     # --thresh 0.2
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \

@@ -4,15 +4,19 @@ import torch
 
 
 class Analyzer(object):
-    def __init__(self):
-        # init value
-        self.stat = {
-            'num_det': 1,
-            'num_tp': 0,
-            'matched_thresh': 0,
-            'recall_thresh': 0
-        }
-        self.match = None
+    # def __init__(self):
+    # # init value
+    # self.clean_stat()
+
+    # def clean_stat(self):
+    # self.stat = {
+    # 'num_det': 1,
+    # 'num_tp': 0,
+    # 'matched_thresh': 0,
+    # 'recall_thresh': 0
+    # 'match': None
+    # }
+    # self.match = None
 
     def analyze(self, match, num_gt):
         """
@@ -22,19 +26,28 @@ class Analyzer(object):
         match: tensor(N,M)
 
         """
+        # import ipdb
+        # ipdb.set_trace()
         self.match = match
         assert match.shape[0] == 1
         match = match[0]
+        match_inds = torch.nonzero(match > -1)
+        if match_inds.numel():
+            # check non zero first
+            match_inds = match_inds[:, 0]
+
         match = match[match > -1]
         gt_mask = torch.zeros(num_gt).type_as(match)
-        gt_mask[match[:-num_gt]] = 1
+        gt_mask[match] = 1
         matched = gt_mask.sum().item()
         recall = matched / num_gt
-        self.stat.update({
+        return {
             'matched': matched,
             'num_gt': num_gt,
-            'recall': recall
-        })
+            'recall': recall,
+            'match_inds': match_inds,
+            'match': self.match
+        }
         # return self.stat
         # print('matched_gt/all_gt/average recall({}/{}/{}): '.format(
 
@@ -59,18 +72,18 @@ class Analyzer(object):
         match_thresh = match[(rcnn_cls_probs > thresh) & (match > -1)]
 
         gt_mask = torch.zeros(num_gt).type_as(match_thresh)
-        gt_mask[match_thresh[:-num_gt]] = 1
+        gt_mask[match_thresh] = 1
         matched_thresh = gt_mask.sum().item()
         recall_thresh = matched_thresh / num_gt
         # if num_det:
         # precision = num_tp/num_det
         # else:
         # precision = 0
-        self.stat.update({
+        return {
             'num_tp': num_tp,
             'num_det': num_det,
 
             # recall after thresh
             'matched_thresh': matched_thresh,
             'recall_thresh': recall_thresh
-        })
+        }

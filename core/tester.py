@@ -25,21 +25,50 @@ def test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
+    # seed = 0
+    # torch.manual_seed(seed)
+    # torch.cuda.manual_seed_all(seed)
     num_samples = len(data_loader)
+    # model.train()
+    num_gt = 0
+    matched = 0
+
     for i, data in enumerate(data_loader):
         img_file = data['img_name']
+
         start_time = time.time()
-        pred_boxes, scores, rois, anchors = im_detect(
+        pred_boxes, scores, rois, anchors, rois_scores = im_detect(
             model, to_cuda(data), eval_config, im_orig=data['img_orig'])
         duration_time = time.time() - start_time
 
         scores = scores.squeeze()
         pred_boxes = pred_boxes.squeeze()
         rois = rois.squeeze()
+        rois_scores = rois_scores.squeeze()
+
+        thresh = eval_config['thresh']
+        #  import ipdb
+        #  ipdb.set_trace()
+        use_which_result = eval_config['use_which_result']
+        if not use_which_result == 'none':
+            if use_which_result == 'rpn':
+                match_inds = model.stats['match_inds']
+            elif use_which_result == 'rcnn':
+                match_inds = model.rcnn_stats['match_inds']
+            thresh = 0
+            eval_config['nms'] = 1
+            scores = scores[match_inds]
+            rois_scores = rois_scores[match_inds]
+            pred_boxes = pred_boxes[match_inds]
+            rois = rois[match_inds]
+            anchors = anchors[match_inds]
         # anchors = anchors.squeeze()
 
+        # calc recall
+        matched += model.rcnn_stats['matched']
+        num_gt += model.rcnn_stats['num_gt']
+
         classes = eval_config['classes']
-        thresh = eval_config['thresh']
 
         #  import ipdb
         #  ipdb.set_trace()
@@ -52,6 +81,7 @@ def test(eval_config, data_loader, model):
             # if there is det
             if inds.numel() > 0:
                 cls_scores = scores[:, j][inds]
+                rois_cls_scores = rois_scores[:, j][inds]
                 _, order = torch.sort(cls_scores, 0, True)
                 if eval_config['class_agnostic']:
                     cls_boxes = pred_boxes[inds, :]
@@ -61,9 +91,11 @@ def test(eval_config, data_loader, model):
                     cls_boxes = pred_boxes[inds][:, j * 4:(j + 1) * 4]
 
                 cls_dets = torch.cat((cls_boxes, cls_scores.unsqueeze(1)), 1)
-                rois_dets = torch.cat((rois_boxes, cls_scores.unsqueeze(1)), 1)
+                rois_dets = torch.cat(
+                    (rois_boxes, rois_cls_scores.unsqueeze(1)), 1)
+                # the same as rois'
                 anchors_dets = torch.cat(
-                    (anchors_boxes, cls_scores.unsqueeze(1)), 1)
+                    (anchors_boxes, rois_cls_scores.unsqueeze(1)), 1)
 
                 cls_dets = cls_dets[order]
                 rois_dets = rois_dets[order]
@@ -82,6 +114,8 @@ def test(eval_config, data_loader, model):
                 dets.append([])
                 res_rois.append([])
                 res_anchors.append([])
+        # import ipdb
+        # ipdb.set_trace()
         save_dets(dets[0], img_file[0], 'kitti', eval_config['eval_out'])
         save_dets(res_rois[0], img_file[0], 'kitti',
                   eval_config['eval_out_rois'])
@@ -91,13 +125,11 @@ def test(eval_config, data_loader, model):
         sys.stdout.write(
             '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
         sys.stdout.flush()
+    print('\naverage recall/num_gt/matched: {:.4f}/{}/{}'.format(
+        matched / num_gt, num_gt, matched))
 
 
 def im_detect(model, data, eval_config, im_orig=None):
-    # fake label
-    # gt_boxes = torch.zeros((1, 1, 5))
-    # num_boxes = torch.Tensor(1)
-    # gt_boxes, num_boxes = __change_into_variable([gt_boxes, num_boxes])
     im_info = data['im_info']
     if eval_config.get('feat_vis'):
         # enable it before forward pass
@@ -113,12 +145,12 @@ def im_detect(model, data, eval_config, im_orig=None):
         feat_visualizer.visualize_maps(featmaps_dict)
 
     cls_prob = prediction['rcnn_cls_probs']
+    second_rpn_cls_probs = prediction['second_rpn_cls_probs']
     rois = prediction['rois_batch']
     bbox_pred = prediction['rcnn_bbox_preds']
     anchors = prediction['second_rpn_anchors'][0]
     # anchors = prediction['anchors'][0]
     # anchors = None
-
 
     scores = cls_prob
     im_scale = im_info[0][2]
@@ -137,21 +169,21 @@ def im_detect(model, data, eval_config, im_orig=None):
     if eval_config['bbox_reg']:
         # Apply bounding-box regression deltas
         box_deltas = bbox_pred.data
-        if eval_config['bbox_normalize_targets_precomputed']:
-            # Optionally normalize targets by a precomputed mean and stdev
-            if eval_config['class_agnostic']:
-                box_deltas = box_deltas.view(
-                    -1, 4) * torch.FloatTensor(eval_config[
-                        'bbox_normalize_stds']).cuda() + torch.FloatTensor(
-                            eval_config['bbox_normalize_means']).cuda()
-                box_deltas = box_deltas.view(eval_config['batch_size'], -1, 4)
-            else:
-                box_deltas = box_deltas.view(
-                    -1, 4) * torch.FloatTensor(eval_config[
-                        'bbox_normalize_stds']).cuda() + torch.FloatTensor(
-                            eval_config['bbox_normalize_means']).cuda()
-                box_deltas = box_deltas.view(eval_config['batch_size'], -1,
-                                             4 * len(eval_config['classes']))
+        #  if eval_config['bbox_normalize_targets_precomputed']:
+        #  # Optionally normalize targets by a precomputed mean and stdev
+        #  if eval_config['class_agnostic']:
+        #  box_deltas = box_deltas.view(
+        #  -1, 4) * torch.FloatTensor(eval_config[
+        #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
+        #  eval_config['bbox_normalize_means']).cuda()
+        #  box_deltas = box_deltas.view(eval_config['batch_size'], -1, 4)
+        #  else:
+        #  box_deltas = box_deltas.view(
+        #  -1, 4) * torch.FloatTensor(eval_config[
+        #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
+        #  eval_config['bbox_normalize_means']).cuda()
+        #  box_deltas = box_deltas.view(eval_config['batch_size'], -1,
+        #  4 * len(eval_config['classes']))
 
         #  pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
         pred_boxes = model.target_assigner.bbox_coder.decode_batch(
@@ -159,7 +191,9 @@ def im_detect(model, data, eval_config, im_orig=None):
         pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
 
     pred_boxes /= im_scale
-    return pred_boxes, scores, rois[:, :, 1:5], anchors
+    rois /= im_scale
+    anchors /= im_scale
+    return pred_boxes, scores, rois[:, :, 1:5], anchors, second_rpn_cls_probs
 
 
 def save_dets(dets, label_info, data_format='kitti', output_dir=''):
@@ -181,7 +215,11 @@ def save_dets_kitti(dets, label_info, output_dir):
             xmin, ymin, xmax, ymax, cf = det
             res_str.append(
                 kitti_template.format(class_name, xmin, ymin, xmax, ymax, cf))
+        # if len(res_str) == 0:
+        # print('empty file')
         f.write('\n'.join(res_str))
+        f.flush()
+        os.fsync(f)
 
 
 def save_bev_map(bev_map, label_info, cache_dir):

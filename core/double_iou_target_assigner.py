@@ -32,6 +32,12 @@ class TargetAssigner(object):
         self.fg_thresh_reg = assigner_config['fg_thresh_reg']
         # self.bg_thresh_reg = assigner_config['bg_thresh_reg']
 
+        if assigner_config.get('fake_match_thresh') is not None:
+            self.fake_match_thresh = assigner_config['fake_match_thresh']
+        else:
+            # default value
+            self.fake_match_thresh = 0.7
+
     @property
     def stat(self):
         return self.analyzer.stat
@@ -52,8 +58,9 @@ class TargetAssigner(object):
 
         # match 0.7 for truly recall calculation
         # if self.fg_thresh_cls < 0.7:
-        fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
-        self.analyzer.analyze(fake_match, gt_boxes.shape[1])
+        fake_match = self.matcher.match_batch(match_quality_matrix,
+                                              self.fake_match_thresh)
+        stats = self.analyzer.analyze(fake_match, gt_boxes.shape[1])
 
         #################################
         # handle cls
@@ -95,7 +102,7 @@ class TargetAssigner(object):
         reg_targets[reg_match == -1] = 0
         reg_weights[reg_match == -1] = 0
 
-        return cls_targets, reg_targets, cls_weights, reg_weights
+        return cls_targets, reg_targets, cls_weights, reg_weights, stats
 
     def _create_regression_weights(self, assigned_overlaps_batch):
         """

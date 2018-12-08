@@ -101,6 +101,7 @@
         ],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
+            "use_cascade":true,
             "net_arch":"res50",
             "pooling_size":7,
             "class_agnostic": true,
@@ -128,7 +129,7 @@
                     0.8,
                     1
                 ],
-                "base_anchor_size": 24,
+                "base_anchor_size": 16,
                 "scales": [
                     4,
                     8,
@@ -150,8 +151,9 @@
                 "similarity_calc_config":{
                     "type":"center"
                 },
-                "fg_thresh": 0.7,
-                "bg_thresh":0.3,
+                "fg_thresh_cls": 0.3,
+                "bg_thresh_cls":0.3,
+                "fg_thresh_reg":0.1,
                 "coder_config": {
                     "type":"center",
                     "bbox_normalize_targets_precomputed": false
@@ -170,8 +172,9 @@
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh": 0.5,
-            "bg_thresh":0.5,
+            "fg_thresh_cls": 0.6,
+            "bg_thresh_cls":0.3,
+            "fg_thresh_reg":0.1,
             "coder_config": {
                 "type":"center",
                 "bbox_inside_weights": [

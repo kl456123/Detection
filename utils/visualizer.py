@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except:
+    print("can not import plt, so feat visualizer is disabled!")
 import torch.nn as nn
 import numpy as np
 import sys

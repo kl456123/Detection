@@ -8,7 +8,7 @@
         },
         "dataset_config": {
             "cache_bev": false,
-            "dataset_file": "val.txt",
+            "dataset_file": "train.txt",
             "root_path": "/data/object/training"
         },
         "name": "kitti",
@@ -76,6 +76,10 @@
         },
         "name": "kitti",
         "transform_config": {
+            "crop_size": [
+                384,
+                1280
+            ],
             "normal_mean": [
                 0.485,
                 0.456,
@@ -96,6 +100,7 @@
         ],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
+            "net_arch":"res50",
             "separate_feat":false,
             "use_cascade":true,
             "class_agnostic": true,
@@ -115,7 +120,6 @@
             "use_iou":false,
             "use_focal_loss":true,
             "anchor_generator_config": {
-                "input_size":[384,1280],
                 "anchor_offset": [
                     0,
                     0
@@ -155,8 +159,6 @@
                 "fg_thresh_cls": 0.3,
                 "bg_thresh_cls":0.3,
                 "fg_thresh_reg":0.1,
-                "fg_thresh":0.3,
-                "bg_thresh":0.1,
                 "coder_config": {
                     "type":"center",
                     "bbox_normalize_targets_precomputed": false
@@ -178,7 +180,7 @@
                 "type":"center"
             },
             "fg_thresh_cls": 0.5,
-            "bg_thresh_cls":0.5,
+            "bg_thresh_cls":0.15,
             "fg_thresh_reg":0.1,
             "fg_thresh":0.5,
             "bg_thresh":0.5,

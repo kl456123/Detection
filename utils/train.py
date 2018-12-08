@@ -33,11 +33,16 @@ if __name__ == '__main__':
     out_path = args.out_path
     print(args.pretrained_path)
     print(in_path)
+    # for file in os.listdir('/data1'):
+    # print(file)
     print(out_path)
+    #  dir_name = 'semantic_dsp_res101'
+    #  out_path = os.path.join(out_path, dir_name)
+    # model_path = os.path.join(args.pretrained_path, 'faster_rcnn_75_3257.pth')
 
     script = "trainval_net.py"
-    net = "semantic"
-    config = "configs/refine_kitti_config.json"
+    net = "post_cls"
+    config = "configs/job_post_cls_config.json"
     command = "/node01/jobs/io/env/py3torch0.4/bin/python {} --cuda --net {} --config {} --in_path {} --out_path {}"\
         .format(script, net, config, in_path, out_path)
 
