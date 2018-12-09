@@ -57,11 +57,24 @@
     # --checkepoch 24
 # --model /data/object/liangxiong/detach_double_iou/detach_double_iou/kitti/faster_rcnn_70_3257.pth
 
-CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net post_iou \
+    # --out_path /data/object/liangxiong/post_iou \
+    # --config configs/post_iou_config.json \
+    # --r True \
+    # --checkpoint 3257 \
+    # --checkepoch 1
+# --model /data/object/liangxiong/detach_double_iou/post_cls/kitti/faster_rcnn_80_3257.pth
+
+
+CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     --net post_cls \
     --out_path /data/object/liangxiong/detach_double_iou_06_cls_better_07 \
     --config configs/post_cls_config.json \
     --model /data/object/liangxiong/detach_double_iou_06/faster_rcnn_31_3257.pth
+# --r True \
+# --checkpoint 3257 \
+# --checkepoch 99
     # --model /data/object/liangxiong/detach_double_iou/post_cls/kitti/faster_rcnn_80_3257.pth
     # --r True \
     # --checkpoint 3257 \

@@ -11,7 +11,7 @@ from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
 
 from core.filler import Filler
-from core.double_iou_target_assigner import TargetAssigner
+from core.iou_target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
@@ -23,7 +23,7 @@ import copy
 import functools
 
 
-class PostCLSFasterRCNN(Model):
+class PostIOUFasterRCNN(Model):
     def forward(self, feed_dict):
         # some pre forward hook
         self.clean_stats()
@@ -93,7 +93,7 @@ class PostCLSFasterRCNN(Model):
                                              feed_dict['gt_boxes'])
             prediction_dict['rcnn_rois_batch'] = rcnn_rois_batch
 
-        if self.enable_cls:
+        if self.enable_iou:
             if self.training:
                 rcnn_stats = self.pre_subsample(
                     prediction_dict, feed_dict, stage='rcnn')
@@ -109,11 +109,13 @@ class PostCLSFasterRCNN(Model):
 
             # shape(N,C)
             pooled_feat_cls = pooled_feat_cls.mean(3).mean(2)
-            rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
-            rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+            #  import ipdb
+            #  ipdb.set_trace()
+            rcnn_iou = self.rcnn_cls_pred(pooled_feat_cls)
+            rcnn_iou = F.sigmoid(rcnn_iou)
 
-            prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
-            prediction_dict['rcnn_cls_scores'] = rcnn_cls_scores
+            prediction_dict['rcnn_cls_probs'] = rcnn_iou
+            prediction_dict['rcnn_cls_scores'] = rcnn_iou[:, 1]
 
         ###################################
         # stats
@@ -143,7 +145,7 @@ class PostCLSFasterRCNN(Model):
             num_gt = feed_dict['gt_labels'].numel()
             fake_match = self.rcnn_stats['match']
             stats = self.target_assigner.analyzer.analyze_ap(
-                fake_match, rcnn_cls_probs[:, 1], num_gt, thresh=0.5)
+                fake_match, rcnn_cls_probs[:, 1], num_gt, thresh=0.7)
             # collect stats
             self.rcnn_stats.update(stats)
 
@@ -182,7 +184,7 @@ class PostCLSFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        self.rcnn_cls_pred = nn.Linear(2048, 2)
         if self.reduce:
             in_channels = 2048
         else:
@@ -193,11 +195,14 @@ class PostCLSFasterRCNN(Model):
             self.rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
 
         # loss module
-        if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(2, alpha=0.25, gamma=2)
-        else:
-            self.rcnn_cls_loss = functools.partial(
-                F.cross_entropy, reduce=False)
+        #  if self.enable_cls:
+        #  if self.use_focal_loss:
+        #  self.rcnn_cls_loss = FocalLoss(2, alpha=0.25, gamma=2)
+        #  else:
+        #  self.rcnn_cls_loss = functools.partial(
+        #  F.cross_entropy, reduce=False)
+        #  elif self.enable_iou:
+        self.rcnn_cls_loss = nn.MSELoss(reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
@@ -243,7 +248,7 @@ class PostCLSFasterRCNN(Model):
         self.enable_reg = False
 
         # cal iou
-        self.enable_iou = False
+        self.enable_iou = True
 
         # track good rois
         self.enable_track_rois = True
@@ -256,6 +261,7 @@ class PostCLSFasterRCNN(Model):
         self.use_gt = False
 
         # if self.enable_eval_final_bbox:
+
         self.subsample = False
 
     def clean_stats(self):
@@ -288,20 +294,16 @@ class PostCLSFasterRCNN(Model):
         gt_boxes = feed_dict['gt_boxes']
         gt_labels = feed_dict['gt_labels']
 
-        # append gt
-        # rois_batch = self.append_gt(rois_batch, gt_boxes)
-
         ##########################
         # assigner
         ##########################
-        # import ipdb
-        # ipdb.set_trace()
         rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights, stats = self.target_assigner.assign(
             rois_batch[:, :, 1:], gt_boxes, gt_labels)
 
         ##########################
         # subsampler
         ##########################
+
         if self.subsample:
             cls_criterion = None
 
@@ -309,7 +311,7 @@ class PostCLSFasterRCNN(Model):
                 # used for reg training
                 pos_indicator = rcnn_reg_weights > 0
                 indicator = None
-            elif self.enable_cls:
+            elif self.enable_cls or self.enable_iou:
                 # used for cls training
                 pos_indicator = rcnn_cls_targets > 0
                 indicator = rcnn_cls_weights > 0

@@ -1,4 +1,3 @@
-
 {
     "data_config": {
         "dataloader_config": {
@@ -115,7 +114,7 @@
         "num_classes": 2,
         "pooling_mode": "align",
         "pooling_size": 7,
-        "rcnn_batch_size": 512,
+        "rcnn_batch_size": 256,
         "rpn_config": {
             "use_iou":false,
             "use_focal_loss":true,
@@ -144,7 +143,7 @@
             "din": 1024,
             "min_size": 16,
             "nms_thresh": 0.7,
-            "post_nms_topN": 1000,
+            "post_nms_topN": 512,
             "pre_nms_topN": 12000,
             "rpn_batch_size": 1024,
             "num_reg_samples":1024,
@@ -158,7 +157,7 @@
                 },
                 "fg_thresh_cls": 0.3,
                 "bg_thresh_cls":0.3,
-                "fg_thresh_reg":0.1,
+                "fg_thresh_reg":0.3,
                 "coder_config": {
                     "type":"center",
                     "bbox_normalize_targets_precomputed": false
@@ -170,7 +169,7 @@
             "use_score": false
         },
         "sampler_config": {
-            "fg_fraction": 0.25
+            "fg_fraction": 0.5
         },
         "num_cls_samples":256,
         "num_reg_samples":512,
@@ -179,9 +178,6 @@
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh_cls": 0.5,
-            "bg_thresh_cls":0.15,
-            "fg_thresh_reg":0.1,
             "fg_thresh":0.5,
             "bg_thresh":0.5,
             "coder_config": {

@@ -13,7 +13,7 @@ from builder import bbox_coder_builder
 from builder import similarity_calc_builder
 
 
-class IoUTargetAssigner(object):
+class TargetAssigner(object):
     def __init__(self, assigner_config):
 
         # some compositions
@@ -26,6 +26,10 @@ class IoUTargetAssigner(object):
 
         self.fg_thresh = assigner_config['fg_thresh']
         self.bg_thresh = assigner_config['bg_thresh']
+        if assigner_config.get('fake_match_thresh') is not None:
+            self.fake_match_thresh = assigner_config['fake_match_thresh']
+        else:
+            self.fake_match_thresh = 0.7
         # self.clobber_positives = assigner_config['clobber_positives']
 
     @property
@@ -48,11 +52,16 @@ class IoUTargetAssigner(object):
         match_quality_matrix = self.similarity_calc.compare_batch(bboxes,
                                                                   gt_boxes)
 
+        fake_match = self.matcher.match_batch(match_quality_matrix,
+                                              self.fake_match_thresh)
+        stats = self.analyzer.analyze(fake_match, gt_boxes.shape[1])
+
+        ###############################
+        # handle cls and reg
+        ###############################
         # match
         # shape(N,K)
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
-
-        self.analyzer.analyze(match, gt_boxes.shape[1])
 
         # get assigned infomation
         # shape (num_batch,num_boxes)
@@ -61,9 +70,6 @@ class IoUTargetAssigner(object):
         # assign regression targets
         reg_targets = self._assign_regression_targets(match, bboxes, gt_boxes)
 
-        # assign classification targets
-        # cls_targets = self._assign_classification_targets(
-        # match, gt_labels, match_quality_matrix)
         cls_targets = assigned_overlaps_batch
 
         # create regression weights
@@ -78,16 +84,9 @@ class IoUTargetAssigner(object):
         ####################################
         # match == -1 means unmatched
         reg_targets[match == -1] = 0
-        # cls_targets[match == -1] = 0
         reg_weights[match == -1] = 0
 
-        # as for cls weights, ignore according to bg_thresh
-        # if self.bg_thresh > 0:
-        # ignored_bg = (assigned_overlaps_batch > self.bg_thresh) & (
-        # match == -1)
-        # cls_weights[ignored_bg] = 0
-
-        return cls_targets, reg_targets, cls_weights, reg_weights
+        return cls_targets, reg_targets, cls_weights, reg_weights, stats
 
     def _create_regression_weights(self, assigned_overlaps_batch):
         """
@@ -174,4 +173,3 @@ class IoUTargetAssigner(object):
         cls_targets_batch = match_quality_matrix.view(
             -1, M)[row, match.view(-1)].view_as(match)
         return cls_targets_batch
-

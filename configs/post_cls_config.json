@@ -220,7 +220,7 @@
         ],
         "disp_interval": 100,
         "mGPUs": true,
-        "max_epochs": 200,
+        "max_epochs": 100,
         "optimizer_config": {
             "lr": 0.001,
             "momentum": 0.9,
