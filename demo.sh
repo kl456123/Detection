@@ -1,22 +1,22 @@
 #!/bin/bash
 
-SAMPLE_IDX=000063
-# SAMPLE_IDX=000052
-# SAMPLE_IDX=000008
-CHECKEPOCH=47
+# SAMPLE_IDX=000063
+# SAMPLE_IDX=000047
+SAMPLE_IDX=000008
+CHECKEPOCH=100
 
 # dont use rpn
 NMS=0.6
 THRESH=0.1
 
 # use results which stage
-USE_WHICH_RESULT=rpn
+USE_WHICH_RESULT=rcnn
 FAKE_MATCH_THRESH=0.7
 
 # NET=semantic
 # NET_NAME=detach_double_iou
 NET_NAME=post_cls
-NET_DIR=detach_double_iou_cls_better_06
+NET_DIR=detach_double_iou_06_cls_better_07
 USE_GT=True
 
 

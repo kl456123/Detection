@@ -59,7 +59,7 @@
 
 CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     --net post_cls \
-    --out_path /data/object/liangxiong/detach_double_iou_06_cls_better_06 \
+    --out_path /data/object/liangxiong/detach_double_iou_06_cls_better_07 \
     --config configs/post_cls_config.json \
     --model /data/object/liangxiong/detach_double_iou_06/faster_rcnn_31_3257.pth
     # --model /data/object/liangxiong/detach_double_iou/post_cls/kitti/faster_rcnn_80_3257.pth

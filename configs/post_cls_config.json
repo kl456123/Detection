@@ -178,8 +178,8 @@
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh_cls": 0.6,
-            "bg_thresh_cls":0.6,
+            "fg_thresh_cls": 0.7,
+            "bg_thresh_cls":0.7,
             "fg_thresh_reg":0.6,
             "fg_thresh":0.5,
             "bg_thresh":0.5,
