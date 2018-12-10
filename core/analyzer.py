@@ -32,9 +32,15 @@ class Analyzer(object):
         assert match.shape[0] == 1
         match = match[0]
         match_inds = torch.nonzero(match > -1)
+
         if match_inds.numel():
             # check non zero first
             match_inds = match_inds[:, 0]
+
+            # iou rate in all
+            rate = match_inds.numel() / match.numel()
+        else:
+            rate = 0
 
         match = match[match > -1]
         gt_mask = torch.zeros(num_gt).type_as(match)
@@ -46,7 +52,8 @@ class Analyzer(object):
             'num_gt': num_gt,
             'recall': recall,
             'match_inds': match_inds,
-            'match': self.match
+            'match': self.match,
+            'rate': rate
         }
         # return self.stat
         # print('matched_gt/all_gt/average recall({}/{}/{}): '.format(

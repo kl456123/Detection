@@ -149,6 +149,8 @@ if __name__ == '__main__':
     model_config['pretrained'] = False
     model_config['target_assigner_config'][
         'fake_match_thresh'] = args.fake_match_thresh
+    # copy it in eval_config
+    eval_config['fake_match_thresh'] = args.fake_match_thresh
 
     assert args.net is not None, 'please select a base model'
     model_config['net'] = args.net
@@ -167,6 +169,7 @@ if __name__ == '__main__':
 
     if args.thresh is not None:
         eval_config['thresh'] = args.thresh
+        model_config['score_thresh'] = args.thresh
 
     if args.img_path:
         dataset_config = data_config['dataset_config']
@@ -195,9 +198,14 @@ if __name__ == '__main__':
     #restore from random or checkpoint
     restore = True
     # two methods to load model
-    # 1. load from training dir
-    # 2. load from any other dirs,it just needs config and model path
-    if args.checkepoch is not None and args.checkpoint is not None:
+    # 1. load from any other dirs,it just needs config and model path
+    # 2. load from training dir
+    if args.model is not None:
+        # assert args.model is not None, 'please determine model or checkpoint'
+        # it should be a path to model
+        checkpoint_name = os.path.basename(args.model)
+        input_dir = os.path.dirname(args.model)
+    elif args.checkepoch is not None and args.checkpoint is not None:
         checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
                                                          args.checkpoint)
 
@@ -209,11 +217,6 @@ if __name__ == '__main__':
             raise Exception(
                 'There is no input directory for loading network from {}'.
                 format(input_dir))
-    elif args.model is not None:
-        # assert args.model is not None, 'please determine model or checkpoint'
-        # it should be a path to model
-        checkpoint_name = os.path.basename(args.model)
-        input_dir = os.path.dirname(args.model)
     else:
         restore = False
 

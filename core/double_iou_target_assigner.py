@@ -42,7 +42,12 @@ class TargetAssigner(object):
     def stat(self):
         return self.analyzer.stat
 
-    def assign(self, bboxes, gt_boxes, gt_labels=None, cls_prob=None):
+    def assign(self,
+               bboxes,
+               gt_boxes,
+               gt_labels=None,
+               cls_prob=None,
+               ret_iou=False):
         """
         Assign each bboxes with label and bbox targets for training
 
@@ -68,6 +73,7 @@ class TargetAssigner(object):
         cls_match = self.matcher.match_batch(match_quality_matrix,
                                              self.fg_thresh_cls)
         cls_assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
+        stats['iou'] = cls_assigned_overlaps_batch
 
         # assign classification targets
         cls_targets = self._assign_classification_targets(cls_match, gt_labels)
@@ -102,7 +108,10 @@ class TargetAssigner(object):
         reg_targets[reg_match == -1] = 0
         reg_weights[reg_match == -1] = 0
 
-        return cls_targets, reg_targets, cls_weights, reg_weights, stats
+        ret = [cls_targets, reg_targets, cls_weights, reg_weights, stats]
+        if ret_iou:
+            ret.append(match_quality_matrix)
+        return ret
 
     def _create_regression_weights(self, assigned_overlaps_batch):
         """

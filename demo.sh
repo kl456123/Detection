@@ -1,13 +1,14 @@
 #!/bin/bash
 
-SAMPLE_IDX=000063
-SAMPLE_IDX=000052
-# SAMPLE_IDX=000008
-CHECKEPOCH=103
+# SAMPLE_IDX=000063
+# SAMPLE_IDX=000128
+# SAMPLE_IDX=000047
+SAMPLE_IDX=000028
+CHECKEPOCH=97
 
 # dont use rpn
 NMS=0.6
-THRESH=0.3
+THRESH=0.0
 
 # use results which stage
 USE_WHICH_RESULT=none
@@ -15,9 +16,13 @@ FAKE_MATCH_THRESH=0.7
 
 # NET=semantic
 # NET_NAME=detach_double_iou
-NET_NAME=post_cls
-NET_DIR=detach_double_iou_06_cls_better_07
+NET_NAME=post_iou
+NET_DIR=post_iou
 USE_GT=True
+
+# use model directly(prior if available)
+# MODEL_PATH=/data/object/liangxiong/tmp/faster_rcnn_45_3257.pth
+# CONFIG_PATH=/data/object/liangxiong/tmp/post_iou_config.json
 
 
 
@@ -33,6 +38,8 @@ CUDA_VISIBLE_DEVICES=1 python test_net.py \
     --use_which_result ${USE_WHICH_RESULT} \
     --fake_match_thresh ${FAKE_MATCH_THRESH} \
     --use_gt ${USE_GT}
+    # --model ${MODEL_PATH} \
+    # --config ${CONFIG_PATH}
     # --feat_vis True
 
 # vis pred

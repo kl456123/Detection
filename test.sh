@@ -120,9 +120,9 @@
     # --checkepoch 53
 CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     --checkpoint 3257 \
-    --checkepoch 47 \
-    --net post_cls \
-    --load_dir /data/object/liangxiong/detach_double_iou_cls_better_06 \
+    --checkepoch 39 \
+    --net post_iou \
+    --load_dir /data/object/liangxiong/post_iou \
     --use_gt True
 
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \

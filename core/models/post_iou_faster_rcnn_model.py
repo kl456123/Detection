@@ -34,8 +34,14 @@ class PostIOUFasterRCNN(Model):
         # first stage
         ################################
         # base model
-        base_feat = self.feature_extractor.first_stage_feature(
-            feed_dict['img'])
+        if self.multiple_crop:
+            feat2 = self.feature_extractor.first_stage_feature[:-1](
+                feed_dict['img'])
+            base_feat = self.feature_extractor.first_stage_feature[-1](feat2)
+            feed_dict.update({'feat2': feat2})
+        else:
+            base_feat = self.feature_extractor.first_stage_feature(
+                feed_dict['img'])
         feed_dict.update({'base_feat': base_feat})
         self.add_feat('base_feat', base_feat)
 
@@ -102,8 +108,12 @@ class PostIOUFasterRCNN(Model):
 
             # rois after subsample
             pred_rois = prediction_dict['rcnn_rois_batch']
-            pooled_feat_cls = self.rcnn_pooling(base_feat,
-                                                pred_rois.view(-1, 5))
+            if self.multiple_crop:
+                pooled_feat_cls = self.generate_cls_feat(feed_dict,
+                                                         pred_rois.view(-1, 5))
+            else:
+                pooled_feat_cls = self.rcnn_pooling(base_feat,
+                                                    pred_rois.view(-1, 5))
             pooled_feat_cls = self.feature_extractor.third_stage_feature(
                 pooled_feat_cls.detach())
 
@@ -140,16 +150,29 @@ class PostIOUFasterRCNN(Model):
 
         # analysis ap
         # when enable cls, otherwise it is no sense
-        if self.training and self.enable_cls:
+        if self.enable_cls:
             rcnn_cls_probs = prediction_dict['rcnn_cls_probs']
             num_gt = feed_dict['gt_labels'].numel()
             fake_match = self.rcnn_stats['match']
             stats = self.target_assigner.analyzer.analyze_ap(
-                fake_match, rcnn_cls_probs[:, 1], num_gt, thresh=0.7)
+                fake_match,
+                rcnn_cls_probs[:, 1],
+                num_gt,
+                thresh=self.score_thresh)
             # collect stats
             self.rcnn_stats.update(stats)
 
         return prediction_dict
+
+    def generate_cls_feat(self, feed_dict, rois):
+        # base_feat = feed_dict['base_feat']
+        feat2 = feed_dict['feat2']
+
+        # pooled_feat1 = self.rcnn_pooling(base_feat, rois)
+        pooled_feat2 = self.rcnn_pooling2(feat2, rois)
+        # pooled_feat = torch.cat([pooled_feat2], dim=1)
+
+        return self.pooled_feat_fusion(pooled_feat2)
 
     def append_gt(self, rois_batch, gt_boxes):
         ################################
@@ -193,6 +216,12 @@ class PostIOUFasterRCNN(Model):
             self.rcnn_bbox_pred = nn.Linear(in_channels, 4)
         else:
             self.rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
+
+        if self.multiple_crop:
+            self.rcnn_pooling2 = RoIAlignAvg(self.pooling_size,
+                                             self.pooling_size, 1.0 / 8.0)
+            #  1x1 fusion
+            self.pooled_feat_fusion = nn.Conv2d(512, 1024, 1, 1, 0)
 
         # loss module
         #  if self.enable_cls:
@@ -264,6 +293,15 @@ class PostIOUFasterRCNN(Model):
 
         self.subsample = False
 
+        self.hard_iou_target = False
+
+        if model_config.get('score_thresh'):
+            self.score_thresh = model_config['score_thresh']
+        else:
+            self.score_thresh = 0.7
+
+        self.multiple_crop = False
+
     def clean_stats(self):
         # rois bbox
         self.stats = {
@@ -299,6 +337,11 @@ class PostIOUFasterRCNN(Model):
         ##########################
         rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights, stats = self.target_assigner.assign(
             rois_batch[:, :, 1:], gt_boxes, gt_labels)
+
+        if self.hard_iou_target:
+            # new version of cls target(iou)
+            rcnn_cls_targets[rcnn_cls_targets < 0.4] = 0
+            rcnn_cls_targets[rcnn_cls_targets > 0.7] = 1
 
         ##########################
         # subsampler

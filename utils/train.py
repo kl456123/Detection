@@ -38,13 +38,13 @@ if __name__ == '__main__':
     print(out_path)
     #  dir_name = 'semantic_dsp_res101'
     #  out_path = os.path.join(out_path, dir_name)
-    # model_path = os.path.join(args.pretrained_path, 'faster_rcnn_75_3257.pth')
+    model_path = os.path.join(args.pretrained_path, 'faster_rcnn_189_3257.pth')
 
     script = "trainval_net.py"
-    net = "post_cls"
+    net = "post_iou"
     config = "configs/job_post_cls_config.json"
-    command = "/node01/jobs/io/env/py3torch0.4/bin/python {} --cuda --net {} --config {} --in_path {} --out_path {}"\
-        .format(script, net, config, in_path, out_path)
+    command = "/node01/jobs/io/env/py3torch0.4/bin/python {} --cuda --net {} --config {} --in_path {} --out_path {} --model {}"\
+        .format(script, net, config, in_path, out_path,model_path)
 
     # import sys
     print("now time: ", time.time())

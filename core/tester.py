@@ -67,6 +67,33 @@ def test(eval_config, data_loader, model):
         # calc recall
         matched += model.rcnn_stats['matched']
         num_gt += model.rcnn_stats['num_gt']
+        rate = model.rcnn_stats['rate']
+        fake_match_thresh = eval_config['fake_match_thresh']
+        max_matched_ind = model.rcnn_stats['match_inds'].max()
+        num_tp = model.rcnn_stats['num_tp']
+
+        #  import ipdb
+        #  ipdb.set_trace()
+        # get remain tp after iou thresh
+        try:
+            remain_num_tp = torch.nonzero(
+                model.rcnn_stats['match'] > fake_match_thresh)[:, 1].numel()
+        except:
+            remain_num_tp = 1
+        test_ap = num_tp / remain_num_tp
+
+        try:
+            max_score = scores[torch.nonzero(model.rcnn_stats['iou'] < 0.3)
+                               [:, 1]][:, 1].max()
+        except:
+            max_score = 0
+        try:
+            min_score = scores[torch.nonzero(model.rcnn_stats['iou'] > 0.7)
+                               [:, 1]][:, 1].min()
+        except:
+            min_score = 0
+        print("max_score(iou<0.3)/min_score(iou>0.7): {}/{}".format(max_score,
+                                                                    min_score))
 
         classes = eval_config['classes']
 
@@ -123,7 +150,9 @@ def test(eval_config, data_loader, model):
                   eval_config['eval_out_anchors'])
 
         sys.stdout.write(
-            '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
+            '\r{}/{},duration: {}, iou_rate/iou/max_ind: {}/{}/{}, num_tp/remain_num_tp/test_ap: {}/{}/{}'.
+            format(i + 1, num_samples, duration_time, rate, fake_match_thresh,
+                   max_matched_ind, num_tp, remain_num_tp, test_ap))
         sys.stdout.flush()
     print('\naverage recall/num_gt/matched: {:.4f}/{}/{}'.format(
         matched / num_gt, num_gt, matched))

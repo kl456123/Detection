@@ -66,6 +66,7 @@ class TargetAssigner(object):
         # get assigned infomation
         # shape (num_batch,num_boxes)
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
+        stats['iou'] = assigned_overlaps_batch
 
         # assign regression targets
         reg_targets = self._assign_regression_targets(match, bboxes, gt_boxes)
