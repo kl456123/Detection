@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# SAMPLE_IDX=000063
-# SAMPLE_IDX=000128
 # SAMPLE_IDX=000047
-SAMPLE_IDX=000028
-CHECKEPOCH=97
+# SAMPLE_IDX=000128
+# SAMPLE_IDX=000019
+SAMPLE_IDX=000008
+CHECKEPOCH=37
 
 # dont use rpn
 NMS=0.6
@@ -16,8 +16,8 @@ FAKE_MATCH_THRESH=0.7
 
 # NET=semantic
 # NET_NAME=detach_double_iou
-NET_NAME=post_iou
-NET_DIR=post_iou
+NET_NAME=reg
+NET_DIR=reg_both
 USE_GT=True
 
 # use model directly(prior if available)

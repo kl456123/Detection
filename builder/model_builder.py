@@ -34,7 +34,7 @@ from core.models.detach_sinet_model import DetachSINetModel
 from core.models.detach_double_iou_faster_rcnn_model import DetachDoubleIOUFasterRCNN
 from core.models.post_cls_faster_rcnn_model import PostCLSFasterRCNN
 from core.models.post_iou_faster_rcnn_model import PostIOUFasterRCNN
-
+from core.models.reg_model import RegFasterRCNN
 # class ModelBuilder(object):
 # def __init__(self, model_config):
 # self.model_config = model_config
@@ -121,6 +121,8 @@ def build(model_config, training=True):
         fasterRCNN = PostCLSFasterRCNN(model_config)
     elif net_arch == 'post_iou':
         fasterRCNN = PostIOUFasterRCNN(model_config)
+    elif net_arch == 'reg':
+        fasterRCNN = RegFasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

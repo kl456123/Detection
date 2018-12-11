@@ -67,13 +67,23 @@
 # --checkpoint 3257 \
 # --checkepoch 22
 
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net reg \
+    # --out_path /data/object/liangxiong/reg_both \
+    # --config configs/reg_config.json
+# --checkpoint 3257 \
+# --checkepoch 30 \
+# --r True
+
+# --model /data/object/liangxiong/detach_double_iou/post_cls/kitti/faster_rcnn_80_3257.pth
+
 
 # post_cls
 CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     --net post_cls \
     --out_path /data/object/liangxiong/post_cls \
-    --config configs/post_cls_config.json \
-    --model /data/object/liangxiong/detach_double_iou/post_cls/kitti/faster_rcnn_80_3257.pth
+    --config configs/post_cls_config.json
+# --model /data/object/liangxiong/detach_double_iou/post_cls/kitti/faster_rcnn_80_3257.pth
     # --model /data/object/liangxiong/detach_double_iou_06/faster_rcnn_31_3257.pth
 # --r True \
 # --checkpoint 3257 \

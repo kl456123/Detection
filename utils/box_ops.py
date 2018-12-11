@@ -42,10 +42,10 @@ def window_filter(anchors, window, allowed_border=0):
 
 def size_filter(boxes, min_size):
     """Remove all boxes with any side smaller than min_size."""
-    ws = boxes[:, 2] - boxes[:, 0] + 1
-    hs = boxes[:, 3] - boxes[:, 1] + 1
-    keep = torch.nonzero((ws >= min_size) & (hs >= min_size)).view(-1)
-    return keep
+    ws = boxes[:, :, 2] - boxes[:, :, 0] + 1
+    hs = boxes[:, :, 3] - boxes[:, :, 1] + 1
+    mask = (ws >= min_size) & (hs >= min_size)
+    return mask
 
 
 def area(boxes):

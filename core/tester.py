@@ -47,8 +47,8 @@ def test(eval_config, data_loader, model):
         rois_scores = rois_scores.squeeze()
 
         thresh = eval_config['thresh']
-        #  import ipdb
-        #  ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
         use_which_result = eval_config['use_which_result']
         if not use_which_result == 'none':
             if use_which_result == 'rpn':
@@ -75,23 +75,23 @@ def test(eval_config, data_loader, model):
         #  import ipdb
         #  ipdb.set_trace()
         # get remain tp after iou thresh
-        try:
-            remain_num_tp = torch.nonzero(
-                model.rcnn_stats['match'] > fake_match_thresh)[:, 1].numel()
-        except:
-            remain_num_tp = 1
+        # try:
+            # remain_num_tp = torch.nonzero(
+                # model.rcnn_stats['match'] > fake_match_thresh)[:, 1].numel()
+        # except:
+        remain_num_tp = 1
         test_ap = num_tp / remain_num_tp
 
-        try:
-            max_score = scores[torch.nonzero(model.rcnn_stats['iou'] < 0.3)
-                               [:, 1]][:, 1].max()
-        except:
-            max_score = 0
-        try:
-            min_score = scores[torch.nonzero(model.rcnn_stats['iou'] > 0.7)
-                               [:, 1]][:, 1].min()
-        except:
-            min_score = 0
+        # try:
+            # max_score = scores[torch.nonzero(model.rcnn_stats['iou'] < 0.3)
+                               # [:, 1]][:, 1].max()
+        # except:
+        max_score = 0
+        # try:
+            # min_score = scores[torch.nonzero(model.rcnn_stats['iou'] > 0.7)
+                               # [:, 1]][:, 1].min()
+        # except:
+        min_score = 0
         print("max_score(iou<0.3)/min_score(iou>0.7): {}/{}".format(max_score,
                                                                     min_score))
 
@@ -173,8 +173,11 @@ def im_detect(model, data, eval_config, im_orig=None):
         feat_visualizer = FeatVisualizer()
         feat_visualizer.visualize_maps(featmaps_dict)
 
-    cls_prob = prediction['rcnn_cls_probs']
     second_rpn_cls_probs = prediction['second_rpn_cls_probs']
+    if prediction.get('rcnn_cls_probs') is not None:
+        cls_prob = prediction['rcnn_cls_probs']
+    else:
+        cls_prob = second_rpn_cls_probs
     rois = prediction['rois_batch']
     bbox_pred = prediction['rcnn_bbox_preds']
     anchors = prediction['second_rpn_anchors'][0]

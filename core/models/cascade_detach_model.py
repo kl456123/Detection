@@ -34,14 +34,8 @@ class PostCLSFasterRCNN(Model):
         # first stage
         ################################
         # base model
-        if self.multiple_crop:
-            feat2 = self.feature_extractor.first_stage_feature[:-1](
-                feed_dict['img'])
-            base_feat = self.feature_extractor.first_stage_feature[-1](feat2)
-            feed_dict.update({'feat2': feat2})
-        else:
-            base_feat = self.feature_extractor.first_stage_feature(
-                feed_dict['img'])
+        base_feat = self.feature_extractor.first_stage_feature(
+            feed_dict['img'])
         feed_dict.update({'base_feat': base_feat})
         self.add_feat('base_feat', base_feat)
 
@@ -108,12 +102,8 @@ class PostCLSFasterRCNN(Model):
 
             # rois after subsample
             pred_rois = prediction_dict['rcnn_rois_batch']
-            if self.multiple_crop:
-                pooled_feat_cls = self.generate_cls_feat(feed_dict,
-                                                         pred_rois.view(-1, 5))
-            else:
-                pooled_feat_cls = self.rcnn_pooling(base_feat,
-                                                    pred_rois.view(-1, 5))
+            pooled_feat_cls = self.rcnn_pooling(base_feat,
+                                                pred_rois.view(-1, 5))
             pooled_feat_cls = self.feature_extractor.third_stage_feature(
                 pooled_feat_cls.detach())
 
@@ -211,22 +201,6 @@ class PostCLSFasterRCNN(Model):
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
-        if self.multiple_crop:
-            self.rcnn_pooling2 = RoIAlignAvg(self.pooling_size,
-                                             self.pooling_size, 1.0 / 8.0)
-            #  1x1 fusion
-            self.pooled_feat_fusion = nn.Conv2d(512, 1024, 1, 1, 0)
-
-    def generate_cls_feat(self, feed_dict, rois):
-        # base_feat = feed_dict['base_feat']
-        feat2 = feed_dict['feat2']
-
-        # pooled_feat1 = self.rcnn_pooling(base_feat, rois)
-        pooled_feat2 = self.rcnn_pooling2(feat2, rois)
-        # pooled_feat = torch.cat([pooled_feat2], dim=1)
-
-        return self.pooled_feat_fusion(pooled_feat2)
-
     def init_param(self, model_config):
         classes = model_config['classes']
         self.classes = classes
@@ -263,10 +237,10 @@ class PostCLSFasterRCNN(Model):
         self.reduce = True
 
         # optimize cls
-        self.enable_cls = False
+        self.enable_cls = True
 
         # optimize reg
-        self.enable_reg = True
+        self.enable_reg = False
 
         # cal iou
         self.enable_iou = False
@@ -283,8 +257,6 @@ class PostCLSFasterRCNN(Model):
 
         # if self.enable_eval_final_bbox:
         self.subsample = False
-
-        self.multiple_crop = False
 
     def clean_stats(self):
         # rois bbox

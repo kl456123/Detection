@@ -5,13 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from core.model import Model
-from core.models.double_iou_rpn_model import RPNModel
+from core.models.reg_rpn_model import RPNModel
 from core.models.focal_loss import FocalLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
 
 from core.filler import Filler
-from core.double_iou_target_assigner import TargetAssigner
+from core.reg_target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
@@ -23,7 +23,7 @@ import copy
 import functools
 
 
-class PostCLSFasterRCNN(Model):
+class RegFasterRCNN(Model):
     def forward(self, feed_dict):
         # some pre forward hook
         self.clean_stats()
@@ -34,14 +34,8 @@ class PostCLSFasterRCNN(Model):
         # first stage
         ################################
         # base model
-        if self.multiple_crop:
-            feat2 = self.feature_extractor.first_stage_feature[:-1](
-                feed_dict['img'])
-            base_feat = self.feature_extractor.first_stage_feature[-1](feat2)
-            feed_dict.update({'feat2': feat2})
-        else:
-            base_feat = self.feature_extractor.first_stage_feature(
-                feed_dict['img'])
+        base_feat = self.feature_extractor.first_stage_feature(
+            feed_dict['img'])
         feed_dict.update({'base_feat': base_feat})
         self.add_feat('base_feat', base_feat)
 
@@ -82,10 +76,6 @@ class PostCLSFasterRCNN(Model):
         prediction_dict['second_rpn_cls_probs'] = prediction_dict[
             'rpn_cls_probs'][0][proposals_order]
 
-        ###########################################
-        # third stage(predict scores of final bbox)
-        ###########################################
-
         # decode rcnn bbox, generate rcnn rois batch
         pred_boxes = self.bbox_coder.decode_batch(
             rcnn_bbox_preds.view(1, -1, 4), rois_batch[:, :, 1:5])
@@ -93,43 +83,9 @@ class PostCLSFasterRCNN(Model):
         rcnn_rois_batch[:, :, 1:5] = pred_boxes.detach()
         prediction_dict['rcnn_rois_batch'] = rcnn_rois_batch
 
-        if self.training and self.use_gt:
-            # append gt
-            rcnn_rois_batch = self.append_gt(rcnn_rois_batch,
-                                             feed_dict['gt_boxes'])
-            prediction_dict['rcnn_rois_batch'] = rcnn_rois_batch
-
-        if self.enable_cls:
-            if self.training:
-                rcnn_stats = self.pre_subsample(
-                    prediction_dict, feed_dict, stage='rcnn')
-                # rcnn stats
-                self.rcnn_stats.update(rcnn_stats)
-
-            # rois after subsample
-            pred_rois = prediction_dict['rcnn_rois_batch']
-            if self.multiple_crop:
-                pooled_feat_cls = self.generate_cls_feat(feed_dict,
-                                                         pred_rois.view(-1, 5))
-            else:
-                pooled_feat_cls = self.rcnn_pooling(base_feat,
-                                                    pred_rois.view(-1, 5))
-            pooled_feat_cls = self.feature_extractor.third_stage_feature(
-                pooled_feat_cls.detach())
-
-            # shape(N,C)
-            pooled_feat_cls = pooled_feat_cls.mean(3).mean(2)
-            rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_cls)
-            rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
-
-            prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
-            prediction_dict['rcnn_cls_scores'] = rcnn_cls_scores
-
         ###################################
         # stats
         ###################################
-        # import ipdb
-        # ipdb.set_trace()
         if not self.training or (self.enable_track_rois and
                                  not self.enable_reg):
             # when enable reg, skip it,
@@ -211,22 +167,6 @@ class PostCLSFasterRCNN(Model):
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
-        if self.multiple_crop:
-            self.rcnn_pooling2 = RoIAlignAvg(self.pooling_size,
-                                             self.pooling_size, 1.0 / 8.0)
-            #  1x1 fusion
-            self.pooled_feat_fusion = nn.Conv2d(512, 1024, 1, 1, 0)
-
-    def generate_cls_feat(self, feed_dict, rois):
-        # base_feat = feed_dict['base_feat']
-        feat2 = feed_dict['feat2']
-
-        # pooled_feat1 = self.rcnn_pooling(base_feat, rois)
-        pooled_feat2 = self.rcnn_pooling2(feat2, rois)
-        # pooled_feat = torch.cat([pooled_feat2], dim=1)
-
-        return self.pooled_feat_fusion(pooled_feat2)
-
     def init_param(self, model_config):
         classes = model_config['classes']
         self.classes = classes
@@ -282,9 +222,7 @@ class PostCLSFasterRCNN(Model):
         self.use_gt = False
 
         # if self.enable_eval_final_bbox:
-        self.subsample = False
-
-        self.multiple_crop = False
+        self.subsample = True
 
     def clean_stats(self):
         # rois bbox
@@ -322,25 +260,22 @@ class PostCLSFasterRCNN(Model):
         ##########################
         # assigner
         ##########################
-        # import ipdb
-        # ipdb.set_trace()
         rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights, stats = self.target_assigner.assign(
             rois_batch[:, :, 1:], gt_boxes, gt_labels)
 
         ##########################
         # subsampler
         ##########################
+        # import ipdb
+        # ipdb.set_trace()
         if self.subsample:
             cls_criterion = None
 
             if self.enable_reg:
                 # used for reg training
-                pos_indicator = rcnn_reg_weights > 0
-                indicator = None
-            elif self.enable_cls:
-                # used for cls training
-                pos_indicator = rcnn_cls_targets > 0
-                indicator = rcnn_cls_weights > 0
+                pos_indicator = rcnn_reg_weights[:, :, 0] > 0
+                # dw
+                indicator = rcnn_reg_weights[:, :, 2] > 0
             else:
                 raise ValueError(
                     "please check enable reg and enable cls again")
@@ -355,25 +290,16 @@ class PostCLSFasterRCNN(Model):
         else:
             batch_sampled_mask = torch.ones_like(rcnn_cls_weights > 0)
 
-        if self.enable_cls:
-            rcnn_cls_weights = rcnn_cls_weights[batch_sampled_mask]
-            num_cls_coeff = (rcnn_cls_weights > 0).sum(dim=-1)
-            assert num_cls_coeff, 'bug happens'
-            prediction_dict[
-                'rcnn_cls_weights'] = rcnn_cls_weights / num_cls_coeff.float()
-
         # used for retriving statistic
         prediction_dict['rcnn_cls_targets'] = rcnn_cls_targets[
             batch_sampled_mask]
 
         # used for fg/bg
         rcnn_reg_weights = rcnn_reg_weights[batch_sampled_mask]
-        num_reg_coeff = (rcnn_reg_weights > 0).sum(dim=-1)
+        num_reg_coeff = (rcnn_reg_weights[:, 0] > 0).sum(dim=-1)
         num_reg_coeff = torch.max(num_reg_coeff,
                                   torch.ones_like(num_reg_coeff))
-        # import ipdb
-        # ipdb.set_trace()
-        # assert num_reg_coeff, 'bug happens'
+
         prediction_dict[
             'rcnn_reg_weights'] = rcnn_reg_weights / num_reg_coeff.float()
 
@@ -396,25 +322,6 @@ class PostCLSFasterRCNN(Model):
         """
         loss_dict = {}
 
-        # submodule loss
-
-        # add rcnn_cls_targets to get the statics of rpn
-        #  loss_dict['rcnn_cls_targets'] = rcnn_cls_targets
-
-        if self.enable_cls:
-            # targets and weights
-            rcnn_cls_weights = prediction_dict['rcnn_cls_weights']
-
-            rcnn_cls_targets = prediction_dict['rcnn_cls_targets']
-            # classification loss
-            rcnn_cls_scores = prediction_dict['rcnn_cls_scores']
-            rcnn_cls_loss = self.rcnn_cls_loss(rcnn_cls_scores,
-                                               rcnn_cls_targets)
-            rcnn_cls_loss *= rcnn_cls_weights
-            rcnn_cls_loss = rcnn_cls_loss.sum(dim=-1)
-
-            loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
-
         if self.enable_reg:
             loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
 
@@ -424,8 +331,9 @@ class PostCLSFasterRCNN(Model):
             # bounding box regression L1 loss
             rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']
             rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
-                                                 rcnn_reg_targets).sum(dim=-1)
+                                                 rcnn_reg_targets)
             rcnn_bbox_loss *= rcnn_reg_weights
+            rcnn_bbox_loss = rcnn_bbox_loss.sum(dim=-1)
             rcnn_bbox_loss = rcnn_bbox_loss.sum(dim=-1)
 
             # loss weights has no gradients
