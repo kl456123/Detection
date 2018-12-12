@@ -51,10 +51,16 @@ def test(eval_config, data_loader, model):
         # ipdb.set_trace()
         use_which_result = eval_config['use_which_result']
         if not use_which_result == 'none':
-            if use_which_result == 'rpn':
+            if 'rpn' in use_which_result:
+                stats = model.stats
                 match_inds = model.stats['match_inds']
-            elif use_which_result == 'rcnn':
-                match_inds = model.rcnn_stats['match_inds']
+            elif 'rcnn' in use_which_result:
+                stats = model.rcnn_stats
+            if 'un' in use_which_result:
+                match_inds = stats['unmatch_inds']
+            else:
+                match_inds = stats['match_inds']
+
             thresh = 0
             eval_config['nms'] = 1
             scores = scores[match_inds]
@@ -76,20 +82,20 @@ def test(eval_config, data_loader, model):
         #  ipdb.set_trace()
         # get remain tp after iou thresh
         # try:
-            # remain_num_tp = torch.nonzero(
-                # model.rcnn_stats['match'] > fake_match_thresh)[:, 1].numel()
+        # remain_num_tp = torch.nonzero(
+        # model.rcnn_stats['match'] > fake_match_thresh)[:, 1].numel()
         # except:
         remain_num_tp = 1
         test_ap = num_tp / remain_num_tp
 
         # try:
-            # max_score = scores[torch.nonzero(model.rcnn_stats['iou'] < 0.3)
-                               # [:, 1]][:, 1].max()
+        # max_score = scores[torch.nonzero(model.rcnn_stats['iou'] < 0.3)
+        # [:, 1]][:, 1].max()
         # except:
         max_score = 0
         # try:
-            # min_score = scores[torch.nonzero(model.rcnn_stats['iou'] > 0.7)
-                               # [:, 1]][:, 1].min()
+        # min_score = scores[torch.nonzero(model.rcnn_stats['iou'] > 0.7)
+        # [:, 1]][:, 1].min()
         # except:
         min_score = 0
         print("max_score(iou<0.3)/min_score(iou>0.7): {}/{}".format(max_score,

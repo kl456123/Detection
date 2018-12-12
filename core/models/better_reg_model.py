@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from core.model import Model
-from core.models.better_reg_rpn_model import RPNModel
+from core.models.reg_rpn_model import RPNModel
 from core.models.focal_loss import FocalLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
@@ -23,7 +23,7 @@ import copy
 import functools
 
 
-class PostCLSFasterRCNN(Model):
+class BetterRegFasterRCNN(Model):
     def forward(self, feed_dict):
         # some pre forward hook
         self.clean_stats()

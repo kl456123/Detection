@@ -181,7 +181,6 @@
             "fg_thresh_cls": 0.7,
             "bg_thresh_cls":0.7,
             "fg_thresh_reg":0.5,
-            "bg_thresh_reg": 0.3,
             "fg_thresh":0.5,
             "bg_thresh":0.5,
             "coder_config": {

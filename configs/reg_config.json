@@ -157,8 +157,8 @@
                 },
                 "fg_thresh_cls": 0.3,
                 "bg_thresh_cls":0.3,
-                "fg_thresh_reg":0.5,
-                "bg_thresh_reg":0.3,
+                "fg_thresh_reg":0.3,
+                "bg_thresh_reg":0.1,
                 "coder_config": {
                     "type":"center",
                     "bbox_normalize_targets_precomputed": false

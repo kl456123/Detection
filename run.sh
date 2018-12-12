@@ -67,10 +67,12 @@
 # --checkpoint 3257 \
 # --checkepoch 22
 
+# better_reg
 # CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
-    # --net reg \
-    # --out_path /data/object/liangxiong/reg_both \
+    # --net better_reg \
+    # --out_path /data/object/liangxiong/better_reg \
     # --config configs/reg_config.json
+
 # --checkpoint 3257 \
 # --checkepoch 30 \
 # --r True
@@ -79,7 +81,7 @@
 
 
 # post_cls
-CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     --net post_cls \
     --out_path /data/object/liangxiong/post_cls \
     --config configs/post_cls_config.json

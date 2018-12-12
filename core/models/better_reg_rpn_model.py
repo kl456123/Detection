@@ -9,7 +9,7 @@ from core.anchor_generators.anchor_generator import AnchorGenerator
 # from core.samplers.hard_negative_sampler import HardNegativeSampler
 # from core.samplers.balanced_sampler import BalancedSampler
 from core.samplers.detection_sampler import DetectionSampler
-from core.reg_target_assigner import TargetAssigner
+from core.better_reg_target_assigner import TargetAssigner
 from core.filler import Filler
 from core.models.focal_loss import FocalLoss
 
@@ -88,6 +88,22 @@ class RPNModel(Model):
             self.rpn_cls_loss = functools.partial(
                 F.cross_entropy, reduce=False)
 
+    def generate_new_anchors(self, anchors):
+        # import ipdb
+        # ipdb.set_trace()
+        anchor_size = 2
+        # anchors_w = anchors[:, :, 2] - anchors[:, :, 0] + 1
+        # anchors_h = anchors[:, :, 3] - anchors[:, :, 1] + 1
+        center_x = (anchors[:, 2] + anchors[:, 0]) / 2
+        center_y = (anchors[:, 3] + anchors[:, 1]) / 2
+
+        # new anchors has the same center as old ones
+        min_x = center_x - (anchor_size - 1) / 2
+        min_y = center_y - (anchor_size - 1) / 2
+        max_x = center_x + (anchor_size - 1) / 2
+        max_y = center_y + (anchor_size - 1) / 2
+        return torch.stack([min_x, min_y, max_x, max_y], dim=-1)
+
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
         # TODO create a new Function
@@ -123,7 +139,10 @@ class RPNModel(Model):
         # anchors_single_map))
         # proposals = torch.cat(proposals, dim=1)
 
-        proposals = self.bbox_coder.decode_batch(rpn_bbox_preds, anchors)
+        # make anchors small
+
+        new_anchors = self.generate_new_anchors(anchors)
+        proposals = self.bbox_coder.decode_batch(rpn_bbox_preds, new_anchors)
 
         # filer and clip
         proposals = box_ops.clip_boxes(proposals, im_info)
@@ -132,13 +151,6 @@ class RPNModel(Model):
         fg_probs = rpn_cls_probs[:, self.num_anchors:, :, :]
         fg_probs = fg_probs.permute(0, 2, 3, 1).contiguous().view(batch_size,
                                                                   -1)
-
-        # filter small proposals
-        #  import ipdb
-        #  ipdb.set_trace()
-        #  keep = box_ops.size_filter(proposals, 5)
-        #  proposals = proposals[keep].unsqueeze(0)
-        #  fg_probs = fg_probs[keep].unsqueeze(0)
 
         # sort fg
         _, fg_probs_order = torch.sort(fg_probs, dim=1, descending=True)
@@ -271,6 +283,9 @@ class RPNModel(Model):
 
         anchors = prediction_dict['anchors']
 
+        # small anchors
+        new_anchors = self.generate_new_anchors(anchors)
+
         # assert len(anchors) == 1, 'just one feature maps is supported now'
         # anchors = anchors[0]
 
@@ -278,17 +293,17 @@ class RPNModel(Model):
         # target assigner
         ################################
         # no need gt labels here,it just a binary classifcation problem
+        #  import ipdb
+        #  ipdb.set_trace()
         rpn_cls_targets, rpn_reg_targets, \
             rpn_cls_weights, rpn_reg_weights, stats = \
-            self.target_assigner.assign(anchors, gt_boxes, gt_labels=None)
+            self.target_assigner.assign(anchors, gt_boxes, new_anchors, gt_labels=None)
 
         ################################
         # subsample
         ################################
 
-        #  import ipdb
-        #  ipdb.set_trace()
-        pos_indicator = rpn_reg_weights[:, :, 0] > 0
+        pos_indicator = rpn_reg_weights > 0
         indicator = rpn_cls_weights > 0
 
         rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
@@ -301,9 +316,9 @@ class RPNModel(Model):
             indicator=indicator)
         batch_sampled_mask = batch_sampled_mask.type_as(rpn_cls_weights)
         rpn_cls_weights = rpn_cls_weights * batch_sampled_mask
-        rpn_reg_weights = rpn_reg_weights * batch_sampled_mask.unsqueeze(2)
+        rpn_reg_weights = rpn_reg_weights * batch_sampled_mask
         num_cls_coeff = (rpn_cls_weights > 0).sum(dim=1)
-        num_reg_coeff = (rpn_reg_weights[:, :, 0] > 0).sum(dim=1)
+        num_reg_coeff = (rpn_reg_weights > 0).sum(dim=1)
         # check
         #  assert num_cls_coeff, 'bug happens'
         #  assert num_reg_coeff, 'bug happens'
@@ -328,7 +343,7 @@ class RPNModel(Model):
         # shape(N,H*W*num_anchors,4)
         rpn_bbox_preds = rpn_bbox_preds.view(rpn_bbox_preds.shape[0], -1, 4)
         rpn_reg_loss = self.rpn_bbox_loss(rpn_bbox_preds, rpn_reg_targets)
-        rpn_reg_loss *= rpn_reg_weights
+        rpn_reg_loss *= rpn_reg_weights.unsqueeze(-1).expand(-1, -1, 4)
         rpn_reg_loss = rpn_reg_loss.view(rpn_reg_loss.shape[0], -1).sum(
             dim=1) / num_reg_coeff.float()
 
