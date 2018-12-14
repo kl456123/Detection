@@ -10,9 +10,13 @@ rois_dir = 'results/rois/'
 lbl_dir = '/data/object/training/label_2'
 
 
-def vis_all(kitti_dir, title='test', dis_lbl=False):
+def vis_all(kitti_dir, title='test', dis_lbl=False, resume=None):
     for kitti in sorted(os.listdir(kitti_dir)):
         sample_idx = os.path.splitext(kitti)[0]
+        if resume is not None and (not int(sample_idx) == resume):
+            continue
+        else:
+            resume = None
         print('current image idx: {}'.format(sample_idx))
         img_path = os.path.join(img_dir, '{}.png'.format(sample_idx))
         kitti_path = os.path.join(kitti_dir, '{}.txt'.format(sample_idx))
@@ -33,6 +37,7 @@ def main():
         '--type', dest='label_type', type=str, default='pred')
     argparser.add_argument(
         '--display_label', dest='dis_lbl', type=bool, default=False)
+    argparser.add_argument('--resume', dest='resume', type=int)
 
     args = argparser.parse_args()
     if args.label_type == 'pred':
@@ -47,7 +52,9 @@ def main():
     else:
         raise ValueError('unknown label type!')
 
-    vis_all(label_dir, title, args.dis_lbl)
+    resume = args.resume
+
+    vis_all(label_dir, title, args.dis_lbl, resume=resume)
 
 
 if __name__ == '__main__':

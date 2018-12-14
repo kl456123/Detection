@@ -30,7 +30,7 @@ class TargetAssigner(object):
 
         # bbox thresh
         self.fg_thresh_reg = assigner_config['fg_thresh_reg']
-        # self.bg_thresh_reg = assigner_config['bg_thresh_reg']
+        self.bg_thresh_reg = assigner_config['bg_thresh_reg']
 
         if assigner_config.get('fake_match_thresh') is not None:
             self.fake_match_thresh = assigner_config['fake_match_thresh']

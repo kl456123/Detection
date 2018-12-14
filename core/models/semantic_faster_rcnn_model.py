@@ -24,6 +24,7 @@ import functools
 
 class SemanticFasterRCNN(Model):
     def forward(self, feed_dict):
+        self.clean_stats()
 
         prediction_dict = {}
 
@@ -40,7 +41,8 @@ class SemanticFasterRCNN(Model):
         # shape(N,num_proposals,5)
         # pre subsample for reduce consume of memory
         if self.training:
-            self.pre_subsample(prediction_dict, feed_dict)
+            stats = self.pre_subsample(prediction_dict, feed_dict)
+            self.stats.update(stats)
         rois_batch = prediction_dict['rois_batch']
 
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
@@ -88,7 +90,62 @@ class SemanticFasterRCNN(Model):
         prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
             proposals_order]
 
+        pred_boxes = self.bbox_coder.decode_batch(
+            rcnn_bbox_preds.view(1, -1, 4), rois_batch[:, :, 1:5])
+        rcnn_rois_batch = torch.zeros_like(rois_batch)
+        rcnn_rois_batch[:, :, 1:5] = pred_boxes.detach()
+        prediction_dict['rcnn_rois_batch'] = rcnn_rois_batch
+
+        # if self.training:
+        # # append gt
+        # rcnn_rois_batch = self.append_gt(rcnn_rois_batch,
+        # feed_dict['gt_boxes'])
+        # prediction_dict['rcnn_rois_batch'] = rcnn_rois_batch
+
+        ###################################
+        # stats
+        ###################################
+
+        # when enable cls, skip it
+        stats = self.target_assigner.assign(rcnn_rois_batch[:, :, 1:],
+                                            feed_dict['gt_boxes'],
+                                            feed_dict['gt_labels'])[-1]
+        self.rcnn_stats.update(stats)
+
+        # analysis ap
+        # when enable cls, otherwise it is no sense
+        if self.training:
+            rcnn_cls_probs = prediction_dict['rcnn_cls_probs']
+            num_gt = feed_dict['gt_labels'].numel()
+            fake_match = self.rcnn_stats['match']
+            stats = self.target_assigner.analyzer.analyze_ap(
+                fake_match, rcnn_cls_probs[:, 1], num_gt, thresh=0.5)
+            # collect stats
+            self.rcnn_stats.update(stats)
+
         return prediction_dict
+
+    def clean_stats(self):
+        # rois bbox
+        self.stats = {
+            'num_det': 1,
+            'num_tp': 0,
+            'matched_thresh': 0,
+            'recall_thresh': 0,
+            'match': None,
+            # 'matched': 0,
+            # 'num_gt': 1,
+        }
+
+        # rcnn bbox(final bbox)
+        self.rcnn_stats = {
+            'num_det': 1,
+            'num_tp': 0,
+            'matched_thresh': 0,
+            'recall_thresh': 0,
+            'match': None,
+            # 'matched': 0,
+        }
 
     def generate_channel_attention(self, feat):
         return feat.mean(3, keepdim=True).mean(2, keepdim=True)
@@ -172,6 +229,9 @@ class SemanticFasterRCNN(Model):
         self.target_assigner = TargetAssigner(
             model_config['target_assigner_config'])
 
+        # bbox_coder
+        self.bbox_coder = self.target_assigner.bbox_coder
+
         # sampler
         self.sampler = BalancedSampler(model_config['sampler_config'])
 
@@ -185,7 +245,7 @@ class SemanticFasterRCNN(Model):
         ##########################
         #  import ipdb
         #  ipdb.set_trace()
-        rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights = self.target_assigner.assign(
+        rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights, stats = self.target_assigner.assign(
             rois_batch[:, :, 1:], gt_boxes, gt_labels)
 
         ##########################
@@ -208,7 +268,8 @@ class SemanticFasterRCNN(Model):
         num_reg_coeff = (rcnn_reg_weights > 0).sum(dim=-1)
         # check
         assert num_cls_coeff, 'bug happens'
-        assert num_reg_coeff, 'bug happens'
+        num_reg_coeff = torch.max(num_reg_coeff,
+                                  torch.ones_like(num_reg_coeff))
 
         prediction_dict[
             'rcnn_cls_weights'] = rcnn_cls_weights / num_cls_coeff.float()
@@ -225,12 +286,9 @@ class SemanticFasterRCNN(Model):
         prediction_dict['rois_batch'] = rois_batch[batch_sampled_mask].view(
             rois_batch.shape[0], -1, 5)
 
-        if not self.training:
-            # used for track
-            proposals_order = prediction_dict['proposals_order']
+        stats['match'] = stats['match'][batch_sampled_mask]
 
-            prediction_dict['proposals_order'] = proposals_order[
-                batch_sampled_mask]
+        return stats
 
     def loss(self, prediction_dict, feed_dict):
         """

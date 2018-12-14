@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
+from core.similarity_calc.center_similarity_calc import CenterSimilarityCalc
 
 
 def clip_boxes(boxes, im_shape):
@@ -96,3 +97,32 @@ def intersection(bbox, gt_boxes):
     inter_boxes = torch.stack([xmin, ymin, xmax, ymax], dim=-1)
     inter_boxes[cond] = 0
     return inter_boxes
+
+
+def super_nms(bboxes, nms_thresh=0.8, nms_num=2):
+    """
+    Args:
+        bboxes: shape(N,4)
+    """
+    similarity_calc = CenterSimilarityCalc()
+    # expand batch dim
+    bboxes = bboxes.unsqueeze(0)
+    # shape(N,M,M)
+    match_quality_matrix = similarity_calc.compare_batch(bboxes, bboxes)
+    # squeeze back
+    # shape(M,M)
+    match_quality_matrix = match_quality_matrix[0]
+    bboxes = bboxes[0]
+
+    match_mask = match_quality_matrix > nms_thresh
+    match_quality_matrix[match_mask] = 1
+    match_quality_matrix[~match_mask] = 0
+
+    # shape(M,)
+    match_num = match_quality_matrix.sum(dim=-1)
+    # exclude self
+    remain_match_inds = torch.nonzero(match_num > (nms_num + 1))
+    if remain_match_inds.numel():
+        remain_match_inds = remain_match_inds[:, 0]
+
+    return remain_match_inds

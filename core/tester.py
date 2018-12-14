@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import os
 import sys
+from utils.box_ops import super_nms
 
 
 def to_cuda(target):
@@ -21,7 +22,7 @@ def to_cuda(target):
         return target.cuda()
 
 
-def test(eval_config, data_loader, model):
+def _test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -164,6 +165,136 @@ def test(eval_config, data_loader, model):
         matched / num_gt, num_gt, matched))
 
 
+def test(eval_config, data_loader, model):
+    """
+    Only one image in batch is supported
+    """
+    num_samples = len(data_loader)
+    num_gt = 0
+    matched = 0
+
+    for i, data in enumerate(data_loader):
+        img_file = data['img_name']
+
+        start_time = time.time()
+        pred_boxes, scores, rois, anchors, rois_scores = im_detect(
+            model, to_cuda(data), eval_config, im_orig=data['img_orig'])
+        duration_time = time.time() - start_time
+
+        scores = scores.squeeze()
+        pred_boxes = pred_boxes.squeeze()
+        rois = rois.squeeze()
+        rois_scores = rois_scores.squeeze()
+
+        # thresh = eval_config['thresh']
+        use_which_result = eval_config['use_which_result']
+        if not use_which_result == 'none':
+            if 'rpn' in use_which_result:
+                stats = model.stats
+                match_inds = model.stats['match_inds']
+            elif 'rcnn' in use_which_result:
+                stats = model.rcnn_stats
+            if 'un' in use_which_result:
+                match_inds = stats['unmatch_inds']
+            else:
+                match_inds = stats['match_inds']
+
+            eval_config['nms'] = 1
+            scores = scores[match_inds]
+            rois_scores = rois_scores[match_inds]
+            pred_boxes = pred_boxes[match_inds]
+            rois = rois[match_inds]
+            anchors = anchors[match_inds]
+        else:
+            # new postprocess
+            keep = super_nms(pred_boxes, nms_num=3, nms_thresh=0.9)
+            # keep = torch.ones_like(keep)
+            # print('num of keep {}'.format(keep.numel()))
+
+            scores = scores[keep]
+            rois_scores = rois_scores[keep]
+            pred_boxes = pred_boxes[keep]
+            rois = rois[keep]
+            anchors = anchors[keep]
+
+        # calc recall
+        matched += model.rcnn_stats['matched']
+        num_gt += model.rcnn_stats['num_gt']
+        rate = model.rcnn_stats['rate']
+        fake_match_thresh = eval_config['fake_match_thresh']
+        max_matched_ind = model.rcnn_stats['match_inds'].max()
+        num_tp = model.rcnn_stats['num_tp']
+
+        remain_num_tp = 1
+        test_ap = num_tp / remain_num_tp
+
+        # max_score = 0
+        # min_score = 0
+        # print("max_score(iou<0.3)/min_score(iou>0.7): {}/{}".format(max_score,
+        # min_score))
+
+        classes = eval_config['classes']
+
+        dets = []
+        res_rois = []
+        res_anchors = []
+        # nms
+        for j in range(1, len(classes)):
+            #  inds = torch.nonzero(scores[:, j] > thresh).view(-1)
+            # if there is det
+            if scores.numel() > 0:
+                cls_scores = scores[:, j]
+                rois_cls_scores = rois_scores[:, j]
+                _, order = torch.sort(cls_scores, 0, True)
+                if eval_config['class_agnostic']:
+                    cls_boxes = pred_boxes
+                    rois_boxes = rois
+                    anchors_boxes = anchors
+                else:
+                    cls_boxes = pred_boxes[:, j * 4:(j + 1) * 4]
+
+                cls_dets = torch.cat((cls_boxes, cls_scores.unsqueeze(1)), 1)
+                rois_dets = torch.cat(
+                    (rois_boxes, rois_cls_scores.unsqueeze(1)), 1)
+                # the same as rois'
+                anchors_dets = torch.cat(
+                    (anchors_boxes, rois_cls_scores.unsqueeze(1)), 1)
+
+                cls_dets = cls_dets[order]
+                rois_dets = rois_dets[order]
+                anchors_dets = anchors_dets[order]
+
+                keep = nms(cls_dets, eval_config['nms'])
+
+                cls_dets = cls_dets[keep.view(-1).long()]
+                rois_dets = rois_dets[keep.view(-1).long()]
+                anchors = anchors_dets[keep.view(-1).long()]
+
+                dets.append(cls_dets.detach().cpu().numpy())
+                res_rois.append(rois_dets.detach().cpu().numpy())
+                res_anchors.append(anchors.detach().cpu().numpy())
+            else:
+                dets.append([])
+                res_rois.append([])
+                res_anchors.append([])
+
+        save_dets(dets[0], img_file[0], 'kitti', eval_config['eval_out'])
+        save_dets(res_rois[0], img_file[0], 'kitti',
+                  eval_config['eval_out_rois'])
+        save_dets(res_anchors[0], img_file[0], 'kitti',
+                  eval_config['eval_out_anchors'])
+
+        sys.stdout.write(
+            '\r{}/{},duration: {}, iou_rate/iou/max_ind: {}/{}/{}, num_tp/remain_num_tp/test_ap: {}/{}/{}'.
+            format(i + 1, num_samples, duration_time, rate, fake_match_thresh,
+                   max_matched_ind, num_tp, remain_num_tp, test_ap))
+        # sys.stdout.write(
+        # '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
+        sys.stdout.flush()
+    print('\naverage recall/num_gt/matched: {:.4f}/{}/{}'.format(
+        matched / num_gt, num_gt, matched))
+
+
 def im_detect(model, data, eval_config, im_orig=None):
     im_info = data['im_info']
     if eval_config.get('feat_vis'):
@@ -207,23 +338,6 @@ def im_detect(model, data, eval_config, im_orig=None):
     if eval_config['bbox_reg']:
         # Apply bounding-box regression deltas
         box_deltas = bbox_pred.data
-        #  if eval_config['bbox_normalize_targets_precomputed']:
-        #  # Optionally normalize targets by a precomputed mean and stdev
-        #  if eval_config['class_agnostic']:
-        #  box_deltas = box_deltas.view(
-        #  -1, 4) * torch.FloatTensor(eval_config[
-        #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
-        #  eval_config['bbox_normalize_means']).cuda()
-        #  box_deltas = box_deltas.view(eval_config['batch_size'], -1, 4)
-        #  else:
-        #  box_deltas = box_deltas.view(
-        #  -1, 4) * torch.FloatTensor(eval_config[
-        #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
-        #  eval_config['bbox_normalize_means']).cuda()
-        #  box_deltas = box_deltas.view(eval_config['batch_size'], -1,
-        #  4 * len(eval_config['classes']))
-
-        #  pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
         pred_boxes = model.target_assigner.bbox_coder.decode_batch(
             box_deltas.view(eval_config['batch_size'], -1, 4), boxes)
         pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)

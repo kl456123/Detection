@@ -81,10 +81,10 @@
 
 
 # post_cls
-CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
-    --net post_cls \
-    --out_path /data/object/liangxiong/post_cls \
-    --config configs/post_cls_config.json
+# CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+    # --net post_cls \
+    # --out_path /data/object/liangxiong/post_cls \
+    # --config configs/post_cls_config.json
 # --model /data/object/liangxiong/detach_double_iou/post_cls/kitti/faster_rcnn_80_3257.pth
     # --model /data/object/liangxiong/detach_double_iou_06/faster_rcnn_31_3257.pth
 # --r True \
@@ -180,10 +180,10 @@ CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
 # --model /data/object/liangxiong/double_iou/double_iou/kitti/faster_rcnn_53_3257.pth \
     # --lr 1e-5
 
-# CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
-    # --net semantic \
-    # --out_path /data/object/liangxiong/semantic_2560_res50 \
-    # --config configs/refine_kitti_config.json \
+CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+    --net semantic \
+    --out_path /data/object/liangxiong/semantic_test \
+    --config configs/refine_kitti_config.json
     # --r True \
     # --checkpoint 3257 \
     # --checkepoch 55

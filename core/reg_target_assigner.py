@@ -187,21 +187,6 @@ class TargetAssigner(object):
         # no need grad_fn
         return reg_targets_batch, neg_targets_w, neg_targets_h
 
-    #  def generate_neg_targets(self, gt_boxes):
-    #  """
-    #  as for neg case , generate specific target for them
-    #  Args:
-    #  assigned_gt_boxes: shape(N,4), (x1,y1,x2,y2)
-    #  Returns:
-    #  neg_targets: shape(N,M,4), (x,y,w,h)
-    #  """
-    #  center_x = (gt_boxes[:, :, 0] + gt_boxes[:, :, 2]) / 2
-    #  center_y = (gt_boxes[:, :, 1] + gt_boxes[:, :, 3]) / 2
-    #  w = gt_boxes[:, :, 2] - gt_boxes[:, :, 0] + 1.0
-    #  h = gt_boxes[:, :, 3] - gt_boxes[:, :, 1] + 1.0
-
-    #  neg_targets = torch.ones_like(gt_boxes)
-
     def _assign_classification_targets(self, match, gt_labels):
         """
         Just return the countpart labels

@@ -53,13 +53,13 @@ class TargetAssigner(object):
         match_quality_matrix = self.similarity_calc.compare_batch(bboxes,
                                                                   gt_boxes)
         # match 0.7 for truly recall calculation
-        if self.fg_thresh < 0.7:
-            fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
-            self.analyzer.analyze(fake_match, gt_boxes.shape[1])
+        fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
+        stats = self.analyzer.analyze(fake_match, gt_boxes.shape[1])
         # match
         # shape(N,K)
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
+        stats['iou'] = assigned_overlaps_batch
 
         # self.analyzer.analyze(match, gt_boxes.shape[1])
         # else:
@@ -98,7 +98,7 @@ class TargetAssigner(object):
                 match == -1)
             cls_weights[ignored_bg] = 0
 
-        return cls_targets, reg_targets, cls_weights, reg_weights
+        return cls_targets, reg_targets, cls_weights, reg_weights, stats
 
     def _create_regression_weights(self, assigned_overlaps_batch):
         """

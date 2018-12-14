@@ -221,8 +221,8 @@ class RPNModel(Model):
         rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
                                dim=2)
 
-        if self.training:
-            rois_batch = self.append_gt(rois_batch, gt_boxes)
+        # if self.training:
+        # rois_batch = self.append_gt(rois_batch, gt_boxes)
 
         rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
                                              rpn_cls_scores.shape[2],
@@ -276,7 +276,7 @@ class RPNModel(Model):
         #  import ipdb
         #  ipdb.set_trace()
         rpn_cls_targets, rpn_reg_targets, \
-            rpn_cls_weights, rpn_reg_weights = \
+            rpn_cls_weights, rpn_reg_weights, _ = \
             self.target_assigner.assign(anchors, gt_boxes, gt_labels=None)
 
         ################################

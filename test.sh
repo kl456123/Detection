@@ -118,12 +118,12 @@
     # --load_dir /data/object/liangxiong/detach_double_iou_cls_better \
     # --checkpoint 3257 \
     # --checkepoch 53
+
 CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    --checkpoint 3257 \
-    --checkepoch 39 \
     --net post_iou \
-    --load_dir /data/object/liangxiong/post_iou \
-    --use_gt True
+    --use_gt True \
+    --model /data/object/liangxiong/tmp/faster_rcnn_189_3257.pth \
+    --config /data/object/liangxiong/tmp/post_iou_config.json
 
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
