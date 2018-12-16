@@ -99,13 +99,27 @@
 # --checkpoint 3257 \
 # --checkepoch 24
 
-CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --checkpoint 3257 \
+    # --checkepoch 50 \
+    # --net double_iou \
+    # --load_dir /data/object/liangxiong/double_iou \
+    # --nms 0.7 \
+    # --thresh 0.2
+
+# no encoded
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --net mono_3d \
+    # --load_dir /data/object/liangxiong/mono_3d_train \
+    # --checkpoint 3257 \
+    # --checkepoch 100
+
+# encoded
+CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    --net mono_3d \
+    --load_dir /data/object/liangxiong/mono_3d_train_encode \
     --checkpoint 3257 \
-    --checkepoch 50 \
-    --net double_iou \
-    --load_dir /data/object/liangxiong/double_iou \
-    --nms 0.7 \
-    --thresh 0.2
+    --checkepoch 69
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \

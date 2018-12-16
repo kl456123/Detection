@@ -4,6 +4,7 @@ import numpy as np
 
 import matplotlib
 from PIL import Image, ImageFilter
+from utils.box_vis import compute_box_3d
 
 
 class Sample(object):
@@ -375,6 +376,7 @@ class ToTensor(object):
         pic = sample['img']
         label = sample.get('label')
         bbox = sample.get('bbox')
+        bbox_3d = sample.get('bbox_3d')
         pic = np.array(pic)
         img = torch.from_numpy(pic.transpose((2, 0, 1)))
         if label is not None:
@@ -382,6 +384,9 @@ class ToTensor(object):
 
         if bbox is not None:
             sample['bbox'] = torch.from_numpy(bbox).float()
+
+        if bbox_3d is not None:
+            sample['bbox_3d'] = torch.from_numpy(bbox_3d).float()
 
         sample['img'] = img.float().div(255)
         return sample
@@ -448,6 +453,43 @@ class BEVToTensor(object):
         return sample
 
 
+class Boxes3DTo2D(object):
+    def __call__(self, sample):
+        # h,w,l,t,ry
+        boxes_3d = sample['bbox_3d']
+        boxes_2d = sample['bbox']
+        center_x = (boxes_2d[:, 2] + boxes_2d[:, 0]) / 2
+        center_y = (boxes_2d[:, 3] + boxes_2d[:, 1]) / 2
+        center = np.stack([center_x, center_y], axis=-1)
+        w = (boxes_2d[:, 2] - boxes_2d[:, 0] + 1)
+        h = (boxes_2d[:, 3] - boxes_2d[:, 1] + 1)
+        dims = np.stack([w, h], axis=-1)
+        p2 = sample['p2']
+        coords = []
+        corners_xys = []
+        for i in range(boxes_3d.shape[0]):
+            target = {}
+            target['ry'] = boxes_3d[i, -1]
+            target['dimension'] = boxes_3d[i, :3]
+            target['dimension'] = target['dimension']
+            target['location'] = boxes_3d[i, 3:-1]
+
+            corners_xy, points_3d = compute_box_3d(target, p2, True)
+
+            # encode it by using boxes_2d
+            corners_xys.append(corners_xy)
+            corners_xy = (corners_xy - center[i]) / dims[i]
+
+            coords_per_box = corners_xy[[0, 1, 3]].reshape(-1)
+            coords_per_box = np.append(coords_per_box, corners_xy[4, 1])
+            coords.append(coords_per_box)
+        sample['coords'] = np.stack(coords, axis=0).astype(np.float32)
+        sample['coords_uncoded'] = np.stack(
+            corners_xys, axis=0).astype(np.float32)
+        sample['points_3d'] = points_3d
+        return sample
+
+
 class Compose(object):
     """Composes several transforms together.
     Args:
@@ -461,4 +503,3 @@ class Compose(object):
         for t in self.transforms:
             sample = t(sample)
         return sample
-

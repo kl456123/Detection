@@ -4,9 +4,6 @@
 # Written by Jiasen Lu, Jianwei Yang, based on code from Ross Girshick
 # --------------------------------------------------------
 
-
-
-
 import os
 
 import numpy as np
@@ -21,7 +18,7 @@ import torch.nn as nn
 import sys
 sys.path.append('./lib')
 
-from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
+from builder.dataloader_builders.kitti_mono_3d_dataloader_builder import Mono3DKittiDataLoaderBuilder
 from builder.optimizer_builder import OptimizerBuilder
 from builder.scheduler_builder import SchedulerBuilder
 from builder import model_builder
@@ -149,7 +146,8 @@ if __name__ == '__main__':
     if args.cuda:
         fasterRCNN.cuda()
 
-    data_loader_builder = KittiDataLoaderBuilder(data_config, training=True)
+    data_loader_builder = Mono3DKittiDataLoaderBuilder(
+        data_config, training=True)
     data_loader = data_loader_builder.build()
 
     # optimizer

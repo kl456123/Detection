@@ -22,10 +22,10 @@
     # --net rfcn \
     # --out_path /data/object/liangxiong/rfcn \
     # --config configs/rfcn_kitti_config.json
-CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
-    --net double_iou_second \
-    --out_path /data/object/liangxiong/double_iou_second \
-    --config configs/double_iou_kitti_config.json
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net double_iou_second \
+    # --out_path /data/object/liangxiong/double_iou_second \
+    # --config configs/double_iou_kitti_config.json
 
 # CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     # --net double_iou_second \
@@ -60,10 +60,19 @@ CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
 # --model /data/object/liangxiong/double_iou/double_iou/kitti/faster_rcnn_53_3257.pth \
     # --lr 1e-5
 
-# CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
-    # --net semantic \
-    # --out_path /data/object/liangxiong/semantic_finetune \
-    # --config configs/double_iou_kitti_config.json \
+# no encoded
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net mono_3d \
+    # --out_path /data/object/liangxiong/mono_3d_train \
+    # --config configs/refine_kitti_config.json \
+    # --checkpoint 3257 \
+    # --checkepoch 100
+
+# encode
+CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    --net mono_3d \
+    --out_path /data/object/liangxiong/mono_3d_train_encode \
+    --config configs/refine_kitti_config.json
     # --model /data/object/liangxiong/double_iou/double_iou/kitti/faster_rcnn_53_3257.pth \
     # --lr 1e-5
 # CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
