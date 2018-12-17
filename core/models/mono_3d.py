@@ -68,6 +68,20 @@ class Mono3DFasterRCNN(Model):
         prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
             proposals_order]
 
+        # generate labels for rcnn_3d(encoded by final bbox)
+        # decode bbox_pred first
+        # import ipdb
+        # ipdb.set_trace()
+        if self.training:
+            rcnn_bbox_preds = rcnn_bbox_preds.detach()
+            final_bbox = self.target_assigner.bbox_coder.decode_batch(
+                rcnn_bbox_preds.unsqueeze(0), rois_batch)
+            # unencoded label
+            rcnn_reg_targets_3d = prediction_dict['rcnn_reg_targets_3d']
+            prediction_dict[
+                'rcnn_reg_targets_3d'] = self.target_assigner.bbox_coder_3d.encode_batch(
+                    final_bbox[0], rcnn_reg_targets_3d)
+
         return prediction_dict
 
     def init_weights(self):

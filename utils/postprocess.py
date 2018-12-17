@@ -121,7 +121,7 @@ def rect(points_3d):
 
 
 def get_ground_plane():
-    return np.asarray([0, 1, 0, -2.39])
+    return np.asarray([0, 1, 0, -2.3])
 
 
 def get_camera_center(p2):

@@ -21,6 +21,8 @@ class TargetAssigner(object):
             assigner_config['similarity_calc_config'])
         self.bbox_coder = bbox_coder_builder.build(
             assigner_config['coder_config'])
+
+        self.bbox_coder_3d = bbox_coder_builder.build({'type': 'bbox_3d'})
         self.matcher = matcher_builder.build(assigner_config['matcher_config'])
         self.analyzer = Analyzer()
 
@@ -141,6 +143,8 @@ class TargetAssigner(object):
             batch_size, -1, 7)
         reg_targets_batch = self.bbox_coder.encode_batch(bboxes,
                                                          assigned_gt_boxes)
+        #  reg_targets_batch_3d = self.bbox_coder_3d.encode_batch(
+            #  bboxes[0], assigned_gt_boxes_3d[0])
 
         # no need grad_fn
         return reg_targets_batch, assigned_gt_boxes_3d

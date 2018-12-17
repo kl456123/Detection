@@ -13,6 +13,18 @@ class CenterCoder(object):
                 coder_config['bbox_normalize_stds'])
 
     def decode_batch(self, deltas, boxes):
+        if self.bbox_normalize_targets_precomputed:
+            dtype = deltas.type()
+            # Optionally normalize targets by a precomputed mean and stdev
+            deltas = (
+                deltas * self.bbox_normalize_stds.expand_as(deltas).type(dtype)
+                + self.bbox_normalize_means.expand_as(deltas).type(dtype))
+
+        reg_targets_batch = self._decode_batch(deltas, boxes)
+
+        return reg_targets_batch
+
+    def _decode_batch(self, deltas, boxes):
         """
         Args:
             deltas: shape(N,K*A,4)

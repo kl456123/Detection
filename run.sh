@@ -69,9 +69,9 @@
     # --checkepoch 100
 
 # encode
-CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     --net mono_3d \
-    --out_path /data/object/liangxiong/mono_3d_train_encode \
+    --out_path /data/object/liangxiong/mono_3d_train_encode_better \
     --config configs/refine_kitti_config.json
     # --model /data/object/liangxiong/double_iou/double_iou/kitti/faster_rcnn_53_3257.pth \
     # --lr 1e-5

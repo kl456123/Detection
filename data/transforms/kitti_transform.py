@@ -1,6 +1,7 @@
 import torch
 import random
 import numpy as np
+from numpy.linalg import norm
 
 import matplotlib
 from PIL import Image, ImageFilter
@@ -467,6 +468,7 @@ class Boxes3DTo2D(object):
         p2 = sample['p2']
         coords = []
         corners_xys = []
+        dims_2d = []
         for i in range(boxes_3d.shape[0]):
             target = {}
             target['ry'] = boxes_3d[i, -1]
@@ -478,15 +480,26 @@ class Boxes3DTo2D(object):
 
             # encode it by using boxes_2d
             corners_xys.append(corners_xy)
-            corners_xy = (corners_xy - center[i]) / dims[i]
+
+            # encoded in target assigner
+            #  corners_xy = (corners_xy - center[i]) / dims[i]
 
             coords_per_box = corners_xy[[0, 1, 3]].reshape(-1)
             coords_per_box = np.append(coords_per_box, corners_xy[4, 1])
             coords.append(coords_per_box)
+
+            # generate new feature to predict
+            # (length of l,h,w in image)
+            l_2d = norm(corners_xy[3] - corners_xy[0])
+            h_2d = norm(corners_xy[4] - corners_xy[0])
+            w_2d = norm(corners_xy[1] - corners_xy[0])
+            dims_2d.append(np.array([h_2d, w_2d, l_2d]))
+
         sample['coords'] = np.stack(coords, axis=0).astype(np.float32)
         sample['coords_uncoded'] = np.stack(
             corners_xys, axis=0).astype(np.float32)
         sample['points_3d'] = points_3d
+        sample['dims_2d'] = dims_2d
         return sample
 
 

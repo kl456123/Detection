@@ -3,6 +3,7 @@
 from core.bbox_coders.center_coder import CenterCoder
 from core.bbox_coders.scale_coder import ScaleCoder
 from core.bbox_coders.delta_coder import DeltaCoder
+from core.bbox_coders.bbox_3d_coder import BBox3DCoder
 
 
 def build(coder_config):
@@ -13,5 +14,7 @@ def build(coder_config):
         return CenterCoder(coder_config)
     elif coder_type == 'delta':
         return DeltaCoder(coder_config)
+    elif coder_type == 'bbox_3d':
+        return BBox3DCoder(coder_config)
     else:
         raise ValueError('unknown type of bbox coder')

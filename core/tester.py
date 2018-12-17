@@ -91,9 +91,16 @@ def test(eval_config, data_loader, model):
                 gt_boxes = data['gt_boxes'][0].detach().cpu().numpy()
                 points_3d = data['points_3d'][0].detach().cpu().numpy()
                 points_3d = points_3d.T
-                rcnn_3d_gt = decode_3d(coords, gt_boxes)
+                #  rcnn_3d_gt = decode_3d(coords, gt_boxes)
+                #  rcnn_3d_gt = coords
+
+                # regression from rois may be better
                 rcnn_3d = decode_3d(rcnn_3d, cls_dets)
+
                 rcnn_3d = mono_3d_postprocess(rcnn_3d, data['p2'])
+                rcnn_3d[:,0] = 1.5
+                rcnn_3d[:,1] = 1.7
+                rcnn_3d[:,2] = 3.6
 
                 dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
             else:
@@ -173,21 +180,21 @@ def im_detect(model, data, eval_config, im_orig=None):
     if eval_config['bbox_reg']:
         # Apply bounding-box regression deltas
         box_deltas = bbox_pred.data
-        if eval_config['bbox_normalize_targets_precomputed']:
-            # Optionally normalize targets by a precomputed mean and stdev
-            if eval_config['class_agnostic']:
-                box_deltas = box_deltas.view(
-                    -1, 4) * torch.FloatTensor(eval_config[
-                        'bbox_normalize_stds']).cuda() + torch.FloatTensor(
-                            eval_config['bbox_normalize_means']).cuda()
-                box_deltas = box_deltas.view(eval_config['batch_size'], -1, 4)
-            else:
-                box_deltas = box_deltas.view(
-                    -1, 4) * torch.FloatTensor(eval_config[
-                        'bbox_normalize_stds']).cuda() + torch.FloatTensor(
-                            eval_config['bbox_normalize_means']).cuda()
-                box_deltas = box_deltas.view(eval_config['batch_size'], -1,
-                                             4 * len(eval_config['classes']))
+        #  if eval_config['bbox_normalize_targets_precomputed']:
+        #  # Optionally normalize targets by a precomputed mean and stdev
+        #  if eval_config['class_agnostic']:
+        #  box_deltas = box_deltas.view(
+        #  -1, 4) * torch.FloatTensor(eval_config[
+        #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
+        #  eval_config['bbox_normalize_means']).cuda()
+        #  box_deltas = box_deltas.view(eval_config['batch_size'], -1, 4)
+        #  else:
+        #  box_deltas = box_deltas.view(
+        #  -1, 4) * torch.FloatTensor(eval_config[
+        #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
+        #  eval_config['bbox_normalize_means']).cuda()
+        #  box_deltas = box_deltas.view(eval_config['batch_size'], -1,
+        #  4 * len(eval_config['classes']))
 
         #  pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
         pred_boxes = model.target_assigner.bbox_coder.decode_batch(
