@@ -72,15 +72,15 @@ class Mono3DFasterRCNN(Model):
         # decode bbox_pred first
         # import ipdb
         # ipdb.set_trace()
-        if self.training:
-            rcnn_bbox_preds = rcnn_bbox_preds.detach()
-            final_bbox = self.target_assigner.bbox_coder.decode_batch(
-                rcnn_bbox_preds.unsqueeze(0), rois_batch)
-            # unencoded label
-            rcnn_reg_targets_3d = prediction_dict['rcnn_reg_targets_3d']
-            prediction_dict[
-                'rcnn_reg_targets_3d'] = self.target_assigner.bbox_coder_3d.encode_batch(
-                    final_bbox[0], rcnn_reg_targets_3d)
+        # if self.training:
+        # rcnn_bbox_preds = rcnn_bbox_preds.detach()
+        # final_bbox = self.target_assigner.bbox_coder.decode_batch(
+        # rcnn_bbox_preds.unsqueeze(0), rois_batch)
+        # # unencoded label
+        # rcnn_reg_targets_3d = prediction_dict['rcnn_reg_targets_3d']
+        # prediction_dict[
+        # 'rcnn_reg_targets_3d'] = self.target_assigner.bbox_coder_3d.encode_batch(
+        # final_bbox[0], rcnn_reg_targets_3d)
 
         return prediction_dict
 
@@ -126,7 +126,7 @@ class Mono3DFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_pred = nn.Linear(in_channels, 7)
+        self.rcnn_3d_pred = nn.Linear(in_channels, 4)
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -163,7 +163,16 @@ class Mono3DFasterRCNN(Model):
         rois_batch = prediction_dict['rois_batch']
         gt_boxes = feed_dict['gt_boxes']
         gt_labels = feed_dict['gt_labels']
-        gt_boxes_3d = feed_dict['coords']
+        #  gt_boxes_3d = feed_dict['coords']
+        #  dims_2d = feed_dict['dims_2d']
+        oritations = feed_dict['oritation']
+
+        # shape(N,7)
+        gt_boxes_3d = feed_dict['gt_boxes_3d']
+
+        # here just concat them
+        # dims and their projection
+        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], oritations], dim=-1)
 
         ##########################
         # assigner

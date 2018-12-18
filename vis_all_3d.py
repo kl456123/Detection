@@ -19,6 +19,12 @@ def main():
 
     for det_file in sorted(os.listdir(result_dir)):
         sample_name = os.path.splitext(det_file)[0]
+
+        #  import ipdb
+        #  ipdb.set_trace()
+        #  if not int(sample_name)==27:
+            #  continue
+
         #  kitti_path = os.path.join(data_dir,
         #  'label_2/{}.txt'.format(sample_name))
         kitti_path = os.path.join(result_dir, '{}.txt'.format(sample_name))

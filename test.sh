@@ -117,9 +117,9 @@
 # encoded
 CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     --net mono_3d \
-    --load_dir /data/object/liangxiong/mono_3d_train_encode_better \
+    --load_dir /data/object/liangxiong/mono_3d_train_encode_bbox \
     --checkpoint 3257 \
-    --checkepoch 8
+    --checkepoch 28
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \

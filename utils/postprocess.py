@@ -11,7 +11,6 @@ def mono_3d_postprocess(dets_3d, p2):
     # in single image
     # shape(N,7), (fblx,fbly,fbrx,fbry,rblx,rbly,ftly)
     rcnn_3ds = dets_3d
-    p2 = p2[0]
     box_3d = []
     for i in range(rcnn_3ds.shape[0]):
         points_2d = rcnn_3ds[i, :-1].reshape((3, 2))
@@ -163,3 +162,188 @@ def point_2dto3d(points_2d, p2):
     # transform back from homo
     # points_3d /= points_3d[:, -1:]
     return points_3d
+
+
+def mono_3d_postprocess_dims(dets_3d, dets_2d, p2):
+    """
+    X = inv(K) * x * depth
+    Args:
+        dets_3d: shape(N,6) (hwl_2d,hwl_3d)
+        dets_2d: shape(N,5) (xyxyc)
+        p2: shape(4,3)
+    """
+    # decompose p2
+    K = p2[:3, :3]
+    T = p2[:, -1]
+    focal_length = K[0, 0]
+    center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
+    center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
+    h = (dets_2d[:, 3] - dets_2d[:, 1] + 1) / 2
+    center_2d_ones = np.ones_like(center_2d_y)
+    center_2d_homo = np.stack(
+        [center_2d_x, center_2d_y, center_2d_ones], axis=-1)
+
+    ground = get_ground_plane()
+
+    # similarity
+    depth_4 = dets_3d[:, 3] / dets_3d[:, 0] * focal_length
+    # the same almostly
+    depth_center = depth_4
+    #  center_3d = np.dot(np.linalg.inv(K),
+    #  center_2d_homo.T).T * depth_center.unsqueeze(-1)
+
+    center_3d = np.dot(
+        np.linalg.inv(K),
+        (depth_center[..., np.newaxis] * center_2d_homo - T).T).T
+
+    # ry
+    ry = np.zeros_like(center_3d[:, -1:])
+    rcnn_3d = np.concatenate([dets_3d[:, 3:6], center_3d, ry], axis=-1)
+    return rcnn_3d
+
+
+def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
+    """
+    Args:
+        dets_3d: shape(N,4) (hwlry)
+        dets_2d: shape(N,5) (xyxyc)
+        p2: shape(4,3)
+    """
+    K = p2[:3, :3]
+    K_homo = np.eye(4)
+    K_homo[:3, :3] = K
+
+    # K*T
+    KT = p2[:, -1]
+    T = np.dot(np.linalg.inv(K), KT)
+
+    num = dets_3d.shape[0]
+    ry = dets_3d[:, -1]
+    zeros = np.zeros_like(ry)
+    ones = np.ones_like(ry)
+    R = np.stack(
+        [
+            np.cos(ry), zeros, np.sin(ry), zeros, ones, zeros, -np.sin(ry),
+            zeros, np.cos(ry)
+        ],
+        axis=-1).reshape(num, 3, 3)
+
+    l = dets_3d[:, 2]
+    h = dets_3d[:, 0]
+    w = dets_3d[:, 1]
+    zeros = np.zeros_like(w)
+    x_corners = np.stack(
+        [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2], axis=-1)
+    y_corners = np.stack([zeros, zeros, zeros, zeros, -h, -h, -h, -h], axis=-1)
+    z_corners = np.stack(
+        [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2], axis=-1)
+
+    corners = np.stack([x_corners, y_corners, z_corners], axis=-1)
+
+    # after rotation
+    #  corners = np.dot(R, corners)
+
+    top_corners = corners[:, -4:]
+    bottom_corners = corners[:, :4]
+    diag_corners = bottom_corners[:, [2, 3, 0, 1]]
+    #  left_side_corners = bottom_corners[:, [1, 2, 3, 0]]
+    #  right_side_corners = bottom_corners[:, [3, 0, 1, 2]]
+
+    # meshgrid
+    # 4x4x4 in all
+
+    num_top = top_corners.shape[1]
+    num_bottom = bottom_corners.shape[1]
+    top_index, bottom_index, side_index = np.meshgrid(
+        np.arange(num_top), np.arange(num_bottom), np.arange(num_bottom))
+
+    # in object frame
+    # 3d points may be in top and bottom side
+    # all corners' shape: (N,M,3)
+    top_side_corners = top_corners[:, top_index.ravel()]
+    bottom_side_corners = bottom_corners[:, bottom_index.ravel()]
+
+    # 3d points may be in left and right side
+    # both left and right are not difference here
+    left_side_corners = bottom_corners[:, side_index.ravel()]
+    right_side_corners = diag_corners[:, side_index.ravel()]
+
+    num_cases = top_side_corners.shape[1]
+    rcnn_3d = []
+    for i in range(num):
+        # for each detection result
+
+        dets_2d_per = dets_2d[i]
+        results_x = []
+        errors = []
+        for j in range(num_cases):
+            # four equations so that four coeff matries
+            left_side_corners_per = left_side_corners[i, j]
+            right_side_corners_per = right_side_corners[i, j]
+            top_side_corners_per = top_side_corners[i, j]
+            bottom_side_corners_per = bottom_side_corners[i, j]
+            R_per = R[i]
+
+            # left, xmin
+            #  RT = np.eye(4)
+            #  RT[:3, -1] = np.dot(R_per, left_side_corners_per)
+            #  coeff_left = np.dot(K_homo, RT)[0]
+            coeff_left = np.asarray([0, 0, dets_2d_per[0]]) - K[0]
+            bias_left = np.dot(np.dot(K, R_per), left_side_corners_per)[0]
+
+            # right, xmax
+            #  RT = np.eye(4)
+            #  RT[:3, -1] = np.dot(R_per, right_side_corners_per)
+            #  coeff_right = np.dot(K_homo, RT)[0]
+            coeff_right = np.asarray([0, 0, dets_2d_per[2]]) - K[0]
+            bias_right = np.dot(np.dot(K, R_per), right_side_corners_per)[0]
+
+            # top, ymin
+            #  RT = np.eye(4)
+            #  RT[:3, -1] = np.dot(R_per, top_side_corners_per)
+            #  coeff_top = np.dot(K_homo, RT)[1]
+            coeff_top = np.asarray([0, 0, dets_2d_per[1]]) - K[1]
+            bias_top = np.dot(np.dot(K, R_per), top_side_corners_per)[1]
+
+            # bottom, ymax
+            #  RT = np.eye(4)
+            #  RT[:3, -1] = np.dot(R_per, bottom_side_corners_per)
+            #  coeff_bottom = np.dot(K_homo, RT)[1]
+            coeff_bottom = np.asarray([0, 0, dets_2d_per[3]]) - K[1]
+            bias_bottom = np.dot(np.dot(K, R_per), bottom_side_corners_per)[1]
+
+            A = np.vstack([coeff_left, coeff_top, coeff_right, coeff_bottom])
+            b = np.asarray([bias_left, bias_top, bias_right, bias_bottom])
+            #  A = coeff_matrix[:, :-1]
+            #  b = dets_2d_per[:-1] - A[:, -1]
+
+            # svd reconstruction error
+            res = np.linalg.lstsq(A, b)
+            # origin of object frame
+            results_x.append(res[0] - T)
+            # errors
+            if len(res[1]):
+                errors.append(res[1])
+            else:
+                errors.append(np.zeros(1))
+
+            #  U, S, V = np.linalg.svd(A)
+            #  np.dot(,np.dot(U.T,b))
+
+        results_x = np.stack(results_x, axis=0)
+        errors = np.stack(errors, axis=0)
+        idx = errors.argmin()
+        # final results
+        X = results_x[idx]
+        rcnn_3d.append(X)
+    #  import ipdb
+    #  ipdb.set_trace()
+    translation = np.vstack(rcnn_3d)
+    return np.concatenate(
+        [dets_3d[:, :-1], translation, dets_3d[:, -1:]], axis=-1)
+
+
+def generate_coeff(points_3d, line_2d):
+    a = None
+    b = None
+    return a, b

@@ -469,6 +469,7 @@ class Boxes3DTo2D(object):
         coords = []
         corners_xys = []
         dims_2d = []
+        oritations = []
         for i in range(boxes_3d.shape[0]):
             target = {}
             target['ry'] = boxes_3d[i, -1]
@@ -487,6 +488,8 @@ class Boxes3DTo2D(object):
             coords_per_box = corners_xy[[0, 1, 3]].reshape(-1)
             coords_per_box = np.append(coords_per_box, corners_xy[4, 1])
             coords.append(coords_per_box)
+            oritations.append(
+                np.asarray([np.sin(target['ry']), np.cos(target['ry'])]))
 
             # generate new feature to predict
             # (length of l,h,w in image)
@@ -499,7 +502,8 @@ class Boxes3DTo2D(object):
         sample['coords_uncoded'] = np.stack(
             corners_xys, axis=0).astype(np.float32)
         sample['points_3d'] = points_3d
-        sample['dims_2d'] = dims_2d
+        sample['dims_2d'] = np.stack(dims_2d, axis=0).astype(np.float32)
+        sample['oritation'] = np.stack(oritations, axis=0).astype(np.float32)
         return sample
 
 

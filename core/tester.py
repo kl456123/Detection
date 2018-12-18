@@ -6,7 +6,7 @@ from lib.model.rpn.bbox_transform import bbox_transform_inv
 from lib.model.rpn.bbox_transform import clip_boxes
 from lib.model.nms.nms_wrapper import nms
 from utils.visualize import save_pkl, visualize_bbox
-from utils.postprocess import mono_3d_postprocess
+from utils.postprocess import mono_3d_postprocess_bbox
 import numpy as np
 import torch
 import os
@@ -83,10 +83,7 @@ def test(eval_config, data_loader, model):
                 cls_dets = cls_dets.detach().cpu().numpy()
                 res_rois.append(rois_dets.detach().cpu().numpy())
                 res_anchors.append(anchors.detach().cpu().numpy())
-                rcnn_3d = rcnn_3d.detach().cpu().numpy()
 
-                import ipdb
-                ipdb.set_trace()
                 coords = data['coords'][0].detach().cpu().numpy()
                 gt_boxes = data['gt_boxes'][0].detach().cpu().numpy()
                 points_3d = data['points_3d'][0].detach().cpu().numpy()
@@ -95,12 +92,21 @@ def test(eval_config, data_loader, model):
                 #  rcnn_3d_gt = coords
 
                 # regression from rois may be better
-                rcnn_3d = decode_3d(rcnn_3d, cls_dets)
+                #  rcnn_3d = decode_3d(rcnn_3d, cls_dets)
 
-                rcnn_3d = mono_3d_postprocess(rcnn_3d, data['p2'])
-                rcnn_3d[:,0] = 1.5
-                rcnn_3d[:,1] = 1.7
-                rcnn_3d[:,2] = 3.6
+                #  import ipdb
+                #  ipdb.set_trace()
+                rcnn_3d = model.target_assigner.bbox_coder_3d.decode_batch_bbox(rcnn_3d)
+                #  import ipdb
+                #  ipdb.set_trace()
+
+                p2 = data['p2'][0].detach().cpu().numpy()
+                rcnn_3d = rcnn_3d.detach().cpu().numpy()
+                rcnn_3d = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
+
+                #  rcnn_3d[:, 0] = 1.5
+                #  rcnn_3d[:, 1] = 1.7
+                #  rcnn_3d[:, 2] = 3.6
 
                 dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
             else:
