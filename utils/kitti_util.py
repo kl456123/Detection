@@ -304,8 +304,8 @@ class Object3d(object):
         self.h = data[8]  # box height
         self.w = data[9]  # box width
         self.l = data[10]  # box length (in meters)
-        self.t = (data[11], data[12], data[13]
-                  )  # location (x,y,z) in camera coord.
+        self.t = (data[11], data[12],
+                  data[13])  # location (x,y,z) in camera coord.
         self.ry = data[
             14]  # yaw angle (around Y-axis in camera coordinates) [-pi..pi]
 
@@ -323,3 +323,49 @@ class Object3d(object):
               (self.h, self.w, self.l)))
         print(('3d bbox location, ry: (%f, %f, %f), %f' % \
               (self.t[0],self.t[1],self.t[2],self.ry)))
+
+
+def compute_local_angle(center_2d, p2, ry):
+    """
+    Args:
+        center_2d: shape(N, 2)
+        p2: shape(3,4)
+    """
+    # import ipdb
+    # ipdb.set_trace()
+    M = p2[:, :3]
+    center_2d_homo = np.concatenate(
+        [center_2d, np.ones_like(center_2d[-1:])], axis=-1)
+    direction_vector = np.dot(np.linalg.inv(M), center_2d_homo.T).T
+    x_vector = np.array([1, 0, 0])
+    cos = np.dot(direction_vector, x_vector.T) / np.linalg.norm(
+        direction_vector, axis=-1)
+    ray_angle = np.arccos(cos)
+    local_angle = ry - ray_angle
+    return local_angle
+
+
+def compute_2d_proj(ry, corners, trans_3d, p):
+    import ipdb
+    ipdb.set_trace()
+    r = np.stack(
+        [np.cos(ry), 0, np.sin(ry), 0, 1, 0, -np.sin(ry), 0, np.cos(ry)],
+        axis=-1).reshape(3, 3)
+    corners_3d = np.dot(r, corners.T)
+    trans_3d = np.repeat(np.expand_dims(trans_3d.T, axis=1), 8, axis=1)
+    corners_3d = corners_3d[..., np.newaxis] + trans_3d
+    # corners_3d = corners_3d.reshape(3, -1)
+    corners_3d_homo = np.vstack((corners_3d, np.ones(
+        (1, corners_3d.shape[1]))))
+
+    corners_2d = np.dot(p, corners_3d_homo)
+    corners_2d_xy = corners_2d[:2] / corners_2d[2]
+
+    corners_2d_xy = corners_2d_xy.reshape(2, 8)
+    xmin = corners_2d_xy[0, :, :].min(axis=0)
+    ymin = corners_2d_xy[1, :, :].min(axis=0)
+    xmax = corners_2d_xy[0, :, :].max(axis=0)
+    ymax = corners_2d_xy[1, :, :].max(axis=0)
+
+    boxes_2d_proj = np.stack([xmin, ymin, xmax, ymax], axis=-1)
+    return boxes_2d_proj

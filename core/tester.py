@@ -86,6 +86,7 @@ def test(eval_config, data_loader, model):
 
                 coords = data['coords'][0].detach().cpu().numpy()
                 gt_boxes = data['gt_boxes'][0].detach().cpu().numpy()
+                gt_boxes_3d = data['gt_boxes_3d'][0].detach().cpu().numpy()
                 points_3d = data['points_3d'][0].detach().cpu().numpy()
                 points_3d = points_3d.T
                 #  rcnn_3d_gt = decode_3d(coords, gt_boxes)
@@ -96,19 +97,44 @@ def test(eval_config, data_loader, model):
 
                 #  import ipdb
                 #  ipdb.set_trace()
-                rcnn_3d = model.target_assigner.bbox_coder_3d.decode_batch_bbox(rcnn_3d)
+                rcnn_3d = model.target_assigner.bbox_coder_3d.decode_batch_bbox(
+                    rcnn_3d)
                 #  import ipdb
                 #  ipdb.set_trace()
 
                 p2 = data['p2'][0].detach().cpu().numpy()
                 rcnn_3d = rcnn_3d.detach().cpu().numpy()
-                rcnn_3d = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
 
-                #  rcnn_3d[:, 0] = 1.5
-                #  rcnn_3d[:, 1] = 1.7
-                #  rcnn_3d[:, 2] = 3.6
+                # use gt
+                use_gt = True
 
-                dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
+                if use_gt:
+                    rcnn_3d_gt = np.concatenate(
+                        [gt_boxes_3d[:, :3], gt_boxes_3d[:, -1:]], axis=-1)
+                    # just for debug
+                    if len(rcnn_3d_gt):
+                        cls_dets_gt = np.concatenate(
+                            [gt_boxes, np.zeros_like(gt_boxes[:, -1:])],
+                            axis=-1)
+                        rcnn_3d_gt = mono_3d_postprocess_bbox(rcnn_3d_gt,
+                                                              cls_dets_gt, p2)
+
+                        rcnn_3d[:, 0] = 1.5
+                        rcnn_3d[:, 1] = 1.7
+                        rcnn_3d[:, 2] = 3.6
+
+                        dets.append(
+                            np.concatenate(
+                                [cls_dets_gt, rcnn_3d_gt], axis=-1))
+                    else:
+                        dets.append([])
+                        res_rois.append([])
+                        res_anchors.append([])
+                        dets_3d.append([])
+                else:
+                    rcnn_3d = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
+                    dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
+
             else:
                 dets.append([])
                 res_rois.append([])

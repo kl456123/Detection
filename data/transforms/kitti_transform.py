@@ -6,6 +6,7 @@ from numpy.linalg import norm
 import matplotlib
 from PIL import Image, ImageFilter
 from utils.box_vis import compute_box_3d
+from utils.kitti_util import compute_local_angle, compute_2d_proj
 
 
 class Sample(object):
@@ -470,6 +471,10 @@ class Boxes3DTo2D(object):
         corners_xys = []
         dims_2d = []
         oritations = []
+        local_angle_oritations = []
+
+        # 2d bbox get from 3d
+        boxes_2d_proj = []
         for i in range(boxes_3d.shape[0]):
             target = {}
             target['ry'] = boxes_3d[i, -1]
@@ -478,6 +483,12 @@ class Boxes3DTo2D(object):
             target['location'] = boxes_3d[i, 3:-1]
 
             corners_xy, points_3d = compute_box_3d(target, p2, True)
+            # find it 2d proj
+            xmin = corners_xy[:, 0].min()
+            ymin = corners_xy[:, 1].min()
+            xmax = corners_xy[:, 0].max()
+            ymax = corners_xy[:, 1].max()
+            boxes_2d_proj_center = [(xmin + xmax) / 2, (ymin + ymax) / 2]
 
             # encode it by using boxes_2d
             corners_xys.append(corners_xy)
@@ -490,6 +501,16 @@ class Boxes3DTo2D(object):
             coords.append(coords_per_box)
             oritations.append(
                 np.asarray([np.sin(target['ry']), np.cos(target['ry'])]))
+
+            # local angle
+            # use truely center
+            local_angle = compute_local_angle(boxes_2d_proj_center, p2,
+                                              target['ry'])
+            local_angle_oritations.append(
+                np.asarray([np.sin(local_angle), np.cos(local_angle)]))
+
+            # 2d box proj
+            boxes_2d_proj.append(np.asarray([xmin, ymin, xmax, ymax]))
 
             # generate new feature to predict
             # (length of l,h,w in image)
@@ -504,6 +525,11 @@ class Boxes3DTo2D(object):
         sample['points_3d'] = points_3d
         sample['dims_2d'] = np.stack(dims_2d, axis=0).astype(np.float32)
         sample['oritation'] = np.stack(oritations, axis=0).astype(np.float32)
+        sample['local_angle_oritation'] = np.stack(
+            local_angle_oritations, axis=0).astype(np.float32)
+        sample['boxes_2d_proj'] = np.round(
+            np.stack(
+                boxes_2d_proj, axis=0).astype(np.float32))
         return sample
 
 

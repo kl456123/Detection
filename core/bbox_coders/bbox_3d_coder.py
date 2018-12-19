@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
+import math
 
 
 class BBox3DCoder(object):
@@ -176,7 +177,14 @@ class BBox3DCoder(object):
         l_3d = targets[:, 2] * l_3d_std + l_3d_mean
 
         # ry
-        ry = torch.asin(targets[:, -1])
+        sin = targets[:, -1]
+        cos = targets[:, -2]
+        ry = torch.atan(sin / cos)
+        cond = cos < 0
+        cond_pos = sin > 0
+        cond_neg = sin < 0
+        ry[cond & cond_pos] = ry[cond & cond_pos] + math.pi
+        ry[cond & cond_neg] = ry[cond & cond_neg] - math.pi
 
         bbox = torch.stack([h_3d, w_3d, l_3d, ry], dim=-1)
         return bbox

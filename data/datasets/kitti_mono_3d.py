@@ -47,6 +47,8 @@ class Mono3DKittiDataset(DetDataset):
             points_3d = transform_sample['points_3d']
             dims_2d = transform_sample['dims_2d']
             oritations = transform_sample['oritation']
+            local_angle_oritations = transform_sample['local_angle_oritation']
+            boxes_2d_proj = transform_sample['boxes_2d_proj']
         else:
             # fake gt
             bbox = torch.zeros((1, 5))
@@ -57,6 +59,8 @@ class Mono3DKittiDataset(DetDataset):
             points_3d = torch.zeros((1, 8))
             dims_2d = torch.zeros((1, 3))
             oritations = torch.zeros((1, 2))
+            local_angle_oritations = torch.zeros((1, 2))
+            boxes_2d_proj = torch.zeros((1, 4))
 
         h, w = transform_sample['img'].shape[-2:]
         training_sample = {}
@@ -65,7 +69,7 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['input_size'] = torch.FloatTensor([h, w])
         training_sample['img_name'] = transform_sample['img_name']
         training_sample['im_scale'] = im_scale
-        training_sample['gt_boxes'] = bbox[:, :4]
+        # training_sample['gt_boxes'] = bbox[:, :4]
         training_sample['gt_labels'] = bbox[:, -1].long()
         training_sample['num'] = num
         training_sample['coords_uncoded'] = coords_uncoded
@@ -73,6 +77,11 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['points_3d'] = points_3d
         training_sample['dims_2d'] = dims_2d
         training_sample['oritation'] = oritations
+        training_sample['local_angle_oritation'] = local_angle_oritations
+
+        # use proj instead of original box
+        # training_sample['boxes_2d_proj'] = boxes_2d_proj
+        training_sample['gt_boxes'] = boxes_2d_proj
 
         # note here it is not truely 3d,just their some projected points in 2d
         training_sample['gt_boxes_3d'] = bbox_3d

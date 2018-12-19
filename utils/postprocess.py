@@ -289,28 +289,32 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
             #  RT[:3, -1] = np.dot(R_per, left_side_corners_per)
             #  coeff_left = np.dot(K_homo, RT)[0]
             coeff_left = np.asarray([0, 0, dets_2d_per[0]]) - K[0]
-            bias_left = np.dot(np.dot(K, R_per), left_side_corners_per)[0]
+            M = np.dot(np.dot(K, R_per), left_side_corners_per)
+            bias_left = M[0] - M[2] * dets_2d_per[0]
 
             # right, xmax
             #  RT = np.eye(4)
             #  RT[:3, -1] = np.dot(R_per, right_side_corners_per)
             #  coeff_right = np.dot(K_homo, RT)[0]
             coeff_right = np.asarray([0, 0, dets_2d_per[2]]) - K[0]
-            bias_right = np.dot(np.dot(K, R_per), right_side_corners_per)[0]
+            M = np.dot(np.dot(K, R_per), right_side_corners_per)
+            bias_right = M[0] - M[2] * dets_2d_per[2]
 
             # top, ymin
             #  RT = np.eye(4)
             #  RT[:3, -1] = np.dot(R_per, top_side_corners_per)
             #  coeff_top = np.dot(K_homo, RT)[1]
             coeff_top = np.asarray([0, 0, dets_2d_per[1]]) - K[1]
-            bias_top = np.dot(np.dot(K, R_per), top_side_corners_per)[1]
+            M = np.dot(np.dot(K, R_per), top_side_corners_per)
+            bias_top = M[1] - M[2] * dets_2d_per[1]
 
             # bottom, ymax
             #  RT = np.eye(4)
             #  RT[:3, -1] = np.dot(R_per, bottom_side_corners_per)
             #  coeff_bottom = np.dot(K_homo, RT)[1]
             coeff_bottom = np.asarray([0, 0, dets_2d_per[3]]) - K[1]
-            bias_bottom = np.dot(np.dot(K, R_per), bottom_side_corners_per)[1]
+            M = np.dot(np.dot(K, R_per), bottom_side_corners_per)
+            bias_bottom = M[1] - M[2] * dets_2d_per[3]
 
             A = np.vstack([coeff_left, coeff_top, coeff_right, coeff_bottom])
             b = np.asarray([bias_left, bias_top, bias_right, bias_bottom])
@@ -332,8 +336,9 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
 
         results_x = np.stack(results_x, axis=0)
         errors = np.stack(errors, axis=0)
-        idx = errors.argmin()
+        #  idx = errors.argmin()
         # final results
+        idx = match(dets_2d[i, :-1], corners[i], results_x, R[i], p2)
         X = results_x[idx]
         rcnn_3d.append(X)
     #  import ipdb
@@ -347,3 +352,80 @@ def generate_coeff(points_3d, line_2d):
     a = None
     b = None
     return a, b
+
+
+def match(boxes_2d, corners, trans_3d, r, p):
+    """
+    Args:
+        boxes_2d: shape(4)
+        corners: shape(8, 3)
+        trans_3d: shape(64,3)
+        ry: shape(3, 3)
+    """
+    #  import ipdb
+    #  ipdb.set_trace()
+    corners_3d = np.dot(r, corners.T)
+    trans_3d = np.repeat(np.expand_dims(trans_3d.T, axis=1), 8, axis=1)
+    corners_3d = corners_3d[..., np.newaxis] + trans_3d
+    corners_3d = corners_3d.reshape(3, -1)
+    corners_3d_homo = np.vstack((corners_3d, np.ones(
+        (1, corners_3d.shape[1]))))
+
+    corners_2d = np.dot(p, corners_3d_homo)
+    corners_2d_xy = corners_2d[:2, :] / corners_2d[2, :]
+
+    corners_2d_xy = corners_2d_xy.reshape(2, 8, -1)
+    xmin = corners_2d_xy[0, :, :].min(axis=0)
+    ymin = corners_2d_xy[1, :, :].min(axis=0)
+    xmax = corners_2d_xy[0, :, :].max(axis=0)
+    ymax = corners_2d_xy[1, :, :].max(axis=0)
+
+    boxes_2d_proj = np.stack([xmin, ymin, xmax, ymax], axis=-1)
+    #  import ipdb
+    #  ipdb.set_trace()
+    bbox_overlaps = py_iou(boxes_2d[np.newaxis, ...], boxes_2d_proj)
+    idx = bbox_overlaps.argmax(axis=-1)
+
+    return idx
+
+
+def py_area(boxes):
+    """
+    Args:
+        boxes: shape(N,M,4)
+    """
+    width = boxes[:, :, 2] - boxes[:, :, 0]
+    height = boxes[:, :, 3] - boxes[:, :, 1]
+    area = width * height
+    return area
+
+
+def py_iou(boxes_a, boxes_b):
+    """
+    Args:
+        boxes_a: shape(N,4)
+        boxes_b: shape(M,4)
+    Returns:
+        overlaps: shape(N, M)
+    """
+    N = boxes_a.shape[0]
+    M = boxes_b.shape[0]
+    boxes_a = np.repeat(np.expand_dims(boxes_a, 1), M, axis=1)
+    boxes_b = np.repeat(np.expand_dims(boxes_b, 0), N, axis=0)
+
+    xmin = np.maximum(boxes_a[:, :, 0], boxes_b[:, :, 0])
+    ymin = np.maximum(boxes_a[:, :, 1], boxes_b[:, :, 1])
+    xmax = np.minimum(boxes_a[:, :, 2], boxes_b[:, :, 2])
+    ymax = np.minimum(boxes_a[:, :, 3], boxes_b[:, :, 3])
+
+    w = xmax - xmin
+    h = ymax - ymin
+    w[w < 0] = 0
+    h[h < 0] = 0
+
+    inner_area = w * h
+    boxes_a_area = py_area(boxes_a)
+    boxes_b_area = py_area(boxes_b)
+
+    iou = inner_area / (boxes_a_area + boxes_b_area - inner_area)
+    return iou

@@ -9,6 +9,7 @@ from utils.kitti_util import Calibration, Object3d
 import sys
 import argparse
 import cv2
+from utils.visualize import visualize_bbox
 sys.path.append('.')
 
 
@@ -17,6 +18,7 @@ def parse_kitti_3d(label_path):
     objs = [Object3d(line) for line in lines]
 
     boxes_3d = [obj.box3d for obj in objs]
+    boxes_2d = [obj.box2d for obj in objs]
     points_3ds = []
     for box_3d in boxes_3d:
         [ry, l, h, w, x, y, z] = box_3d
@@ -32,8 +34,11 @@ def parse_kitti_3d(label_path):
         points_3ds.append(points_3d)
 
     if len(boxes_3d) == 0:
-        return np.zeros((0, 8, 3)), np.zeros((0, 7))
-    return np.stack(points_3ds, axis=0), np.stack(boxes_3d, axis=0)
+        return np.zeros((0, 8, 3)), np.zeros((0, 7)), np.zeros((0, 4))
+    return np.stack(
+        points_3ds, axis=0), np.stack(
+            boxes_3d, axis=0), np.stack(
+                boxes_2d, axis=0)
 
 
 def compute_box_3d_in_world(target, p):
@@ -129,7 +134,14 @@ def load_projection_matrix(calib_file):
     return p
 
 
-def draw_boxes(img, box_3d, calib_matrix, save_path, offset=[0, 0], save=True):
+def draw_boxes(img,
+               box_3d,
+               calib_matrix,
+               save_path,
+               offset=[0, 0],
+               save=True,
+               box_2d=None,
+               title=''):
     '''
     Args:
         img(PIL.Image):
@@ -159,14 +171,17 @@ def draw_boxes(img, box_3d, calib_matrix, save_path, offset=[0, 0], save=True):
                     start_point = (corners_xy[i][0], corners_xy[i][1])
                     end_point = (corners_xy[j][0], corners_xy[j][1])
                     draw.line(
-                        [start_point, end_point], fill=(255, 170, 30), width=1)
+                        [start_point, end_point], fill=(255, 0, 0), width=2)
 
     # if save:
     img.save(save_path)
     img = cv2.imread(save_path)
-    cv2.imshow('box_3d', img)
-    cv2.waitKey(0)
-    # img.show()
+    if box_2d is not None:
+        visualize_bbox(img, box_2d, title=title)
+    else:
+        cv2.imshow(title, img)
+        cv2.waitKey(0)
+        #  img.show()
 
 
 def parse_args():
@@ -209,10 +224,13 @@ def main():
     img = Image.open(img_path)
 
     # label
-    points_3d, boxes_3d = parse_kitti_3d(label_path)
+    points_3d, boxes_3d, boxes_2d = parse_kitti_3d(label_path)
 
     # final draw it
-    draw_boxes(img, boxes_3d, p2, save_path)
+    #  import ipdb
+    #  ipdb.set_trace()
+    boxes_2d = None
+    draw_boxes(img, boxes_3d, p2, save_path, title=img_path, box_2d=boxes_2d)
 
 
 if __name__ == '__main__':

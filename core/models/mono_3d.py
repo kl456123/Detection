@@ -126,7 +126,7 @@ class Mono3DFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_pred = nn.Linear(in_channels, 4)
+        self.rcnn_3d_pred = nn.Linear(in_channels, 5)
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -165,7 +165,8 @@ class Mono3DFasterRCNN(Model):
         gt_labels = feed_dict['gt_labels']
         #  gt_boxes_3d = feed_dict['coords']
         #  dims_2d = feed_dict['dims_2d']
-        oritations = feed_dict['oritation']
+        # use local angle
+        oritations = feed_dict['local_angle_oritation']
 
         # shape(N,7)
         gt_boxes_3d = feed_dict['gt_boxes_3d']
