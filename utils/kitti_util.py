@@ -345,6 +345,25 @@ def compute_local_angle(center_2d, p2, ry):
     return local_angle
 
 
+def compute_global_angle(center_2d, p2, local_angle):
+    """
+    Note that just batch is supported
+    Args:
+        center_2d: shape(N, 2)
+        p2: shape(3,4)
+    """
+    M = p2[:, :3]
+    center_2d_homo = np.concatenate(
+        [center_2d, np.ones_like(center_2d[:, -1:])], axis=-1)
+    direction_vector = np.dot(np.linalg.inv(M), center_2d_homo.T).T
+    x_vector = np.array([1, 0, 0]).reshape(1, 3)
+    cos = np.dot(direction_vector, x_vector.T) / np.linalg.norm(
+        direction_vector, axis=-1)
+    ray_angle = np.arccos(cos)
+    ry = local_angle + ray_angle
+    return ry
+
+
 def compute_2d_proj(ry, corners, trans_3d, p):
     import ipdb
     ipdb.set_trace()

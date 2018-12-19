@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.linalg import norm
+from utils.kitti_util import compute_global_angle
 
 
 def mono_3d_postprocess(dets_3d, p2):
@@ -218,7 +219,10 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     T = np.dot(np.linalg.inv(K), KT)
 
     num = dets_3d.shape[0]
-    ry = dets_3d[:, -1]
+    ry_local = dets_3d[:, -1]
+    # compute global angle
+    ry = compute_global_angle(ry_local)
+
     zeros = np.zeros_like(ry)
     ones = np.ones_like(ry)
     R = np.stack(
