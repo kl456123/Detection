@@ -17,6 +17,9 @@ def parse_kitti_3d(label_path):
     lines = [line.rstrip() for line in open(label_path)]
     objs = [Object3d(line) for line in lines]
 
+    # class filter
+    objs = [obj for obj in objs if obj.type == 'Car']
+
     boxes_3d = [obj.box3d for obj in objs]
     boxes_2d = [obj.box2d for obj in objs]
     points_3ds = []
@@ -141,7 +144,8 @@ def draw_boxes(img,
                offset=[0, 0],
                save=True,
                box_2d=None,
-               title=''):
+               title='',
+               box_3d_gt=None):
     '''
     Args:
         img(PIL.Image):
@@ -154,6 +158,40 @@ def draw_boxes(img,
                         [2, 5, 7], [3, 6, 8], [4, 5, 7]]
     connected_points = np.array(connected_points) - 1
     connected_points = connected_points.tolist()
+    connected_points_2d = [[1, 3], [0, 2], [1, 3], [0, 2]]
+
+    voxel_size = 0.05
+    width = 80
+    height = 75
+    bev_width = int(height / voxel_size)
+    bev_height = int(width / voxel_size)
+    bird_view = Image.new('RGB', (bev_width, bev_height), (255, 255, 255))
+    bird_view_draw = ImageDraw.Draw(bird_view)
+
+    if box_3d_gt is not None:
+        for i in range(box_3d_gt.shape[0]):
+            target = {}
+            target['ry'] = box_3d_gt[i, 0]
+            target['dimension'] = box_3d_gt[i, 1:4]
+            target['location'] = box_3d_gt[i, 4:]
+
+            corners_xy, corners_3d = compute_box_3d(
+                target, calib_matrix, ret_3d=True)
+            corners_3d = corners_3d.T
+            corners_bird = corners_3d[:4, [0, 2]]
+            corners_bird = corners_bird[:, ::-1]
+            corners_bird[:, 1] = corners_bird[:, 1] + 1 / 2 * width
+            corners_bird = (corners_bird / voxel_size).astype(np.int)
+            # change coordinates before drawing
+            for i in range(4):
+                for j in range(4):
+                    if j in connected_points_2d[i]:
+                        start_point = (corners_bird[i][0], corners_bird[i][1])
+                        end_point = (corners_bird[j][0], corners_bird[j][1])
+                        bird_view_draw.line(
+                            [start_point, end_point],
+                            fill=(255, 0, 0),
+                            width=10)
 
     for i in range(box_3d.shape[0]):
         target = {}
@@ -161,7 +199,24 @@ def draw_boxes(img,
         target['dimension'] = box_3d[i, 1:4]
         target['location'] = box_3d[i, 4:]
 
-        corners_xy = compute_box_3d(target, calib_matrix)
+        corners_xy, corners_3d = compute_box_3d(
+            target, calib_matrix, ret_3d=True)
+
+        corners_3d = corners_3d.T
+        corners_bird = corners_3d[:4, [0, 2]]
+        corners_bird = corners_bird[:, ::-1]
+        corners_bird[:, 1] = corners_bird[:, 1] + 1 / 2 * width
+        corners_bird = (corners_bird / voxel_size).astype(np.int)
+        # change coordinates before drawing
+        for i in range(4):
+            for j in range(4):
+                if j in connected_points_2d[i]:
+                    start_point = (corners_bird[i][0], corners_bird[i][1])
+                    end_point = (corners_bird[j][0], corners_bird[j][1])
+                    bird_view_draw.line(
+                        [start_point, end_point], fill=(0, 255, 0), width=10)
+
+        # draw 3d points in image
         corners_xy[:, 0] -= offset[0]
         corners_xy[:, 1] -= offset[1]
         corners_xy = corners_xy.tolist()
@@ -173,7 +228,7 @@ def draw_boxes(img,
                     draw.line(
                         [start_point, end_point], fill=(255, 0, 0), width=2)
 
-    # if save:
+    # display front view
     img.save(save_path)
     img = cv2.imread(save_path)
     if box_2d is not None:
@@ -181,7 +236,16 @@ def draw_boxes(img,
     else:
         cv2.imshow(title, img)
         cv2.waitKey(0)
-        #  img.show()
+
+    # display bird view
+    # import ipdb
+    # ipdb.set_trace()
+    new_width = 384 / bird_view.height * bird_view.width
+    bird_view = bird_view.resize((int(new_width), 384))
+    bird_view.save(save_path)
+    bird_view = cv2.imread(save_path)
+    cv2.imshow(title, bird_view)
+    cv2.waitKey(0)
 
 
 def parse_args():
@@ -204,6 +268,8 @@ def parse_args():
         help='path to output',
         type=str,
         default='./demo.png')
+    parser.add_argument(
+        '--label', dest='label_path', help='path to labe', type=str)
 
     args = parser.parse_args()
     return args
@@ -212,10 +278,12 @@ def parse_args():
 def main():
     args = parse_args()
 
-    label_path = args.kitti
+    kitti_path = args.kitti
     img_path = args.img
     calib_path = args.calib
     save_path = args.save_path
+    label_path = args.label_path
+    label_dir = '/data/object/training/label_2'
 
     # load calib matrix(here just P2 is used)
     p2 = load_projection_matrix(calib_path)
@@ -224,13 +292,24 @@ def main():
     img = Image.open(img_path)
 
     # label
-    points_3d, boxes_3d, boxes_2d = parse_kitti_3d(label_path)
+    points_3d, boxes_3d, boxes_2d = parse_kitti_3d(kitti_path)
+    if label_path is None:
+        base_name = os.path.basename(kitti_path)
+        label_path = os.path.join(label_dir, base_name)
+    points_3d_gt, boxes_3d_gt, boxes_2d_gt = parse_kitti_3d(label_path)
 
     # final draw it
     #  import ipdb
     #  ipdb.set_trace()
     # boxes_2d = None
-    draw_boxes(img, boxes_3d, p2, save_path, title=img_path, box_2d=boxes_2d)
+    draw_boxes(
+        img,
+        boxes_3d,
+        p2,
+        save_path,
+        title=img_path,
+        box_2d=boxes_2d,
+        box_3d_gt=boxes_3d_gt)
 
 
 if __name__ == '__main__':

@@ -226,7 +226,7 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
     center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
     ry = compute_global_angle(center_2d, p2, ry_local)
-    # ry = ry_local
+    #  ry = ry_local
 
     zeros = np.zeros_like(ry)
     ones = np.ones_like(ry)
@@ -345,9 +345,11 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
 
         results_x = np.stack(results_x, axis=0)
         errors = np.stack(errors, axis=0)
-        #  idx = errors.argmin()
+        idx = errors.argmin()
         # final results
-        idx = match(dets_2d[i, :-1], corners[i], results_x, R[i], p2)
+        #  import ipdb
+        #  ipdb.set_trace()
+        #  idx = match(dets_2d[i, :-1], corners[i], results_x, R[i], p2)
         X = results_x[idx]
         rcnn_3d.append(X)
     #  import ipdb

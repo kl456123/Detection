@@ -130,7 +130,7 @@ class BBox3DCoder(object):
         target_w_3d = (dims[:, 1] - w_3d_mean) / w_3d_std
         target_l_3d = (dims[:, 2] - l_3d_mean) / l_3d_std
         targets = torch.stack(
-            [target_h_3d, target_w_3d, target_l_3d, dims[:, -2], dims[:, -1]],
+            [target_h_3d, target_w_3d, target_l_3d, dims[:, -1]],
             dim=-1)
         return targets
 
@@ -177,8 +177,8 @@ class BBox3DCoder(object):
         l_3d = targets[:, 2] * l_3d_std + l_3d_mean
 
         # ry
-        sin = targets[:, -1]
-        cos = targets[:, -2]
+        sin = targets[:, -2]
+        cos = targets[:, -1]
         ry = torch.atan(sin / cos)
         cond = cos < 0
         cond_pos = sin > 0

@@ -27,6 +27,7 @@ class Mono3DKittiDataset(DetDataset):
 
         self.transforms = transforms
         self.max_num_gt_boxes = 40
+        self.use_proj_2d = False
 
     def get_training_sample(self, transform_sample):
         # bbox and num
@@ -71,7 +72,6 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['input_size'] = torch.FloatTensor([h, w])
         training_sample['img_name'] = transform_sample['img_name']
         training_sample['im_scale'] = im_scale
-        # training_sample['gt_boxes'] = bbox[:, :4]
         training_sample['gt_labels'] = bbox[:, -1].long()
         training_sample['num'] = num
         training_sample['coords_uncoded'] = coords_uncoded
@@ -84,7 +84,10 @@ class Mono3DKittiDataset(DetDataset):
 
         # use proj instead of original box
         # training_sample['boxes_2d_proj'] = boxes_2d_proj
-        training_sample['gt_boxes'] = boxes_2d_proj
+        if self.use_proj_2d:
+            training_sample['gt_boxes'] = boxes_2d_proj
+        else:
+            training_sample['gt_boxes'] = bbox[:, :4]
 
         # note here it is not truely 3d,just their some projected points in 2d
         training_sample['gt_boxes_3d'] = bbox_3d

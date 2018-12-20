@@ -456,6 +456,9 @@ class BEVToTensor(object):
 
 
 class Boxes3DTo2D(object):
+    def __init__(self, use_proj_2d=False):
+        self.use_proj_2d = use_proj_2d
+
     def __call__(self, sample):
         # h,w,l,t,ry
         boxes_3d = sample['bbox_3d']
@@ -466,6 +469,7 @@ class Boxes3DTo2D(object):
         w = (boxes_2d[:, 2] - boxes_2d[:, 0] + 1)
         h = (boxes_2d[:, 3] - boxes_2d[:, 1] + 1)
         dims = np.stack([w, h], axis=-1)
+
         p2 = sample['p2']
         coords = []
         corners_xys = []
@@ -505,8 +509,13 @@ class Boxes3DTo2D(object):
 
             # local angle
             # use truely center
-            local_angle = compute_local_angle(boxes_2d_proj_center, p2,
-                                              target['ry'])
+            if self.use_proj_2d:
+                center_used = boxes_2d_proj_center
+            else:
+                center_used = center[i]
+            # import ipdb
+            # ipdb.set_trace()
+            local_angle = compute_local_angle(center_used, p2, target['ry'])
             local_angles.append([local_angle])
             local_angle_oritations.append(
                 np.asarray([np.sin(local_angle), np.cos(local_angle)]))

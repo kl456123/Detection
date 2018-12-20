@@ -43,8 +43,8 @@ def test(eval_config, data_loader, model):
         classes = eval_config['classes']
         thresh = eval_config['thresh']
 
-        #  import ipdb
-        #  ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
         dets = []
         res_rois = []
         res_anchors = []
@@ -88,6 +88,9 @@ def test(eval_config, data_loader, model):
                 gt_boxes = data['gt_boxes'][0].detach().cpu().numpy()
                 gt_boxes_3d = data['gt_boxes_3d'][0].detach().cpu().numpy()
                 points_3d = data['points_3d'][0].detach().cpu().numpy()
+                local_angles_gt = data['local_angle'][0].detach().cpu().numpy()
+                local_angle_oritation_gt = data['local_angle_oritation'][
+                    0].detach().cpu().numpy()
                 points_3d = points_3d.T
                 #  rcnn_3d_gt = decode_3d(coords, gt_boxes)
                 #  rcnn_3d_gt = coords
@@ -95,15 +98,21 @@ def test(eval_config, data_loader, model):
                 # regression from rois may be better
                 #  rcnn_3d = decode_3d(rcnn_3d, cls_dets)
 
-                #  import ipdb
-                #  ipdb.set_trace()
+                # import ipdb
+                # ipdb.set_trace()
                 rcnn_3d = model.target_assigner.bbox_coder_3d.decode_batch_bbox(
                     rcnn_3d)
+
+                # rcnn_3d_gt = np.concatenate(
+                    # [gt_boxes_3d[:, :3], local_angle_oritation_gt], axis=-1)
+                # rcnn_3d_gt = model.target_assigner.bbox_coder_3d.decode_batch_bbox(
+                    # torch.from_numpy(rcnn_3d_gt))
                 #  import ipdb
                 #  ipdb.set_trace()
 
                 p2 = data['p2'][0].detach().cpu().numpy()
                 rcnn_3d = rcnn_3d.detach().cpu().numpy()
+                # rcnn_3d_gt = rcnn_3d_gt.detach().cpu().numpy()
 
                 # use gt
                 use_gt = False
@@ -111,11 +120,9 @@ def test(eval_config, data_loader, model):
                 if use_gt:
                     # import ipdb
                     # ipdb.set_trace()
-                    local_angles_gt = data['local_angle'][0].detach().cpu(
-                    ).numpy()
                     global_angles_gt = gt_boxes_3d[:, -1:]
                     rcnn_3d_gt = np.concatenate(
-                        [gt_boxes_3d[:, :3], local_angles_gt], axis=-1)
+                         [gt_boxes_3d[:, :3], local_angles_gt], axis=-1)
                     # just for debug
                     if len(rcnn_3d_gt):
                         cls_dets_gt = np.concatenate(
@@ -137,8 +144,8 @@ def test(eval_config, data_loader, model):
                         res_anchors.append([])
                         dets_3d.append([])
                 else:
-                    #  import ipdb
-                    #  ipdb.set_trace()
+                    import ipdb
+                    ipdb.set_trace()
                     #  rcnn_3d[:, :-1] = gt_boxes_3d[:, :3]
                     rcnn_3d = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
@@ -239,7 +246,7 @@ def im_detect(model, data, eval_config, im_orig=None):
         #  pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
         pred_boxes = model.target_assigner.bbox_coder.decode_batch(
             box_deltas.view(eval_config['batch_size'], -1, 4), boxes)
-        pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
+        # pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
 
     pred_boxes /= im_scale
     return pred_boxes, scores, rois[:, :, 1:5], anchors, rcnn_3d

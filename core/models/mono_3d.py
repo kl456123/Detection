@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from core.model import Model
 from core.models.rpn_model import RPNModel
 from core.models.focal_loss import FocalLoss
+from core.models.multibin_loss import MultiBinLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
 
@@ -126,7 +127,9 @@ class Mono3DFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_pred = nn.Linear(in_channels, 5)
+        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + self.num_bins * 4)
+
+        self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -159,6 +162,8 @@ class Mono3DFasterRCNN(Model):
 
         self.visualizer = FeatVisualizer()
 
+        self.num_bins = 4
+
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']
         gt_boxes = feed_dict['gt_boxes']
@@ -166,14 +171,15 @@ class Mono3DFasterRCNN(Model):
         #  gt_boxes_3d = feed_dict['coords']
         #  dims_2d = feed_dict['dims_2d']
         # use local angle
-        oritations = feed_dict['local_angle_oritation']
+        #  oritations = feed_dict['local_angle_oritation']
+        local_angle = feed_dict['local_angle']
 
         # shape(N,7)
         gt_boxes_3d = feed_dict['gt_boxes_3d']
 
         # here just concat them
         # dims and their projection
-        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], oritations], dim=-1)
+        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], local_angle], dim=-1)
 
         ##########################
         # assigner
@@ -262,8 +268,14 @@ class Mono3DFasterRCNN(Model):
 
         # 3d loss
         rcnn_3d = prediction_dict['rcnn_3d']
-        rcnn_3d_loss = self.rcnn_bbox_loss(rcnn_3d, rcnn_reg_targets_3d).sum(
-            dim=-1)
+        # dims
+        rcnn_3d_loss_dims = self.rcnn_bbox_loss(
+            rcnn_3d[:, :3], rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
+
+        # angles
+        rcnn_3d_loss_angles = self.rcnn_3d_loss(
+            rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, -1:]).sum(dim=-1)
+        rcnn_3d_loss = rcnn_3d_loss_dims + rcnn_3d_loss_angles
         rcnn_3d_loss *= rcnn_reg_weights_3d
         rcnn_3d_loss = rcnn_bbox_loss.sum(dim=-1)
 

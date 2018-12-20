@@ -331,8 +331,8 @@ def compute_local_angle(center_2d, p2, ry):
         center_2d: shape(N, 2)
         p2: shape(3,4)
     """
-    # import ipdb
-    # ipdb.set_trace()
+    #  import ipdb
+    #  ipdb.set_trace()
     M = p2[:, :3]
     center_2d_homo = np.concatenate(
         [center_2d, np.ones_like(center_2d[-1:])], axis=-1)
@@ -342,6 +342,8 @@ def compute_local_angle(center_2d, p2, ry):
         direction_vector, axis=-1)
     ray_angle = np.arccos(cos)
     local_angle = ry + ray_angle
+    if local_angle > np.pi:
+        local_angle = local_angle - 2 * np.pi
     return local_angle
 
 
@@ -361,6 +363,10 @@ def compute_global_angle(center_2d, p2, local_angle):
         direction_vector, axis=-1)
     ray_angle = np.arccos(cos)
     ry = local_angle - ray_angle
+    # if ry < -np.pi:
+    # ry += np.pi
+    cond = ry < -np.pi
+    ry[cond] = ry[cond] + 2 * np.pi
     return ry
 
 
