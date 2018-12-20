@@ -341,7 +341,7 @@ def compute_local_angle(center_2d, p2, ry):
     cos = np.dot(direction_vector, x_vector.T) / np.linalg.norm(
         direction_vector, axis=-1)
     ray_angle = np.arccos(cos)
-    local_angle = ry - ray_angle
+    local_angle = ry + ray_angle
     return local_angle
 
 
@@ -356,11 +356,11 @@ def compute_global_angle(center_2d, p2, local_angle):
     center_2d_homo = np.concatenate(
         [center_2d, np.ones_like(center_2d[:, -1:])], axis=-1)
     direction_vector = np.dot(np.linalg.inv(M), center_2d_homo.T).T
-    x_vector = np.array([1, 0, 0]).reshape(1, 3)
-    cos = np.dot(direction_vector, x_vector.T) / np.linalg.norm(
+    x_vector = np.array([1, 0, 0])
+    cos = np.dot(direction_vector, x_vector) / np.linalg.norm(
         direction_vector, axis=-1)
     ray_angle = np.arccos(cos)
-    ry = local_angle + ray_angle
+    ry = local_angle - ray_angle
     return ry
 
 

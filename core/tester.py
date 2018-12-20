@@ -106,11 +106,16 @@ def test(eval_config, data_loader, model):
                 rcnn_3d = rcnn_3d.detach().cpu().numpy()
 
                 # use gt
-                use_gt = True
+                use_gt = False
 
                 if use_gt:
+                    # import ipdb
+                    # ipdb.set_trace()
+                    local_angles_gt = data['local_angle'][0].detach().cpu(
+                    ).numpy()
+                    global_angles_gt = gt_boxes_3d[:, -1:]
                     rcnn_3d_gt = np.concatenate(
-                        [gt_boxes_3d[:, :3], gt_boxes_3d[:, -1:]], axis=-1)
+                        [gt_boxes_3d[:, :3], local_angles_gt], axis=-1)
                     # just for debug
                     if len(rcnn_3d_gt):
                         cls_dets_gt = np.concatenate(
@@ -119,9 +124,9 @@ def test(eval_config, data_loader, model):
                         rcnn_3d_gt = mono_3d_postprocess_bbox(rcnn_3d_gt,
                                                               cls_dets_gt, p2)
 
-                        rcnn_3d[:, 0] = 1.5
-                        rcnn_3d[:, 1] = 1.7
-                        rcnn_3d[:, 2] = 3.6
+                        #  rcnn_3d[:, 0] = 1.5
+                        #  rcnn_3d[:, 1] = 1.7
+                        #  rcnn_3d[:, 2] = 3.6
 
                         dets.append(
                             np.concatenate(
@@ -132,6 +137,9 @@ def test(eval_config, data_loader, model):
                         res_anchors.append([])
                         dets_3d.append([])
                 else:
+                    #  import ipdb
+                    #  ipdb.set_trace()
+                    #  rcnn_3d[:, :-1] = gt_boxes_3d[:, :3]
                     rcnn_3d = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
 

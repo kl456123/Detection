@@ -221,7 +221,12 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     num = dets_3d.shape[0]
     ry_local = dets_3d[:, -1]
     # compute global angle
-    ry = compute_global_angle(ry_local)
+    # center of 2d
+    center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
+    center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
+    center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
+    ry = compute_global_angle(center_2d, p2, ry_local)
+    # ry = ry_local
 
     zeros = np.zeros_like(ry)
     ones = np.ones_like(ry)
@@ -349,7 +354,7 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     #  ipdb.set_trace()
     translation = np.vstack(rcnn_3d)
     return np.concatenate(
-        [dets_3d[:, :-1], translation, dets_3d[:, -1:]], axis=-1)
+        [dets_3d[:, :-1], translation, ry[..., np.newaxis]], axis=-1)
 
 
 def generate_coeff(points_3d, line_2d):

@@ -229,7 +229,7 @@ def main():
     # final draw it
     #  import ipdb
     #  ipdb.set_trace()
-    boxes_2d = None
+    # boxes_2d = None
     draw_boxes(img, boxes_3d, p2, save_path, title=img_path, box_2d=boxes_2d)
 
 

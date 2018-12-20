@@ -472,6 +472,7 @@ class Boxes3DTo2D(object):
         dims_2d = []
         oritations = []
         local_angle_oritations = []
+        local_angles = []
 
         # 2d bbox get from 3d
         boxes_2d_proj = []
@@ -506,6 +507,7 @@ class Boxes3DTo2D(object):
             # use truely center
             local_angle = compute_local_angle(boxes_2d_proj_center, p2,
                                               target['ry'])
+            local_angles.append([local_angle])
             local_angle_oritations.append(
                 np.asarray([np.sin(local_angle), np.cos(local_angle)]))
 
@@ -530,6 +532,8 @@ class Boxes3DTo2D(object):
         sample['boxes_2d_proj'] = np.round(
             np.stack(
                 boxes_2d_proj, axis=0).astype(np.float32))
+        sample['local_angle'] = np.stack(
+            local_angles, axis=0).astype(np.float32)
         return sample
 
 
