@@ -50,7 +50,8 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
         num_det = 0
         num_tp = 0
         matched_thresh = 0
-
+        angle_num_tp = 0
+        angle_num_all = 0
         for step, data in enumerate(data_loader):
 
             data = to_cuda(data)
@@ -90,6 +91,8 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             num_det += stat['num_det']
             num_tp += stat['num_tp']
             matched_thresh += stat['matched_thresh']
+            angle_num_tp += stat['angle_num_tp'].item()
+            angle_num_all += stat['angle_num_all']
             if step % disp_interval == 0:
                 end = time.time()
 
@@ -128,12 +131,17 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
                 print((
                     "\t\t\tmatched_gt_thresh/all_gt/average recall_thresh({}/{}/{:.4f}): "
                 ).format(matched_thresh, num_gt, matched_thresh / num_gt))
+                print("\t\t\tangle_num_tp/angle_num_all({}/{}/{:.4f}): ".
+                      format(angle_num_tp, angle_num_all, angle_num_tp /
+                             angle_num_all))
                 # reset
                 matched = 0
                 num_gt = 0
                 num_tp = 0
                 num_det = 0
                 matched_thresh = 0
+                angle_num_tp = 0
+                angle_num_all = 0
 
                 start = time.time()
 

@@ -199,7 +199,8 @@ if __name__ == '__main__':
     start = time.time()
 
     vis = args.vis
-    data_loader_builder = Mono3DKittiDataLoaderBuilder(data_config, training=True)
+    data_loader_builder = Mono3DKittiDataLoaderBuilder(
+        data_config, training=True)
     data_loader = data_loader_builder.build()
 
     tester.test(eval_config, data_loader, fasterRCNN)

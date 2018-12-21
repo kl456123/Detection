@@ -100,13 +100,16 @@ def test(eval_config, data_loader, model):
 
                 # import ipdb
                 # ipdb.set_trace()
-                rcnn_3d = model.target_assigner.bbox_coder_3d.decode_batch_bbox(
-                    rcnn_3d)
+                # shape(N,3+num_bins*4)
+                #  import ipdb
+                #  ipdb.set_trace()
+                #  rcnn_3d = model.target_assigner.bbox_coder_3d.decode_batch_bbox(
+                #  rcnn_3d, model.rcnn_3d_loss.bin_centers)
 
                 # rcnn_3d_gt = np.concatenate(
-                    # [gt_boxes_3d[:, :3], local_angle_oritation_gt], axis=-1)
+                # [gt_boxes_3d[:, :3], local_angle_oritation_gt], axis=-1)
                 # rcnn_3d_gt = model.target_assigner.bbox_coder_3d.decode_batch_bbox(
-                    # torch.from_numpy(rcnn_3d_gt))
+                # torch.from_numpy(rcnn_3d_gt))
                 #  import ipdb
                 #  ipdb.set_trace()
 
@@ -115,14 +118,16 @@ def test(eval_config, data_loader, model):
                 # rcnn_3d_gt = rcnn_3d_gt.detach().cpu().numpy()
 
                 # use gt
-                use_gt = False
+                use_gt = True
 
                 if use_gt:
-                    # import ipdb
-                    # ipdb.set_trace()
+
+                    if os.path.basename(data['img_name'][0]) == '000015.png':
+                        import ipdb
+                        ipdb.set_trace()
                     global_angles_gt = gt_boxes_3d[:, -1:]
                     rcnn_3d_gt = np.concatenate(
-                         [gt_boxes_3d[:, :3], local_angles_gt], axis=-1)
+                        [gt_boxes_3d[:, :3], local_angles_gt], axis=-1)
                     # just for debug
                     if len(rcnn_3d_gt):
                         cls_dets_gt = np.concatenate(
@@ -246,7 +251,7 @@ def im_detect(model, data, eval_config, im_orig=None):
         #  pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
         pred_boxes = model.target_assigner.bbox_coder.decode_batch(
             box_deltas.view(eval_config['batch_size'], -1, 4), boxes)
-        # pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
+        pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
 
     pred_boxes /= im_scale
     return pred_boxes, scores, rois[:, :, 1:5], anchors, rcnn_3d

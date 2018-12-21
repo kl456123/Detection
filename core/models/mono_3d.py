@@ -82,6 +82,23 @@ class Mono3DFasterRCNN(Model):
         # prediction_dict[
         # 'rcnn_reg_targets_3d'] = self.target_assigner.bbox_coder_3d.encode_batch(
         # final_bbox[0], rcnn_reg_targets_3d)
+        if not self.training:
+            #  import ipdb
+            #  ipdb.set_trace()
+            dims = rcnn_3d[:, :3]
+            angles = rcnn_3d[:, 3:].view(-1, self.num_bins, 4)
+            angles_cls = F.softmax(angles[:, :, :2], dim=-1)
+            _, angles_cls_argmax = torch.max(angles_cls[:, :, 1], dim=-1)
+            row = torch.arange(
+                0, angles_cls_argmax.shape[0]).type_as(angles_cls_argmax)
+            angles_oritations = angles[:, :, 2:][row, angles_cls_argmax]
+            rcnn_3d = torch.cat([dims, angles_oritations], dim=-1)
+            #  import ipdb
+            #  ipdb.set_trace()
+            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
+                rcnn_3d, self.rcnn_3d_loss.bin_centers[angles_cls_argmax])
+            prediction_dict['rcnn_3d'] = rcnn_3d
+            #  prediction_dict['bin_centers'] = self.rcnn_3d_loss.bin_centers[angles_cls_argmax]
 
         return prediction_dict
 
@@ -162,7 +179,7 @@ class Mono3DFasterRCNN(Model):
 
         self.visualizer = FeatVisualizer()
 
-        self.num_bins = 4
+        self.num_bins = 5
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']
@@ -273,8 +290,9 @@ class Mono3DFasterRCNN(Model):
             rcnn_3d[:, :3], rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
 
         # angles
-        rcnn_3d_loss_angles = self.rcnn_3d_loss(
-            rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, -1:]).sum(dim=-1)
+        rcnn_3d_loss_angles, tp_mask = self.rcnn_3d_loss(
+            rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, -1:])
+        rcnn_3d_loss_angles = rcnn_3d_loss_angles.sum(dim=-1)
         rcnn_3d_loss = rcnn_3d_loss_dims + rcnn_3d_loss_angles
         rcnn_3d_loss *= rcnn_reg_weights_3d
         rcnn_3d_loss = rcnn_bbox_loss.sum(dim=-1)
@@ -286,5 +304,16 @@ class Mono3DFasterRCNN(Model):
 
         # add rcnn_cls_targets to get the statics of rpn
         # loss_dict['rcnn_cls_targets'] = rcnn_cls_targets
+
+        # stats
+        #  import ipdb
+        #  ipdb.set_trace()
+        tp_mask = tp_mask[rcnn_reg_weights_3d > 0]
+        angle_num_tp = tp_mask.sum()
+        angle_num_all = tp_mask.numel()
+        self.target_assigner.stat.update({
+            'angle_num_tp': angle_num_tp,
+            'angle_num_all': angle_num_all
+        })
 
         return loss_dict

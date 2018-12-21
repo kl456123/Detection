@@ -205,6 +205,7 @@ def mono_3d_postprocess_dims(dets_3d, dets_2d, p2):
 
 def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     """
+    May be we can improve performance angle prediction by enumerating
     Args:
         dets_3d: shape(N,4) (hwlry)
         dets_2d: shape(N,5) (xyxyc)
@@ -345,11 +346,11 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
 
         results_x = np.stack(results_x, axis=0)
         errors = np.stack(errors, axis=0)
-        idx = errors.argmin()
+        # idx = errors.argmin()
         # final results
         #  import ipdb
         #  ipdb.set_trace()
-        #  idx = match(dets_2d[i, :-1], corners[i], results_x, R[i], p2)
+        idx = match(dets_2d[i, :-1], corners[i], results_x, R[i], p2)
         X = results_x[idx]
         rcnn_3d.append(X)
     #  import ipdb

@@ -3,6 +3,8 @@
 import torch
 import torch.nn as nn
 import math
+from core.ops import get_angle
+import torch.nn.functional as F
 
 
 class MultiBinLoss(nn.Module):
@@ -37,6 +39,9 @@ class MultiBinLoss(nn.Module):
             deltas > 2 * math.pi - self.max_deltas)
         return cls_targets.long()
 
+    def decode_angle(self, encoded_angle):
+        pass
+
     def forward(self, preds, targets):
         """
         data format of preds: num_bins * (conf, sin, cos)
@@ -61,30 +66,21 @@ class MultiBinLoss(nn.Module):
 
         # residual loss
         # reg_targets = self.generate_reg_targets(targets)
-        theta = self.get_angle(preds[:, :, 1], preds[:, :, 2])
+        theta = get_angle(preds[:, :, -2], preds[:, :, -1])
         angle_reg_weights = cls_targets.detach().float()
         angle_reg_loss = -angle_reg_weights * torch.cos(
             targets - self.bin_centers - theta)
         num_covered = angle_reg_weights.sum(dim=-1)
         angle_reg_loss = 1 / num_covered * angle_reg_loss.sum(dim=-1)
 
-        return angle_cls_loss + angle_reg_loss
+        # total_loss = angle_cls_loss + angle_reg_loss
+        total_loss = angle_cls_loss
 
-    def get_angle(self, sin, cos):
-        """
-        Args:
-            sin: shape(N,num_bins)
-        """
-        sin = sin.detach()
-        cos = cos.detach()
-        norm = torch.sqrt(sin * sin + cos * cos)
-        sin /= norm
-        cos /= norm
+        # some stats for meansure the cls precision
+        angle_cls_preds = preds[:, :, :2].detach()
+        angle_cls_probs = F.softmax(angle_cls_preds, dim=-1)
+        angle_cls_probs[angle_cls_probs >= 0.5] = 1
+        angle_cls_probs[angle_cls_probs < 0.5] = 0
+        tp_mask = 1 - (angle_cls_probs[:, :, 1].long() ^ cls_targets)
 
-        # range in [-pi, pi]
-        theta = torch.asin(sin)
-        cond_pos = (cos < 0) & (sin > 0)
-        cond_neg = (cos < 0) & (sin > 0)
-        theta[cond_pos] = math.pi - theta[cond_pos]
-        theta[cond_neg] = -math.pi - theta[cond_neg]
-        return theta
+        return total_loss, tp_mask
