@@ -83,8 +83,8 @@ class Mono3DFasterRCNN(Model):
         # 'rcnn_reg_targets_3d'] = self.target_assigner.bbox_coder_3d.encode_batch(
         # final_bbox[0], rcnn_reg_targets_3d)
         if not self.training:
-            #  import ipdb
-            #  ipdb.set_trace()
+            import ipdb
+            ipdb.set_trace()
             dims = rcnn_3d[:, :3]
             angles = rcnn_3d[:, 3:].view(-1, self.num_bins, 4)
             angles_cls = F.softmax(angles[:, :, :2], dim=-1)

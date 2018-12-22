@@ -119,7 +119,7 @@ CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     --net mono_3d \
     --load_dir /data/object/liangxiong/mono_3d_train_encode_bbox_local_angle_no_proj_5 \
     --checkpoint 3257 \
-    --checkepoch 7
+    --checkepoch 53
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \

@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.linalg import norm
-from utils.kitti_util import compute_global_angle
+from utils.kitti_util import compute_global_angle, roty
 
 
 def mono_3d_postprocess(dets_3d, p2):
@@ -348,9 +348,8 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
         errors = np.stack(errors, axis=0)
         # idx = errors.argmin()
         # final results
-        #  import ipdb
-        #  ipdb.set_trace()
-        idx = match(dets_2d[i, :-1], corners[i], results_x, R[i], p2)
+        idx = match(dets_2d[i, :-1], corners[i], results_x,
+                    R[i][np.newaxis, ...], p2)
         X = results_x[idx]
         rcnn_3d.append(X)
     #  import ipdb
@@ -366,7 +365,7 @@ def generate_coeff(points_3d, line_2d):
     return a, b
 
 
-def match(boxes_2d, corners, trans_3d, r, p):
+def match(boxes_2d, corners, trans_3d, r, p, thresh=None):
     """
     Args:
         boxes_2d: shape(4)
@@ -374,11 +373,9 @@ def match(boxes_2d, corners, trans_3d, r, p):
         trans_3d: shape(64,3)
         ry: shape(3, 3)
     """
-    #  import ipdb
-    #  ipdb.set_trace()
     corners_3d = np.dot(r, corners.T)
     trans_3d = np.repeat(np.expand_dims(trans_3d.T, axis=1), 8, axis=1)
-    corners_3d = corners_3d[..., np.newaxis] + trans_3d
+    corners_3d = corners_3d.transpose((1, 2, 0)) + trans_3d
     corners_3d = corners_3d.reshape(3, -1)
     corners_3d_homo = np.vstack((corners_3d, np.ones(
         (1, corners_3d.shape[1]))))
@@ -396,9 +393,12 @@ def match(boxes_2d, corners, trans_3d, r, p):
     #  import ipdb
     #  ipdb.set_trace()
     bbox_overlaps = py_iou(boxes_2d[np.newaxis, ...], boxes_2d_proj)
-    idx = bbox_overlaps.argmax(axis=-1)
-
-    return idx
+    if thresh is None:
+        idx = bbox_overlaps.argmax(axis=-1)
+        return idx
+    else:
+        keep = np.where(bbox_overlaps > thresh)[1]
+        return keep
 
 
 def py_area(boxes):
@@ -441,3 +441,198 @@ def py_iou(boxes_a, boxes_b):
 
     iou = inner_area / (boxes_a_area + boxes_b_area - inner_area)
     return iou
+
+
+def generate_multi_bins(num_bins):
+    """
+    get all centers of bins
+    """
+    interval = 2 * np.pi / num_bins
+    bin_centers = np.arange(num_bins) * interval
+    cond = bin_centers > np.pi
+    bin_centers[cond] = bin_centers[cond] - 2 * np.pi
+    return bin_centers
+
+
+def mono_3d_postprocess_angle(dets_3d, dets_2d, p2):
+    """
+    May be we can improve performance angle prediction by enumerating
+    Args:
+        dets_3d: shape(N,4) (hwlry)
+        dets_2d: shape(N,5) (xyxyc)
+        p2: shape(4,3)
+    """
+    K = p2[:3, :3]
+    K_homo = np.eye(4)
+    K_homo[:3, :3] = K
+
+    # K*T
+    KT = p2[:, -1]
+    T = np.dot(np.linalg.inv(K), KT)
+
+    num = dets_3d.shape[0]
+    #  ry_local = dets_3d[:, -1]
+    #  ry = ry_local
+
+    #  zeros = np.zeros_like(ry)
+    #  ones = np.ones_like(ry)
+    #  R = np.stack(
+    #  [
+    #  np.cos(ry), zeros, np.sin(ry), zeros, ones, zeros, -np.sin(ry),
+    #  zeros, np.cos(ry)
+    #  ],
+    #  axis=-1).reshape(num, 3, 3)
+
+    l = dets_3d[:, 2]
+    h = dets_3d[:, 0]
+    w = dets_3d[:, 1]
+    zeros = np.zeros_like(w)
+    x_corners = np.stack(
+        [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2], axis=-1)
+    y_corners = np.stack([zeros, zeros, zeros, zeros, -h, -h, -h, -h], axis=-1)
+    z_corners = np.stack(
+        [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2], axis=-1)
+
+    corners = np.stack([x_corners, y_corners, z_corners], axis=-1)
+
+    # after rotation
+    #  corners = np.dot(R, corners)
+
+    top_corners = corners[:, -4:]
+    bottom_corners = corners[:, :4]
+    diag_corners = bottom_corners[:, [2, 3, 0, 1]]
+    #  left_side_corners = bottom_corners[:, [1, 2, 3, 0]]
+    #  right_side_corners = bottom_corners[:, [3, 0, 1, 2]]
+
+    # meshgrid
+    # 4x4x4 in all
+
+    num_top = top_corners.shape[1]
+    num_bottom = bottom_corners.shape[1]
+    top_index, bottom_index, side_index = np.meshgrid(
+        np.arange(num_top), np.arange(num_bottom), np.arange(num_bottom))
+
+    # in object frame
+    # 3d points may be in top and bottom side
+    # all corners' shape: (N,M,3)
+    top_side_corners = top_corners[:, top_index.ravel()]
+    bottom_side_corners = bottom_corners[:, bottom_index.ravel()]
+
+    # 3d points may be in left and right side
+    # both left and right are not difference here
+    left_side_corners = bottom_corners[:, side_index.ravel()]
+    right_side_corners = diag_corners[:, side_index.ravel()]
+
+    num_cases = top_side_corners.shape[1]
+    rcnn_3d = []
+    rcnn_ry = []
+
+    bin_centers = generate_multi_bins(24)
+    #  import ipdb
+    #  ipdb.set_trace()
+    for i in range(num):
+        # for each detection result
+
+        dets_2d_per = dets_2d[i]
+        results_x = []
+        errors = []
+        ry = []
+        R = []
+        for bin_center in bin_centers:
+            # generate Rotation matrix
+            R_per = roty(bin_center)
+            for j in range(num_cases):
+                # four equations so that four coeff matries
+                left_side_corners_per = left_side_corners[i, j]
+                right_side_corners_per = right_side_corners[i, j]
+                top_side_corners_per = top_side_corners[i, j]
+                bottom_side_corners_per = bottom_side_corners[i, j]
+                #  R_per = R[i]
+
+                # left, xmin
+                #  RT = np.eye(4)
+                #  RT[:3, -1] = np.dot(R_per, left_side_corners_per)
+                #  coeff_left = np.dot(K_homo, RT)[0]
+                coeff_left = np.asarray([0, 0, dets_2d_per[0]]) - K[0]
+                M = np.dot(np.dot(K, R_per), left_side_corners_per)
+                bias_left = M[0] - M[2] * dets_2d_per[0]
+
+                # right, xmax
+                #  RT = np.eye(4)
+                #  RT[:3, -1] = np.dot(R_per, right_side_corners_per)
+                #  coeff_right = np.dot(K_homo, RT)[0]
+                coeff_right = np.asarray([0, 0, dets_2d_per[2]]) - K[0]
+                M = np.dot(np.dot(K, R_per), right_side_corners_per)
+                bias_right = M[0] - M[2] * dets_2d_per[2]
+
+                # top, ymin
+                #  RT = np.eye(4)
+                #  RT[:3, -1] = np.dot(R_per, top_side_corners_per)
+                #  coeff_top = np.dot(K_homo, RT)[1]
+                coeff_top = np.asarray([0, 0, dets_2d_per[1]]) - K[1]
+                M = np.dot(np.dot(K, R_per), top_side_corners_per)
+                bias_top = M[1] - M[2] * dets_2d_per[1]
+
+                # bottom, ymax
+                #  RT = np.eye(4)
+                #  RT[:3, -1] = np.dot(R_per, bottom_side_corners_per)
+                #  coeff_bottom = np.dot(K_homo, RT)[1]
+                coeff_bottom = np.asarray([0, 0, dets_2d_per[3]]) - K[1]
+                M = np.dot(np.dot(K, R_per), bottom_side_corners_per)
+                bias_bottom = M[1] - M[2] * dets_2d_per[3]
+
+                A = np.vstack(
+                    [coeff_left, coeff_top, coeff_right, coeff_bottom])
+                b = np.asarray([bias_left, bias_top, bias_right, bias_bottom])
+                #  A = coeff_matrix[:, :-1]
+                #  b = dets_2d_per[:-1] - A[:, -1]
+
+                # svd reconstruction error
+                res = np.linalg.lstsq(A, b)
+                # origin of object frame
+                results_x.append(res[0] - T)
+                # errors
+                if len(res[1]):
+                    errors.append(res[1])
+                else:
+                    errors.append(np.zeros(1))
+
+                ry.append(bin_center)
+                R.append(R_per)
+
+        results_x = np.stack(results_x, axis=0)
+        errors = np.stack(errors, axis=0)
+        ry = np.stack(ry, axis=0)
+        R = np.stack(R, axis=0)
+
+        # two methods
+        #  import ipdb
+        #  ipdb.set_trace()
+        keep = match(dets_2d[i, :-1], corners[i], results_x, R, p2, thresh=0.8)
+        if keep.size:
+            errors = errors[keep]
+            results_x = results_x[keep]
+            ry = ry[keep]
+            R = R[keep]
+        idx = errors.argmin()
+        if errors[idx] > 1e3:
+            print('error is too large: {}'.format(errors[idx]))
+
+        # top cases
+        #  import ipdb
+        #  ipdb.set_trace()
+        #  keep = np.argsort(errors.flatten())[:30]
+        #  results_x = results_x[keep]
+        #  ry = ry[keep]
+        #  R = R[keep]
+        #  idx = match(dets_2d[i, :-1], corners[i], results_x, R, p2)
+        X = results_x[idx]
+        rcnn_3d.append(X)
+        rcnn_ry.append(ry[idx])
+    #  import ipdb
+    #  ipdb.set_trace()
+    translation = np.vstack(rcnn_3d)
+    rcnn_ry = np.vstack(rcnn_ry)
+    #  import ipdb
+    #  ipdb.set_trace()
+    return np.concatenate([dets_3d[:, :-1], translation, rcnn_ry], axis=-1)

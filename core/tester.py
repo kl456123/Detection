@@ -6,7 +6,7 @@ from lib.model.rpn.bbox_transform import bbox_transform_inv
 from lib.model.rpn.bbox_transform import clip_boxes
 from lib.model.nms.nms_wrapper import nms
 from utils.visualize import save_pkl, visualize_bbox
-from utils.postprocess import mono_3d_postprocess_bbox
+from utils.postprocess import mono_3d_postprocess_angle, mono_3d_postprocess_bbox
 import numpy as np
 import torch
 import os
@@ -118,13 +118,13 @@ def test(eval_config, data_loader, model):
                 # rcnn_3d_gt = rcnn_3d_gt.detach().cpu().numpy()
 
                 # use gt
-                use_gt = True
+                use_gt = False
 
                 if use_gt:
 
-                    if os.path.basename(data['img_name'][0]) == '000015.png':
-                        import ipdb
-                        ipdb.set_trace()
+                    # if os.path.basename(data['img_name'][0]) == '000015.png':
+                    # import ipdb
+                    # ipdb.set_trace()
                     global_angles_gt = gt_boxes_3d[:, -1:]
                     rcnn_3d_gt = np.concatenate(
                         [gt_boxes_3d[:, :3], local_angles_gt], axis=-1)
@@ -133,8 +133,8 @@ def test(eval_config, data_loader, model):
                         cls_dets_gt = np.concatenate(
                             [gt_boxes, np.zeros_like(gt_boxes[:, -1:])],
                             axis=-1)
-                        rcnn_3d_gt = mono_3d_postprocess_bbox(rcnn_3d_gt,
-                                                              cls_dets_gt, p2)
+                        rcnn_3d_gt = mono_3d_postprocess_angle(rcnn_3d_gt,
+                                                               cls_dets_gt, p2)
 
                         #  rcnn_3d[:, 0] = 1.5
                         #  rcnn_3d[:, 1] = 1.7
@@ -149,8 +149,8 @@ def test(eval_config, data_loader, model):
                         res_anchors.append([])
                         dets_3d.append([])
                 else:
-                    import ipdb
-                    ipdb.set_trace()
+                    # import ipdb
+                    # ipdb.set_trace()
                     #  rcnn_3d[:, :-1] = gt_boxes_3d[:, :3]
                     rcnn_3d = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))

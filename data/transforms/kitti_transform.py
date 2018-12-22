@@ -456,7 +456,7 @@ class BEVToTensor(object):
 
 
 class Boxes3DTo2D(object):
-    def __init__(self, use_proj_2d=False):
+    def __init__(self, use_proj_2d=True):
         self.use_proj_2d = use_proj_2d
 
     def __call__(self, sample):
