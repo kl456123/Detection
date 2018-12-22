@@ -180,10 +180,10 @@
 # --model /data/object/liangxiong/double_iou/double_iou/kitti/faster_rcnn_53_3257.pth \
     # --lr 1e-5
 
-CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
-    --net semantic \
-    --out_path /data/object/liangxiong/semantic_test \
-    --config configs/refine_kitti_config.json
+# CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+    # --net semantic \
+    # --out_path /data/object/liangxiong/semantic_test \
+    # --config configs/refine_kitti_config.json
     # --r True \
     # --checkpoint 3257 \
     # --checkepoch 55
@@ -349,3 +349,8 @@ CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 10 \
     # --r True
+
+CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+    --net refine \
+    --out_path /data/object/liangxiong/refine \
+    --config configs/refine_kitti_config.json

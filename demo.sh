@@ -3,21 +3,21 @@
 SAMPLE_IDX=000063
 # SAMPLE_IDX=000128
 # SAMPLE_IDX=000047
-# SAMPLE_IDX=000004
-CHECKEPOCH=50
+SAMPLE_IDX=000008
+CHECKEPOCH=48
 
 # dont use rpn
 NMS=1
 THRESH=0
 
 # use results which stage
-USE_WHICH_RESULT=rcnn_match
+USE_WHICH_RESULT=none
 FAKE_MATCH_THRESH=0.7
 
 # NET=semantic
 # NET_NAME=detach_double_iou
-NET_NAME=post_cls
-NET_DIR=post_cls
+NET_NAME=post_iou
+NET_DIR=post_iou
 USE_GT=True
 
 # use model directly(prior if available)
@@ -38,9 +38,9 @@ CUDA_VISIBLE_DEVICES=0 python test_net.py \
     --use_which_result ${USE_WHICH_RESULT} \
     --fake_match_thresh ${FAKE_MATCH_THRESH} \
     --use_gt ${USE_GT}
-    # --feat_vis True
     # --model ${MODEL_PATH} \
     # --config ${CONFIG_PATH} \
+    # --feat_vis True
 
 # vis pred
 python utils/visualize.py \

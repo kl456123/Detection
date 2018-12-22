@@ -206,10 +206,13 @@ def test(eval_config, data_loader, model):
             rois = rois[match_inds]
             anchors = anchors[match_inds]
         else:
+            # import ipdb
+            # ipdb.set_trace()
             # new postprocess
-            keep = super_nms(pred_boxes, nms_num=3, nms_thresh=0.9)
+            keep = super_nms(pred_boxes, nms_num=3, nms_thresh=0.8, loop_time=10)
             # keep = torch.ones_like(keep)
             # print('num of keep {}'.format(keep.numel()))
+
 
             scores = scores[keep]
             rois_scores = rois_scores[keep]

@@ -5,63 +5,121 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from core.model import Model
-from core.models.refine_rpn_model import RefineRPNModel
+from core.models.double_iou_rpn_model import RPNModel
 from core.models.focal_loss import FocalLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
+from model.psroi_pooling.modules.psroi_pool import PSRoIPool
 
 from core.filler import Filler
-from core.refine_target_assigner import RefineTargetAssigner
+from core.refine_target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
-from core.models.feature_extractor_model import FeatureExtractor
+from core.models.feature_extractors.resnet import ResNetFeatureExtractor
+from core.samplers.detection_sampler import DetectionSampler
+
+from utils import box_ops
+import copy
 
 import functools
 
 
 class RefineFasterRCNN(Model):
     def forward(self, feed_dict):
+        # some pre forward hook
+        self.clean_stats()
 
         prediction_dict = {}
 
+        ################################
+        # first stage
+        ################################
         # base model
-        base_feat = self.feature_extractor.first_stage_feature(
-            feed_dict['img'])
+        if self.multiple_crop:
+            feat2 = self.feature_extractor.first_stage_feature[:-1](
+                feed_dict['img'])
+            base_feat = self.feature_extractor.first_stage_feature[-1](feat2)
+            feed_dict.update({'feat2': feat2})
+        else:
+            base_feat = self.feature_extractor.first_stage_feature(
+                feed_dict['img'])
         feed_dict.update({'base_feat': base_feat})
-        # batch_size = base_feat.shape[0]
+        self.add_feat('base_feat', base_feat)
 
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
 
-        # proposals = prediction_dict['proposals_batch']
-        # shape(N,num_proposals,5)
+        #####################################
+        # second stage(bbox regression)
+        #####################################
         # pre subsample for reduce consume of memory
-        if self.training:
-            self.pre_subsample(prediction_dict, feed_dict)
+        if self.training and self.enable_reg:
+            # append gt
+            # if self.use_gt:
+            # prediction_dict['rois_batch'] = self.append_gt(
+            # prediction_dict['rois_batch'], feed_dict['gt_boxes'])
+            stats = self.pre_subsample(prediction_dict, feed_dict)
+            # rois stats
+            self.stats.update(stats)
         rois_batch = prediction_dict['rois_batch']
 
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
         pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
 
+        # although it must be true
+        #  if self.enable_reg:
         # shape(N,C,1,1)
-        pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
-        # shape(N,C)
-        pooled_feat = pooled_feat.mean(3).mean(2)
+        pooled_feat_reg = self.feature_extractor.second_stage_feature(
+            pooled_feat)
 
-        rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
-        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
+        pooled_feat_reg = pooled_feat_reg.mean(3).mean(2)
+        rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat_reg)
+        prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
 
+        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat_reg)
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
         prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
-        prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
         prediction_dict['rcnn_cls_scores'] = rcnn_cls_scores
 
-        # used for track
+        # used for tracking
         proposals_order = prediction_dict['proposals_order']
-        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][0][
+        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
             proposals_order]
+        prediction_dict['second_rpn_cls_probs'] = prediction_dict[
+            'rpn_cls_probs'][0][proposals_order]
+
+        ###########################################
+        # third stage(predict scores of final bbox)
+        ###########################################
+
+        # decode rcnn bbox, generate rcnn rois batch
+        pred_boxes = self.bbox_coder.decode_batch(
+            rcnn_bbox_preds.view(1, -1, 4), rois_batch[:, :, 1:5])
+        rcnn_rois_batch = torch.zeros_like(rois_batch)
+        rcnn_rois_batch[:, :, 1:5] = pred_boxes.detach()
+        prediction_dict['rcnn_rois_batch'] = rcnn_rois_batch
+
+        ###################################
+        # stats
+        ###################################
+        stats = self.target_assigner.assign(rcnn_rois_batch[:, :, 1:],
+                                            feed_dict['gt_boxes'],
+                                            feed_dict['gt_labels'])[-1]
+        self.rcnn_stats.update(stats)
 
         return prediction_dict
+
+    # def append_gt(self, rois_batch, gt_boxes):
+    # ################################
+    # # append gt_boxes to rois_batch for losses
+    # ################################
+    # # may be some bugs here
+    # gt_boxes_append = torch.zeros(gt_boxes.shape[0], gt_boxes.shape[1],
+    # 5).type_as(gt_boxes)
+    # gt_boxes_append[:, :, 1:5] = gt_boxes[:, :, :4]
+    # # cat gt_boxes to rois_batch
+    # rois_batch = torch.cat([rois_batch, gt_boxes_append], dim=1)
+    # return rois_batch
 
     def init_weights(self):
         # submodule init weights
@@ -72,27 +130,42 @@ class RefineFasterRCNN(Model):
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
     def init_modules(self):
-        self.feature_extractor = FeatureExtractor(
+        self.feature_extractor = ResNetFeatureExtractor(
             self.feature_extractor_config)
-        #  self.rpn_model = RPNModel(self.rpn_config)
-        self.rpn_model = RefineRPNModel(self.rpn_config)
-        self.rcnn_pooling = RoIAlignAvg(self.pooling_size, self.pooling_size,
-                                        1.0 / 16.0)
+        self.rpn_model = RPNModel(self.rpn_config)
+        if self.pooling_mode == 'align':
+            self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
+                                            self.pooling_size, 1.0 / 16.0)
+        elif self.pooling_mode == 'ps':
+            self.rcnn_pooling = PSRoIPool(7, 7, 1.0 / 16, 7, self.n_classes)
+        elif self.pooling_mode == 'psalign':
+            raise NotImplementedError('have not implemented yet!')
+        elif self.pooling_mode == 'deformable_psalign':
+            raise NotImplementedError('have not implemented yet!')
         self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
-        if self.class_agnostic:
-            self.rcnn_bbox_pred = nn.Linear(2048, 4)
+        if self.reduce:
+            in_channels = 2048
         else:
-            self.rcnn_bbox_pred = nn.Linear(2048, 4 * self.n_classes)
+            in_channels = 2048 * 4 * 4
+        if self.class_agnostic:
+            self.rcnn_bbox_pred = nn.Linear(in_channels, 4)
+        else:
+            self.rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
 
         # loss module
-        # if self.use_focal_loss:
-        # self.rcnn_cls_loss = FocalLoss(2)
-        # else:
-        # self.rcnn_cls_loss = functools.partial(
-        # F.cross_entropy, reduce=False)
+        if self.use_focal_loss:
+            self.rcnn_cls_loss = FocalLoss(2, alpha=0.25, gamma=2)
+        else:
+            self.rcnn_cls_loss = functools.partial(
+                F.cross_entropy, reduce=False)
 
-        self.rcnn_cls_loss = nn.MSELoss(reduce=False)
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
+
+        if self.multiple_crop:
+            self.rcnn_pooling2 = RoIAlignAvg(self.pooling_size,
+                                             self.pooling_size, 1.0 / 8.0)
+            #  1x1 fusion
+            self.pooled_feat_fusion = nn.Conv2d(512, 1024, 1, 1, 0)
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -114,65 +187,135 @@ class RefineFasterRCNN(Model):
         self.rpn_config = model_config['rpn_config']
 
         # assigner
-        self.target_assigner = RefineTargetAssigner(
+        self.target_assigner = TargetAssigner(
             model_config['target_assigner_config'])
 
+        # bbox_coder
+        self.bbox_coder = self.target_assigner.bbox_coder
+
+        # similarity
+        self.similarity_calc = self.target_assigner.similarity_calc
+
         # sampler
-        # self.sampler = HardNegativeSampler(model_config['sampler_config'])
         self.sampler = BalancedSampler(model_config['sampler_config'])
 
-    def pre_subsample(self, prediction_dict, feed_dict):
-        rois_batch = prediction_dict['rois_batch']
+        # self.reduce = model_config.get('reduce')
+        self.reduce = True
+
+        # optimize cls
+        self.enable_cls = False
+
+        # optimize reg
+        self.enable_reg = True
+
+        # cal iou
+        self.enable_iou = False
+
+        # track good rois
+        self.enable_track_rois = True
+        self.enable_track_rcnn_rois = True
+
+        # eval the final bbox
+        self.enable_eval_final_bbox = True
+
+        # if self.enable_eval_final_bbox:
+        self.subsample = True
+
+        self.multiple_crop = False
+
+    def clean_stats(self):
+        # rois bbox
+        self.stats = {
+            'num_det': 1,
+            'num_tp': 0,
+            'matched_thresh': 0,
+            'recall_thresh': 0,
+            'match': None
+        }
+
+        # rcnn bbox(final bbox)
+        self.rcnn_stats = {
+            'num_det': 1,
+            'num_tp': 0,
+            'matched_thresh': 0,
+            'recall_thresh': 0,
+            'match': None
+        }
+
+    def pre_subsample(self, prediction_dict, feed_dict, stage='rpn'):
+        if stage == 'rpn':
+            rois_name = 'rois_batch'
+        else:
+            rois_name = 'rcnn_rois_batch'
+
+        rois_batch = prediction_dict[rois_name]
+
         gt_boxes = feed_dict['gt_boxes']
         gt_labels = feed_dict['gt_labels']
+
+        # append gt
+        # rois_batch = self.append_gt(rois_batch, gt_boxes)
 
         ##########################
         # assigner
         ##########################
-        #  import ipdb
-        #  ipdb.set_trace()
-        rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights = self.target_assigner.assign(
+        # import ipdb
+        # ipdb.set_trace()
+        rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights, stats = self.target_assigner.assign(
             rois_batch[:, :, 1:], gt_boxes, gt_labels)
 
         ##########################
         # subsampler
         ##########################
-        pos_indicator = rcnn_cls_targets > 0
-        indicator = rcnn_cls_weights > 0
+        if self.subsample:
+            cls_criterion = None
 
-        # subsample from all
-        # shape (N,M)
-        batch_sampled_mask = self.sampler.subsample_batch(
-            self.rcnn_batch_size, pos_indicator, indicator=indicator)
+            # used for reg training
+            pos_indicator = rcnn_reg_weights > 0
+
+            # just training cls by using bg
+            indicator = (rcnn_cls_weights > 0) | pos_indicator
+
+            # subsample from all
+            # shape (N,M)
+            batch_sampled_mask = self.sampler.subsample_batch(
+                self.rcnn_batch_size,
+                pos_indicator,
+                indicator=indicator,
+                criterion=cls_criterion)
+        else:
+            batch_sampled_mask = torch.ones_like(rcnn_cls_weights > 0)
+
+        #  import ipdb
+        #  ipdb.set_trace()
         rcnn_cls_weights = rcnn_cls_weights[batch_sampled_mask]
-        rcnn_reg_weights = rcnn_reg_weights[batch_sampled_mask]
-        num_cls_coeff = rcnn_cls_weights.type(torch.cuda.ByteTensor).sum(
-            dim=-1)
-        num_reg_coeff = rcnn_reg_weights.type(torch.cuda.ByteTensor).sum(
-            dim=-1)
-        # check
+        num_cls_coeff = (rcnn_cls_weights > 0).sum(dim=-1)
         assert num_cls_coeff, 'bug happens'
-        assert num_reg_coeff, 'bug happens'
-
         prediction_dict[
             'rcnn_cls_weights'] = rcnn_cls_weights / num_cls_coeff.float()
-        prediction_dict[
-            'rcnn_reg_weights'] = rcnn_reg_weights / num_reg_coeff.float()
+
+        # used for retriving statistic
         prediction_dict['rcnn_cls_targets'] = rcnn_cls_targets[
             batch_sampled_mask]
+
+        # used for fg/bg
+        rcnn_reg_weights = rcnn_reg_weights[batch_sampled_mask]
+        num_reg_coeff = (rcnn_reg_weights > 0).sum(dim=-1)
+        num_reg_coeff = torch.max(num_reg_coeff,
+                                  torch.ones_like(num_reg_coeff))
+        prediction_dict[
+            'rcnn_reg_weights'] = rcnn_reg_weights / num_reg_coeff.float()
+
         prediction_dict['rcnn_reg_targets'] = rcnn_reg_targets[
             batch_sampled_mask]
 
+        # here use rcnn_target_assigner for final bbox pred
+        stats['match'] = stats['match'][batch_sampled_mask]
+
         # update rois_batch
-        prediction_dict['rois_batch'] = rois_batch[batch_sampled_mask].view(
+        prediction_dict[rois_name] = rois_batch[batch_sampled_mask].view(
             rois_batch.shape[0], -1, 5)
-
-        if not self.training:
-            # used for track
-            proposals_order = prediction_dict['proposals_order']
-
-            prediction_dict['proposals_order'] = proposals_order[
-                batch_sampled_mask]
+        return stats
 
     def loss(self, prediction_dict, feed_dict):
         """
@@ -182,41 +325,37 @@ class RefineFasterRCNN(Model):
         loss_dict = {}
 
         # submodule loss
-        loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
+
+        # add rcnn_cls_targets to get the statics of rpn
+        #  loss_dict['rcnn_cls_targets'] = rcnn_cls_targets
 
         # targets and weights
+        # cls
         rcnn_cls_weights = prediction_dict['rcnn_cls_weights']
-        rcnn_reg_weights = prediction_dict['rcnn_reg_weights']
 
         rcnn_cls_targets = prediction_dict['rcnn_cls_targets']
-        rcnn_reg_targets = prediction_dict['rcnn_reg_targets']
-
         # classification loss
-        rcnn_cls_probs = prediction_dict['rcnn_cls_probs']
-        fg_rcnn_cls_probs = rcnn_cls_probs[:, 1]
-        # exp
-        fg_rcnn_cls_probs = torch.exp(fg_rcnn_cls_probs)
-        rcnn_cls_targets = torch.exp(rcnn_cls_targets)
-        #  import ipdb
-        #  ipdb.set_trace()
-        rcnn_cls_loss = self.rcnn_cls_loss(
-            fg_rcnn_cls_probs, rcnn_cls_targets.type_as(fg_rcnn_cls_probs))
+        rcnn_cls_scores = prediction_dict['rcnn_cls_scores']
+        rcnn_cls_loss = self.rcnn_cls_loss(rcnn_cls_scores, rcnn_cls_targets)
         rcnn_cls_loss *= rcnn_cls_weights
         rcnn_cls_loss = rcnn_cls_loss.sum(dim=-1)
+
+        loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
+
+        # reg
+        loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
+
+        rcnn_reg_weights = prediction_dict['rcnn_reg_weights']
+        rcnn_reg_targets = prediction_dict['rcnn_reg_targets']
 
         # bounding box regression L1 loss
         rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']
         rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
                                              rcnn_reg_targets).sum(dim=-1)
         rcnn_bbox_loss *= rcnn_reg_weights
-        # rcnn_bbox_loss *= rcnn_reg_weights
         rcnn_bbox_loss = rcnn_bbox_loss.sum(dim=-1)
 
         # loss weights has no gradients
-        loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
         loss_dict['rcnn_bbox_loss'] = rcnn_bbox_loss
-
-        # add rcnn_cls_targets to get the statics of rpn
-        loss_dict['rcnn_cls_targets'] = rcnn_cls_targets
 
         return loss_dict

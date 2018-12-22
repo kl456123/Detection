@@ -83,7 +83,7 @@ class RPNModel(Model):
         # cls
         if self.use_focal_loss:
             self.rpn_cls_loss = FocalLoss(
-                2, alpha=1, gamma=2, auto_alpha=False)
+                2, alpha=0.2, gamma=2, auto_alpha=False)
         else:
             self.rpn_cls_loss = functools.partial(
                 F.cross_entropy, reduce=False)

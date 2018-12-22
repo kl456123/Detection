@@ -99,7 +99,7 @@ def intersection(bbox, gt_boxes):
     return inter_boxes
 
 
-def super_nms(bboxes, nms_thresh=0.8, nms_num=2):
+def super_nms(bboxes, nms_thresh=0.8, nms_num=2, loop_time=1):
     """
     Args:
         bboxes: shape(N,4)
@@ -118,7 +118,14 @@ def super_nms(bboxes, nms_thresh=0.8, nms_num=2):
     match_quality_matrix[match_mask] = 1
     match_quality_matrix[~match_mask] = 0
 
-    # shape(M,)
+    for i in range(loop_time):
+        # shape(M,)
+        match_num = match_quality_matrix.sum(dim=-1)
+        remain_unmatch_inds = torch.nonzero(match_num <= nms_num + 1)[:, 0]
+        match_quality_matrix = match_quality_matrix.transpose(0, 1)
+        match_quality_matrix[remain_unmatch_inds] = 0
+        match_quality_matrix = match_quality_matrix.transpose(0, 1)
+
     match_num = match_quality_matrix.sum(dim=-1)
     # exclude self
     remain_match_inds = torch.nonzero(match_num > (nms_num + 1))

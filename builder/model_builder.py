@@ -5,7 +5,7 @@ from core.models.faster_rcnn_model import FasterRCNN
 # from core.models.two_rpn_model import TwoRPNModel
 # from core.models.new_faster_rcnn_model import NewFasterRCNN
 # from core.models.distance_faster_rcnn_model import DistanceFasterRCNN
-# from core.models.refine_faster_rcnn_model import RefineFasterRCNN
+from core.models.refine_faster_rcnn_model import RefineFasterRCNN
 # from core.models.gate_faster_rcnn_model import GateFasterRCNN
 # from core.models.rfcn_model import RFCNModel
 from core.models.semantic_faster_rcnn_model import SemanticFasterRCNN
@@ -65,7 +65,7 @@ def build(model_config, training=True):
         fasterRCNN = NewFasterRCNN(model_config)
     elif net_arch == 'distance_faster_rcnn':
         fasterRCNN = DistanceFasterRCNN(model_config)
-    elif net_arch == 'refine_faster_rcnn':
+    elif net_arch == 'refine':
         fasterRCNN = RefineFasterRCNN(model_config)
     elif net_arch == 'gate_faster_rcnn':
         fasterRCNN = GateFasterRCNN(model_config)

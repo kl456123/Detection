@@ -13,7 +13,7 @@ from builder import bbox_coder_builder
 from builder import similarity_calc_builder
 
 
-class RefineTargetAssigner(object):
+class TargetAssigner(object):
     def __init__(self, assigner_config):
 
         # some compositions
@@ -32,7 +32,12 @@ class RefineTargetAssigner(object):
     def stat(self):
         return self.analyzer.stat
 
-    def assign(self, bboxes, gt_boxes, gt_labels=None, cls_prob=None):
+    def assign(self,
+               bboxes,
+               gt_boxes,
+               gt_labels=None,
+               cls_prob=None,
+               match=None):
         """
         Assign each bboxes with label and bbox targets for training
 
@@ -47,24 +52,20 @@ class RefineTargetAssigner(object):
         bboxes = bboxes.detach()
         match_quality_matrix = self.similarity_calc.compare_batch(bboxes,
                                                                   gt_boxes)
-
+        # match 0.7 for truly recall calculation
+        fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
+        stats = self.analyzer.analyze(fake_match, gt_boxes.shape[1])
         # match
         # shape(N,K)
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
-
-        self.analyzer.analyze(match, gt_boxes.shape[1])
-
-        # get assigned infomation
-        # shape (num_batch,num_boxes)
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
+        stats['iou'] = assigned_overlaps_batch
 
         # assign regression targets
         reg_targets = self._assign_regression_targets(match, bboxes, gt_boxes)
 
         # assign classification targets
-        #  cls_targets = self._assign_classification_targets(match, gt_labels,
-        #  assigned_overlaps_batch)
-        cls_targets = assigned_overlaps_batch.clone()
+        cls_targets = self._assign_classification_targets(match, gt_labels)
 
         # create regression weights
         reg_weights = self._create_regression_weights(assigned_overlaps_batch)
@@ -82,12 +83,12 @@ class RefineTargetAssigner(object):
         reg_weights[match == -1] = 0
 
         # as for cls weights, ignore according to bg_thresh
-        if self.bg_thresh > 0:
-            ignored_bg = (assigned_overlaps_batch > self.bg_thresh) & (
-                match == -1)
-            cls_weights[ignored_bg] = 0
+        #  if self.bg_thresh > 0:
+        #  ignored_bg = (assigned_overlaps_batch > self.bg_thresh) & (
+        #  match == -1)
+        #  cls_weights[ignored_bg] = 0
 
-        return cls_targets, reg_targets, cls_weights, reg_weights
+        return cls_targets, reg_targets, cls_weights, reg_weights, stats
 
     def _create_regression_weights(self, assigned_overlaps_batch):
         """
@@ -98,24 +99,24 @@ class RefineTargetAssigner(object):
         """
         #  gamma = 2
         #  return torch.pow(1 - assigned_overlaps_batch, gamma).detach()
-        #  return torch.ones_like(assigned_overlaps_batch
-        return assigned_overlaps_batch.clone()
+        return torch.ones_like(assigned_overlaps_batch)
 
     def _create_classification_weights(self, assigned_overlaps_batch):
         """
         All samples can be used for calculating loss,So reserve all.
         """
-        #  cls_weights = torch.ones_like(assigned_overlaps_batch)
-        #  return cls_weights
-        return assigned_overlaps_batch.clone()
+        # just bg to be trained
+        cls_weights = torch.zeros_like(assigned_overlaps_batch)
+        cls_weights[assigned_overlaps_batch == 0] = 1
+        return cls_weights
 
     def _assign_regression_targets(self, match, bboxes, gt_boxes):
         """
         Args:
-            match: Tensor(num_batch,num_boxes)
-            gt_boxes: Tensor(num_batch,num_gt_boxes,4)
+        match: Tensor(num_batch,num_boxes)
+        gt_boxes: Tensor(num_batch,num_gt_boxes,4)
         Returns:
-            reg_targets: Tensor(num_batch,num_boxes,4)
+        reg_targets: Tensor(num_batch,num_boxes,4)
         """
         # shape(num_batch,num_boxes,4)
         batch_size = gt_boxes.shape[0]
@@ -128,8 +129,7 @@ class RefineTargetAssigner(object):
         # no need grad_fn
         return reg_targets_batch
 
-    def _assign_classification_targets(self, match, gt_labels,
-                                       match_quality_matrix):
+    def _assign_classification_targets(self, match, gt_labels):
         """
         Just return the countpart labels
         Note that use zero to represent background labels
@@ -137,31 +137,18 @@ class RefineTargetAssigner(object):
         generate countpart gt_labels
         """
         # binary labels classifcation
-        # if gt_labels is None:
-        # consider it as binary classification problem
-        return self._generate_binary_labels(match, match_quality_matrix)
+        if gt_labels is None:
+            # consider it as binary classification problem
+            return self._generate_binary_labels(match)
 
         # multiple labels classification
-        # TODO(as for multiple cls ,match_quality_matrix should also be
-        # considered)
-        # batch_size = match.shape[0]
-        # offset = torch.arange(0, batch_size) * gt_labels.size(1)
-        # match += offset.view(batch_size, 1).type_as(match)
-        # cls_targets_batch = gt_labels.view(-1)[match.view(-1)].view(
-
-    # batch_size, match.shape[1])
-    # return cls_targets_batch
-
-    def _generate_binary_labels(self, match, match_quality_matrix):
-        """
-        Select cls_target from matrix according to match
-        Args:
-            match: shape(N,K)
-            match_quality_matrix: shape(N,K,M)
-        """
-        num = match.numel()
-        row = torch.arange(0, num).type_as(match)
-        M = match_quality_matrix.shape[2]
-        cls_targets_batch = match_quality_matrix.view(
-            -1, M)[row, match.view(-1)].view_as(match)
+        batch_size = match.shape[0]
+        offset = torch.arange(0, batch_size) * gt_labels.size(1)
+        match += offset.view(batch_size, 1).type_as(match)
+        cls_targets_batch = gt_labels.view(-1)[match.view(-1)].view(
+            batch_size, match.shape[1])
         return cls_targets_batch
+
+    def _generate_binary_labels(self, match):
+        gt_labels_batch = torch.ones_like(match).long()
+        return gt_labels_batch
