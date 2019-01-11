@@ -6,7 +6,7 @@ from numpy.linalg import norm
 import matplotlib
 from PIL import Image, ImageFilter
 from utils.box_vis import compute_box_3d
-from utils.kitti_util import compute_local_angle, compute_2d_proj
+from utils.kitti_util import compute_local_angle, compute_2d_proj, truncate_box
 
 
 class Sample(object):
@@ -477,6 +477,8 @@ class Boxes3DTo2D(object):
         oritations = []
         local_angle_oritations = []
         local_angles = []
+        cls_orients = []
+        reg_orients = []
 
         # 2d bbox get from 3d
         boxes_2d_proj = []
@@ -530,6 +532,34 @@ class Boxes3DTo2D(object):
             w_2d = norm(corners_xy[1] - corners_xy[0])
             dims_2d.append(np.array([h_2d, w_2d, l_2d]))
 
+            # some labels for estimating orientation
+            # import ipdb
+            # ipdb.set_trace()
+            left_side_points_2d = corners_xy[[0, 3]]
+            right_side_points_2d = corners_xy[[1, 2]]
+            left_side_points_3d = points_3d.T[[0, 3]]
+            right_side_points_3d = points_3d.T[[1, 2]]
+
+            # which one is visible
+            mid_left_points_3d = left_side_points_3d.mean(axis=0)
+            mid_right_points_3d = right_side_points_3d.mean(axis=0)
+            # K*T
+            KT = p2[:, -1]
+            K = p2[:3, :3]
+            T = np.dot(np.linalg.inv(K), KT)
+            C = -T
+            mid_left_dist = np.linalg.norm((C - mid_left_points_3d))
+            mid_right_dist = np.linalg.norm((C - mid_right_points_3d))
+            if mid_left_dist > mid_right_dist:
+                visible_side = right_side_points_2d
+            else:
+                visible_side = left_side_points_2d
+
+            # visible side truncated with 2d box
+            cls_orient, reg_orient = truncate_box(dims[i], visible_side)
+            cls_orients.append(cls_orient)
+            reg_orients.append(reg_orient)
+
         sample['coords'] = np.stack(coords, axis=0).astype(np.float32)
         sample['coords_uncoded'] = np.stack(
             corners_xys, axis=0).astype(np.float32)
@@ -543,6 +573,10 @@ class Boxes3DTo2D(object):
                 boxes_2d_proj, axis=0).astype(np.float32))
         sample['local_angle'] = np.stack(
             local_angles, axis=0).astype(np.float32)
+        # import ipdb
+        # ipdb.set_trace()
+        sample['cls_orient'] = np.stack(cls_orients, axis=0).astype(np.int32)
+        sample['reg_orient'] = np.stack(reg_orients, axis=0).astype(np.float32)
         return sample
 
 

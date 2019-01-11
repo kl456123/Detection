@@ -394,3 +394,22 @@ def compute_2d_proj(ry, corners, trans_3d, p):
 
     boxes_2d_proj = np.stack([xmin, ymin, xmax, ymax], axis=-1)
     return boxes_2d_proj
+
+
+def truncate_box(dims_2d, line):
+    """
+    Args:
+        dims_2d:
+        line:
+    Return: cls_orient:
+            reg_orient:
+    """
+    direction = (line[0] - line[1])
+    cls_orient = direction[0] > 0
+    reg_orient = np.abs(direction)
+
+    # normalize
+    w, h = dims_2d
+    reg_orient[0] /= w
+    reg_orient[1] /= h
+    return cls_orient, reg_orient

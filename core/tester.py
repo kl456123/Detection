@@ -149,8 +149,8 @@ def test(eval_config, data_loader, model):
                         res_anchors.append([])
                         dets_3d.append([])
                 else:
-                    # import ipdb
-                    # ipdb.set_trace()
+                    import ipdb
+                    ipdb.set_trace()
                     #  rcnn_3d[:, :-1] = gt_boxes_3d[:, :3]
                     rcnn_3d = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))

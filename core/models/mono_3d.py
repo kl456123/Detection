@@ -8,6 +8,7 @@ from core.model import Model
 from core.models.rpn_model import RPNModel
 from core.models.focal_loss import FocalLoss
 from core.models.multibin_loss import MultiBinLoss
+from core.models.multibin_reg_loss import MultiBinRegLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
 
@@ -56,6 +57,12 @@ class Mono3DFasterRCNN(Model):
         rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
         rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
         rcnn_3d = self.rcnn_3d_pred(pooled_feat)
+        # import ipdb
+        # ipdb.set_trace()
+        # normalize to [0, 1]
+        # rcnn_3d_preds = rcnn_3d[:, 3:].view(-1, self.num_bins, 2)
+        # rcnn_3d_probs = F.softmax(rcnn_3d_preds, dim=-1)
+        # rcnn_3d[:, 3:] = rcnn_3d_probs
 
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -82,23 +89,38 @@ class Mono3DFasterRCNN(Model):
         # prediction_dict[
         # 'rcnn_reg_targets_3d'] = self.target_assigner.bbox_coder_3d.encode_batch(
         # final_bbox[0], rcnn_reg_targets_3d)
+        # if not self.training:
+        # import ipdb
+        # ipdb.set_trace()
+        # dims = rcnn_3d[:, :3]
+        # angles = rcnn_3d[:, 3:].view(-1, self.num_bins)
+        # angles_cls = F.softmax(angles[:, :, :2], dim=-1)
+        # _, angles_cls_argmax = torch.max(angles_cls[:, :, 1], dim=-1)
+        # row = torch.arange(
+        # 0, angles_cls_argmax.shape[0]).type_as(angles_cls_argmax)
+        # angles_oritations = angles[:, :, 2:][row, angles_cls_argmax]
+        # rcnn_3d = torch.cat([dims, angles_oritations], dim=-1)
+        # #  import ipdb
+        # #  ipdb.set_trace()
+        # rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
+        # rcnn_3d, self.rcnn_3d_loss.bin_centers[angles_cls_argmax])
+        # prediction_dict['rcnn_3d'] = rcnn_3d
+        #  prediction_dict['bin_centers'] = self.rcnn_3d_loss.bin_centers[angles_cls_argmax]
+
         if not self.training:
             import ipdb
             ipdb.set_trace()
             dims = rcnn_3d[:, :3]
-            angles = rcnn_3d[:, 3:].view(-1, self.num_bins, 4)
-            angles_cls = F.softmax(angles[:, :, :2], dim=-1)
-            _, angles_cls_argmax = torch.max(angles_cls[:, :, 1], dim=-1)
-            row = torch.arange(
-                0, angles_cls_argmax.shape[0]).type_as(angles_cls_argmax)
-            angles_oritations = angles[:, :, 2:][row, angles_cls_argmax]
-            rcnn_3d = torch.cat([dims, angles_oritations], dim=-1)
-            #  import ipdb
-            #  ipdb.set_trace()
-            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
-                rcnn_3d, self.rcnn_3d_loss.bin_centers[angles_cls_argmax])
+            angles = rcnn_3d[:, 3:].view(-1, self.num_bins, 2)
+            angles_cls = F.softmax(angles, dim=-1)
+            angles_probs = angles_cls[:, :, 1]
+            angles_probs, angles_probs_argmax = torch.max(angles_probs, dim=-1)
+            rcnn_3d = torch.cat([dims, torch.unsqueeze(
+                angles_probs, dim=-1)],
+                                dim=-1)
+            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_angle(
+                rcnn_3d, self.rcnn_3d_loss.bin_centers[angles_probs_argmax])
             prediction_dict['rcnn_3d'] = rcnn_3d
-            #  prediction_dict['bin_centers'] = self.rcnn_3d_loss.bin_centers[angles_cls_argmax]
 
         return prediction_dict
 
@@ -144,9 +166,10 @@ class Mono3DFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + self.num_bins * 4)
+        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + self.num_bins * 2)
 
-        self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
+        # self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
+        self.rcnn_3d_loss = MultiBinRegLoss(num_bins=self.num_bins)
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -179,7 +202,7 @@ class Mono3DFasterRCNN(Model):
 
         self.visualizer = FeatVisualizer()
 
-        self.num_bins = 5
+        self.num_bins = 4
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']
@@ -290,8 +313,8 @@ class Mono3DFasterRCNN(Model):
             rcnn_3d[:, :3], rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
 
         # angles
-        rcnn_3d_loss_angles, tp_mask = self.rcnn_3d_loss(
-            rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, -1:])
+        rcnn_3d_loss_angles = self.rcnn_3d_loss(rcnn_3d[:, 3:],
+                                                rcnn_reg_targets_3d[:, -1:])
         rcnn_3d_loss_angles = rcnn_3d_loss_angles.sum(dim=-1)
         rcnn_3d_loss = rcnn_3d_loss_dims + rcnn_3d_loss_angles
         rcnn_3d_loss *= rcnn_reg_weights_3d
@@ -308,12 +331,16 @@ class Mono3DFasterRCNN(Model):
         # stats
         #  import ipdb
         #  ipdb.set_trace()
-        tp_mask = tp_mask[rcnn_reg_weights_3d > 0]
-        angle_num_tp = tp_mask.sum()
-        angle_num_all = tp_mask.numel()
+        # tp_mask = tp_mask[rcnn_reg_weights_3d > 0]
+        # angle_num_tp = tp_mask.sum()
+        # angle_num_all = tp_mask.numel()
+        # self.target_assigner.stat.update({
+        # 'angle_num_tp': angle_num_tp,
+        # 'angle_num_all': angle_num_all
+        # })
         self.target_assigner.stat.update({
-            'angle_num_tp': angle_num_tp,
-            'angle_num_all': angle_num_all
+            'angle_num_tp': torch.tensor(0),
+            'angle_num_all': 1
         })
 
         return loss_dict

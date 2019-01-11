@@ -198,3 +198,46 @@ class BBox3DCoder(object):
 
         bbox = torch.stack([h_3d, w_3d, l_3d, theta], dim=-1)
         return bbox
+
+    def decode_batch_angle(self, targets, bin_centers=None):
+        """
+        Args:
+            targets: shape(N, 3)
+        """
+
+        # dims
+        h_3d_mean = 1.67
+        w_3d_mean = 1.87
+        l_3d_mean = 3.7
+
+        h_3d_std = 1
+        w_3d_std = 1
+        l_3d_std = 1
+
+        h_3d = targets[:, 0] * h_3d_std + h_3d_mean
+        w_3d = targets[:, 1] * w_3d_std + w_3d_mean
+        l_3d = targets[:, 2] * l_3d_std + l_3d_mean
+
+        # ry
+        # sin = targets[:, -2]
+        # cos = targets[:, -1]
+        # theta = get_angle(sin, cos)
+        if bin_centers is not None:
+            # theta = bin_centers + theta
+            # theta = bin_centers
+            theta = -torch.acos(targets[:, 3]) - bin_centers
+
+        # cond_pos = (cos < 0) & (sin > 0)
+        # cond_neg = (cos < 0) & (sin < 0)
+        # theta[cond_pos] = math.pi - theta[cond_pos]
+        # theta[cond_neg] = -math.pi - theta[cond_neg]
+
+        # ry = torch.atan(sin / cos)
+        # cond = cos < 0
+        # cond_pos = sin > 0
+        # cond_neg = sin < 0
+        # ry[cond & cond_pos] = ry[cond & cond_pos] + math.pi
+        # ry[cond & cond_neg] = ry[cond & cond_neg] - math.pi
+
+        bbox = torch.stack([h_3d, w_3d, l_3d, theta], dim=-1)
+        return bbox
