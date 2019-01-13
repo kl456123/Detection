@@ -410,6 +410,43 @@ def truncate_box(dims_2d, line):
 
     # normalize
     w, h = dims_2d
-    reg_orient[0] /= w
-    reg_orient[1] /= h
+
+    # use roi to normalize it not gt box
+    # reg_orient[0] /= w
+    # reg_orient[1] /= h
+    # reg_orient = np.log(reg_orient)
     return cls_orient, reg_orient
+
+
+def get_h_2d(C_3d, dim, P2):
+    # x,y,z
+    # C_3d = np.asarray([-16.53, 2.39, 58.49])
+    # h,w,l
+    # dim = np.asarray([1.67, 1.87, 3.69])
+
+    bottom_3d = C_3d + np.asarray([0, 0.5 * dim[0], 0])
+    top_3d = C_3d - np.asarray([0, 0.5 * dim[0], 0])
+
+    bottom_3d_homo = np.append(bottom_3d, 1)
+    top_3d_homo = np.append(top_3d, 1)
+
+    bottom_2d_homo = np.dot(P2, bottom_3d_homo)
+    top_2d_homo = np.dot(P2, top_3d_homo)
+
+    lambda_bottom = bottom_2d_homo[-1]
+    bottom_2d_homo = bottom_2d_homo / lambda_bottom
+    bottom_2d = bottom_2d_homo[:-1]
+
+    lambda_top = top_2d_homo[-1]
+    top_2d_homo = top_2d_homo / lambda_top
+    top_2d = top_2d_homo[:-1]
+
+    delta_2d = top_2d - bottom_2d
+    return delta_2d
+
+
+def get_center_2d(C_3d, P2):
+    C_3d_homo = np.append(C_3d, 1)
+    C_2d_homo = np.dot(P2, C_3d_homo)
+    C_2d_homo = C_2d_homo / C_2d_homo[-1]
+    return C_2d_homo[:-1]

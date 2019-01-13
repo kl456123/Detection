@@ -203,6 +203,42 @@ def mono_3d_postprocess_dims(dets_3d, dets_2d, p2):
     return rcnn_3d
 
 
+def generate_side_points(dets_2d, orient):
+    """
+    Generate side points to calculate orientation
+    Args:
+        dets_2d: shape(N,4) detected box
+        orient: shape(N,3) cls_orient and reg_orient
+    Returns:
+        side_points: shape(N,4)
+    """
+    # import ipdb
+    # ipdb.set_trace()
+    cls_orient_argmax = orient[:, 0].astype(np.int32)
+    reg_orient = orient[:, 0:]
+
+    side_points = np.zeros((orient.shape[0], 4))
+
+    # cls_orient_argmax = np.argmax(cls_orient, axis=-1)
+
+    row_inds = np.arange(0, cls_orient_argmax.shape[0]).astype(np.int32)
+
+    # two points
+    selected_x = np.stack([dets_2d[:, 2], dets_2d[:, 0]], axis=-1)
+    # side point
+    side_points[:, 3] = dets_2d[:, 3] - reg_orient[:, 1]
+
+    side_points[:, 2] = selected_x[row_inds, cls_orient_argmax]
+
+    # bottom point
+    selected_x = np.stack(
+        [dets_2d[:, 2] - reg_orient[:, 0], dets_2d[:, 0] + reg_orient[:, 0]],
+        axis=-1)
+    side_points[:, 1] = dets_2d[:, 3]
+    side_points[:, 0] = selected_x[row_inds, cls_orient_argmax]
+    return side_points
+
+
 def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     """
     May be we can improve performance angle prediction by enumerating
@@ -220,13 +256,31 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     T = np.dot(np.linalg.inv(K), KT)
 
     num = dets_3d.shape[0]
-    ry_local = dets_3d[:, -1]
-    # compute global angle
-    # center of 2d
-    center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
-    center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
-    center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
-    ry = compute_global_angle(center_2d, p2, ry_local)
+
+    # ry
+    # import ipdb
+    # ipdb.set_trace()
+    if dets_3d.shape[1] == 6:
+        lines = generate_side_points(dets_2d, dets_3d[:, 3:])
+        A = lines[:, 3] - lines[:, 1]
+        B = lines[:, 0] - lines[:, 2]
+        C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]
+        plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
+        a = plane[:, 0]
+        c = plane[:, 2]
+        # direct_line = np.hstack([c,-a])
+        # or ry +/- pi
+        ry = np.arccos(c / (np.sqrt(c * c + a * a)))
+    else:
+        ry = dets_3d[:, -1]
+    # ry[...] = 1.57
+    # ry_local = dets_3d[:, -1]
+    # # compute global angle
+    # # center of 2d
+    # center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
+    # center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
+    # center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
+    # ry = compute_global_angle(center_2d, p2, ry_local)
     #  ry = ry_local
 
     zeros = np.zeros_like(ry)
@@ -356,7 +410,7 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     #  ipdb.set_trace()
     translation = np.vstack(rcnn_3d)
     return np.concatenate(
-        [dets_3d[:, :-1], translation, ry[..., np.newaxis]], axis=-1)
+        [dets_3d[:, :3], translation, ry[..., np.newaxis]], axis=-1)
 
 
 def generate_coeff(points_3d, line_2d):

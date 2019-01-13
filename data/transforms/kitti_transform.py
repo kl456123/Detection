@@ -7,6 +7,7 @@ import matplotlib
 from PIL import Image, ImageFilter
 from utils.box_vis import compute_box_3d
 from utils.kitti_util import compute_local_angle, compute_2d_proj, truncate_box
+from utils.kitti_util import get_h_2d, get_center_2d
 
 
 class Sample(object):
@@ -482,12 +483,17 @@ class Boxes3DTo2D(object):
 
         # 2d bbox get from 3d
         boxes_2d_proj = []
+        h_2ds = []
+        c_2ds = []
         for i in range(boxes_3d.shape[0]):
             target = {}
             target['ry'] = boxes_3d[i, -1]
             target['dimension'] = boxes_3d[i, :3]
             target['dimension'] = target['dimension']
             target['location'] = boxes_3d[i, 3:-1]
+
+            h_2ds.append(get_h_2d(target['location'], target['dimension'], p2))
+            c_2ds.append(get_center_2d(target['location'], p2))
 
             corners_xy, points_3d = compute_box_3d(target, p2, True)
             # find it 2d proj
@@ -577,6 +583,9 @@ class Boxes3DTo2D(object):
         # ipdb.set_trace()
         sample['cls_orient'] = np.stack(cls_orients, axis=0).astype(np.int32)
         sample['reg_orient'] = np.stack(reg_orients, axis=0).astype(np.float32)
+
+        sample['h_2d'] = np.stack(h_2ds, axis=0).astype(np.float32)
+        sample['c_2d'] = np.stack(c_2ds, axis=0).astype(np.float32)
         return sample
 
 

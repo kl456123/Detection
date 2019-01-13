@@ -139,12 +139,14 @@ class TargetAssigner(object):
         match += offset.view(batch_size, 1).type_as(match)
         assigned_gt_boxes = gt_boxes.view(-1, 4)[match.view(-1)].view(
             batch_size, -1, 4)
-        assigned_gt_boxes_3d = gt_boxes_3d.view(-1, 4)[match.view(-1)].view(
-            batch_size, -1, 4)
+        assigned_gt_boxes_3d = gt_boxes_3d.view(-1, 6)[match.view(-1)].view(
+            batch_size, -1, 6)
         reg_targets_batch = self.bbox_coder.encode_batch(bboxes,
                                                          assigned_gt_boxes)
+        # import ipdb
+        # ipdb.set_trace()
         reg_targets_batch_3d = self.bbox_coder_3d.encode_batch_bbox(
-            assigned_gt_boxes_3d[0])
+            assigned_gt_boxes_3d[0], bboxes[0])
 
         # no need grad_fn
         return reg_targets_batch, reg_targets_batch_3d.unsqueeze(0)

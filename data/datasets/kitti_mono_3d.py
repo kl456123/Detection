@@ -53,6 +53,8 @@ class Mono3DKittiDataset(DetDataset):
             local_angles = transform_sample['local_angle']
             cls_orients = transform_sample['cls_orient']
             reg_orients = transform_sample['reg_orient']
+            h_2ds = transform_sample['h_2d']
+            c_2ds = transform_sample['c_2d']
         else:
             # fake gt
             bbox = torch.zeros((1, 5))
@@ -68,6 +70,8 @@ class Mono3DKittiDataset(DetDataset):
             local_angles = torch.zeros((1, 1))
             cls_orients = torch.zeros((1, 1))
             reg_orients = torch.zeros((1, 2))
+            h_2ds = torch.zeros((1, 1))
+            c_2ds = torch.zeros((1, 1))
 
         h, w = transform_sample['img'].shape[-2:]
         training_sample = {}
@@ -87,6 +91,8 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['local_angle'] = local_angles
         training_sample['reg_orient'] = reg_orients
         training_sample['cls_orient'] = cls_orients
+        training_sample['h_2d'] = h_2ds
+        training_sample['c_2d'] = c_2ds
 
         # use proj instead of original box
         # training_sample['boxes_2d_proj'] = boxes_2d_proj
