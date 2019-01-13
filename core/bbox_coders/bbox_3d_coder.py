@@ -116,7 +116,6 @@ class BBox3DCoder(object):
         """
         encoding dims may be better,here just encode dims_2d
         Args:
-            boxes_2d: shape(N,)
             dims: shape(N,6), (h,w,l) and their projection in 2d
         """
 
@@ -133,11 +132,21 @@ class BBox3DCoder(object):
         target_l_3d = (dims[:, 2] - l_3d_mean) / l_3d_std
         targets = torch.stack([target_h_3d, target_w_3d, target_l_3d], dim=-1)
 
+        # encode reg orient
         # normalize to [0,1]
         w = rois[:, 2] - rois[:, 0] + 1
         h = rois[:, 3] - rois[:, 1] + 1
-        dims[:, -2] /= w
-        dims[:, -1] /= h
+
+        x = (rois[:, 2] + rois[:, 0]) / 2
+        y = (rois[:, 3] + rois[:, 1]) / 2
+
+        # encode c_2d
+        dims[:, 6] = (dims[:, 6] - x) / w
+        dims[:, 7] = (dims[:, 7] - y) / h
+
+        # encode h_2d
+        dims[:, 5] = torch.log(dims[:, 5] / h)
+
         targets = torch.cat([targets, dims[:, 3:]], dim=-1)
         return targets
 
@@ -187,40 +196,22 @@ class BBox3DCoder(object):
         rois = rois_batch[0, :, 1:]
         w = rois[:, 2] - rois[:, 0] + 1
         h = rois[:, 3] - rois[:, 1] + 1
+        x = (rois[:, 2] + rois[:, 0]) / 2
+        y = (rois[:, 3] + rois[:, 1]) / 2
 
         # cls orient
         cls_orient = targets[:, 3:5]
         cls_orient = F.softmax(cls_orient, dim=-1)
         cls_orient, cls_orient_argmax = torch.max(cls_orient, dim=-1)
 
-        reg_orient = targets[:, 5:]
-        reg_orient[:, 0] *= w
-        reg_orient[:, 1] *= h
+        reg_orient = targets[:, 5:7]
 
-        #####################################
-        # Note that dont generate points here
-        # move this step to postprocess
+        # decode h_2d
+        h_2d = torch.exp(targets[:, 7]) * h
 
-        # used for indexing
-        # row_inds = torch.arange(
-        # 0, cls_orient_argmax.shape[0]).type_as(cls_orient_argmax)
-
-        # # two points
-        # lines = torch.zeros_like(rois)
-
-        # selected_x = torch.stack([rois[:, 2], rois[:, 0]], dim=-1)
-        # # selected_x = selected_x[cls_orient_argmax]
-        # # side point
-        # lines[:, 3] = rois[:, 3] - reg_orient[:, 1]
-
-        # lines[:, 2] = selected_x[row_inds, cls_orient_argmax]
-
-        # # bottom point
-        # selected_x = torch.stack(
-        # [rois[:, 2] - reg_orient[:, 0], rois[:, 0] + reg_orient[:, 0]],
-        # dim=-1)
-        # lines[:, 1] = rois[:, 3]
-        # lines[:, 0] = selected_x[row_inds, cls_orient_argmax]
+        # decode c_2d
+        c_2d_x = targets[:, 8] * w + x
+        c_2d_y = targets[:, 9] * h + y
 
         bbox = torch.stack([h_3d, w_3d, l_3d], dim=-1)
         orient = torch.stack(
@@ -229,8 +220,9 @@ class BBox3DCoder(object):
                 reg_orient[:, 1]
             ],
             dim=-1)
+        info_2d = torch.stack([h_2d, c_2d_x, c_2d_y], dim=-1)
 
-        return torch.cat([bbox, orient], dim=-1)
+        return torch.cat([bbox, orient, info_2d], dim=-1)
 
     def decode_batch_angle(self, targets, bin_centers=None):
         """

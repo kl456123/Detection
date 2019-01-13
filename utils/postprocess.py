@@ -215,7 +215,11 @@ def generate_side_points(dets_2d, orient):
     # import ipdb
     # ipdb.set_trace()
     cls_orient_argmax = orient[:, 0].astype(np.int32)
-    reg_orient = orient[:, 0:]
+    reg_orient = orient[:, 1:3]
+    h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
+    w = (dets_2d[:, 2] - dets_2d[:, 0] + 1)
+    reg_orient[:, 0] *= w
+    reg_orient[:, 1] *= h
 
     side_points = np.zeros((orient.shape[0], 4))
 
@@ -260,7 +264,7 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     # ry
     # import ipdb
     # ipdb.set_trace()
-    if dets_3d.shape[1] == 6:
+    if dets_3d.shape[1] == 9:
         lines = generate_side_points(dets_2d, dets_3d[:, 3:])
         A = lines[:, 3] - lines[:, 1]
         B = lines[:, 0] - lines[:, 2]

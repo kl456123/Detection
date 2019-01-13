@@ -62,14 +62,9 @@ class Mono3DFasterRCNN(Model):
         rcnn_3d = self.rcnn_3d_pred(pooled_feat)
 
         # normalize to [0,1]
-        reg_orient = torch.exp(rcnn_3d[:, -2:])
-        rcnn_3d = torch.cat([rcnn_3d[:, :-2], reg_orient], dim=-1)
-        # import ipdb
-        # ipdb.set_trace()
-        # normalize to [0, 1]
-        # rcnn_3d_preds = rcnn_3d[:, 3:].view(-1, self.num_bins, 2)
-        # rcnn_3d_probs = F.softmax(rcnn_3d_preds, dim=-1)
-        # rcnn_3d[:, 3:] = rcnn_3d_probs
+        # reg_orient = F.sigmoid(rcnn_3d[:, 5:7])
+        # rcnn_3d = torch.cat([rcnn_3d[:, :-2], reg_orient], dim=-1)
+        rcnn_3d[:, 5:7] = F.sigmoid(rcnn_3d[:, 5:7])
 
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -181,7 +176,7 @@ class Mono3DFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4)
+        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 3)
 
         # self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
         # self.rcnn_3d_loss = MultiBinRegLoss(num_bins=self.num_bins)
@@ -239,10 +234,14 @@ class Mono3DFasterRCNN(Model):
         reg_orient = feed_dict['reg_orient']
         orient = torch.cat([cls_orient, reg_orient], dim=-1)
 
+        h_2ds = feed_dict['h_2d']
+        c_2ds = feed_dict['c_2d']
+
         # here just concat them
         # dims and their projection
 
-        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], orient], dim=-1)
+        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], orient, h_2ds, c_2ds],
+                                dim=-1)
 
         ##########################
         # assigner

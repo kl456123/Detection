@@ -8,6 +8,7 @@ from PIL import Image, ImageFilter
 from utils.box_vis import compute_box_3d
 from utils.kitti_util import compute_local_angle, compute_2d_proj, truncate_box
 from utils.kitti_util import get_h_2d, get_center_2d
+from utils.box_vis import draw_line
 
 
 class Sample(object):
@@ -485,6 +486,8 @@ class Boxes3DTo2D(object):
         boxes_2d_proj = []
         h_2ds = []
         c_2ds = []
+        # import ipdb
+        # ipdb.set_trace()
         for i in range(boxes_3d.shape[0]):
             target = {}
             target['ry'] = boxes_3d[i, -1]
@@ -492,7 +495,8 @@ class Boxes3DTo2D(object):
             target['dimension'] = target['dimension']
             target['location'] = boxes_3d[i, 3:-1]
 
-            h_2ds.append(get_h_2d(target['location'], target['dimension'], p2))
+            h_2ds.append(
+                [get_h_2d(target['location'], target['dimension'], p2)])
             c_2ds.append(get_center_2d(target['location'], p2))
 
             corners_xy, points_3d = compute_box_3d(target, p2, True)
@@ -563,6 +567,12 @@ class Boxes3DTo2D(object):
 
             # visible side truncated with 2d box
             cls_orient, reg_orient = truncate_box(dims[i], visible_side)
+
+            # import ipdb
+            # ipdb.set_trace()
+            # used for debug
+            # draw_line(sample['img_name'], visible_side)
+
             cls_orients.append(cls_orient)
             reg_orients.append(reg_orient)
 

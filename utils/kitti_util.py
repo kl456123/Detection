@@ -405,15 +405,18 @@ def truncate_box(dims_2d, line):
             reg_orient:
     """
     direction = (line[0] - line[1])
-    cls_orient = direction[0] > 0
+    if direction[0] == 0:
+        cls_orient = False
+    else:
+        cls_orient = direction[1] / direction[0] > 0
+    # cls_orient = direction[0] > 0
     reg_orient = np.abs(direction)
 
     # normalize
     w, h = dims_2d
 
-    # use roi to normalize it not gt box
-    # reg_orient[0] /= w
-    # reg_orient[1] /= h
+    reg_orient[0] /= w
+    reg_orient[1] /= h
     # reg_orient = np.log(reg_orient)
     return cls_orient, reg_orient
 
@@ -442,7 +445,7 @@ def get_h_2d(C_3d, dim, P2):
     top_2d = top_2d_homo[:-1]
 
     delta_2d = top_2d - bottom_2d
-    return delta_2d
+    return np.abs(delta_2d[-1])
 
 
 def get_center_2d(C_3d, P2):

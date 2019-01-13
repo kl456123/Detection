@@ -13,7 +13,7 @@ class OrientationLoss(nn.Module):
         """
         Args:
             preds: shape()
-            targets: shape(N, 3), (cls_orient，reg_orient)
+            targets: shape(N, 3), (cls_orient(1), reg_orient(2),h_2d(1),c_2d(2))
         """
         # import ipdb
         # ipdb.set_trace()

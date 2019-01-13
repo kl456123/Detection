@@ -137,6 +137,24 @@ def load_projection_matrix(calib_file):
     return p
 
 
+def draw_line(img_name, line, save_path='tmp.jpg', title='side'):
+    img = Image.open(img_name)
+    draw = ImageDraw.Draw(img)
+
+    # for line in lines:
+    draw.line(
+        [(line[0, 0], line[0, 1]), (line[1, 0], line[1, 1])],
+        fill=(0, 255, 0),
+        width=2)
+    #  draw.line([(411, 203), (423, 201)], fill=(0, 255, 0), width=2)
+
+    # display front view
+    img.save(save_path)
+    img = cv2.imread(save_path)
+    cv2.imshow(title, img)
+    cv2.waitKey(0)
+
+
 def draw_boxes(img,
                box_3d,
                calib_matrix,
