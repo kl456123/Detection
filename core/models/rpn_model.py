@@ -120,6 +120,7 @@ class RPNModel(Model):
         proposals = self.bbox_coder.decode_batch(rpn_bbox_preds, anchors)
 
         # filer and clip
+        # it is necessary even if predict 2d proj
         proposals = box_ops.clip_boxes(proposals, im_info)
 
         # fg prob

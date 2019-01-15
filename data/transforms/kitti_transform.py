@@ -495,9 +495,9 @@ class Boxes3DTo2D(object):
             target['dimension'] = target['dimension']
             target['location'] = boxes_3d[i, 3:-1]
 
-            h_2ds.append(
-                [get_h_2d(target['location'], target['dimension'], p2)])
-            c_2ds.append(get_center_2d(target['location'], p2))
+            # import ipdb
+            # ipdb.set_trace()
+            # normalize by using gt bbox
 
             corners_xy, points_3d = compute_box_3d(target, p2, True)
             # find it 2d proj
@@ -533,7 +533,8 @@ class Boxes3DTo2D(object):
                 np.asarray([np.sin(local_angle), np.cos(local_angle)]))
 
             # 2d box proj
-            boxes_2d_proj.append(np.asarray([xmin, ymin, xmax, ymax]))
+            box_2d_proj = np.asarray([xmin, ymin, xmax, ymax])
+            boxes_2d_proj.append(box_2d_proj)
 
             # generate new feature to predict
             # (length of l,h,w in image)
@@ -575,6 +576,17 @@ class Boxes3DTo2D(object):
 
             cls_orients.append(cls_orient)
             reg_orients.append(reg_orient)
+
+            # normalize it at the same time
+            # use 2d proj instead of boxes_2d
+            # import ipdb
+            # ipdb.set_trace()
+            h_2ds.append([
+                get_h_2d(target['location'], target['dimension'], p2,
+                         box_2d_proj)
+            ])
+
+            c_2ds.append(get_center_2d(target['location'], p2, box_2d_proj))
 
         sample['coords'] = np.stack(coords, axis=0).astype(np.float32)
         sample['coords_uncoded'] = np.stack(

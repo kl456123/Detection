@@ -405,10 +405,11 @@ def truncate_box(dims_2d, line):
             reg_orient:
     """
     direction = (line[0] - line[1])
-    if direction[0] == 0:
-        cls_orient = False
+    if direction[0] * direction[1] == 0:
+        cls_orient = -1
     else:
         cls_orient = direction[1] / direction[0] > 0
+        cls_orient = cls_orient.astype(np.int32)
     # cls_orient = direction[0] > 0
     reg_orient = np.abs(direction)
 
@@ -421,7 +422,7 @@ def truncate_box(dims_2d, line):
     return cls_orient, reg_orient
 
 
-def get_h_2d(C_3d, dim, P2):
+def get_h_2d(C_3d, dim, P2, box_2d):
     # x,y,z
     # C_3d = np.asarray([-16.53, 2.39, 58.49])
     # h,w,l
@@ -445,11 +446,24 @@ def get_h_2d(C_3d, dim, P2):
     top_2d = top_2d_homo[:-1]
 
     delta_2d = top_2d - bottom_2d
-    return np.abs(delta_2d[-1])
+
+    h = box_2d[3] - box_2d[1] + 1
+    return np.abs(delta_2d[-1]) / h
 
 
-def get_center_2d(C_3d, P2):
+def get_center_2d(C_3d, P2, box_2d):
     C_3d_homo = np.append(C_3d, 1)
     C_2d_homo = np.dot(P2, C_3d_homo)
     C_2d_homo = C_2d_homo / C_2d_homo[-1]
-    return C_2d_homo[:-1]
+    C_2d = C_2d_homo[:-1]
+
+    # normalize it by using gt box
+    h = box_2d[3] - box_2d[1] + 1
+    w = box_2d[2] - box_2d[0] + 1
+    # x = (box_2d[3] + box_2d[1]) / 2
+    # y = (box_2d[2] + box_2d[0]) / 2
+    x = box_2d[0]
+    y = box_2d[1]
+    C_2d_normalized = ((C_2d[0] - x) / w, (C_2d[1] - y) / h)
+
+    return C_2d_normalized

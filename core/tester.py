@@ -124,13 +124,14 @@ def test(eval_config, data_loader, model):
                         res_anchors.append([])
                         dets_3d.append([])
                 else:
-                    import ipdb
-                    ipdb.set_trace()
+                    # import ipdb
+                    # ipdb.set_trace()
                     #  rcnn_3d[:, :-1] = gt_boxes_3d[:, :3]
                     # global_angles_gt = gt_boxes_3d[:, -1:]
                     # rcnn_3d = np.concatenate(
                         # [gt_boxes_3d[:, :3], global_angles_gt], axis=-1)
-                    rcnn_3d = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
+                    rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
+                    # rcnn_3d[:, 3:6] = location
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
 
             else:
@@ -229,7 +230,7 @@ def im_detect(model, data, eval_config, im_orig=None):
         #  pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
         pred_boxes = model.target_assigner.bbox_coder.decode_batch(
             box_deltas.view(eval_config['batch_size'], -1, 4), boxes)
-        pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
+        # pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
 
     pred_boxes /= im_scale
     return pred_boxes, scores, rois[:, :, 1:5], anchors, rcnn_3d

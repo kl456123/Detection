@@ -132,20 +132,19 @@ class BBox3DCoder(object):
         target_l_3d = (dims[:, 2] - l_3d_mean) / l_3d_std
         targets = torch.stack([target_h_3d, target_w_3d, target_l_3d], dim=-1)
 
-        # encode reg orient
-        # normalize to [0,1]
-        w = rois[:, 2] - rois[:, 0] + 1
-        h = rois[:, 3] - rois[:, 1] + 1
+        # w = rois[:, 2] - rois[:, 0] + 1
+        # h = rois[:, 3] - rois[:, 1] + 1
 
-        x = (rois[:, 2] + rois[:, 0]) / 2
-        y = (rois[:, 3] + rois[:, 1]) / 2
+        # x = (rois[:, 2] + rois[:, 0]) / 2
+        # y = (rois[:, 3] + rois[:, 1]) / 2
 
+        # not encoded here
         # encode c_2d
-        dims[:, 6] = (dims[:, 6] - x) / w
-        dims[:, 7] = (dims[:, 7] - y) / h
+        # dims[:, 7] = (dims[:, 7] - x) / w
+        # dims[:, 8] = (dims[:, 8] - y) / h
 
         # encode h_2d
-        dims[:, 5] = torch.log(dims[:, 5] / h)
+        # dims[:, 6] = torch.log(dims[:, 6] / h)
 
         targets = torch.cat([targets, dims[:, 3:]], dim=-1)
         return targets
@@ -194,10 +193,10 @@ class BBox3DCoder(object):
 
         # rois w and h
         rois = rois_batch[0, :, 1:]
-        w = rois[:, 2] - rois[:, 0] + 1
-        h = rois[:, 3] - rois[:, 1] + 1
-        x = (rois[:, 2] + rois[:, 0]) / 2
-        y = (rois[:, 3] + rois[:, 1]) / 2
+        # w = rois[:, 2] - rois[:, 0] + 1
+        # h = rois[:, 3] - rois[:, 1] + 1
+        # x = (rois[:, 2] + rois[:, 0]) / 2
+        # y = (rois[:, 3] + rois[:, 1]) / 2
 
         # cls orient
         cls_orient = targets[:, 3:5]
@@ -207,11 +206,11 @@ class BBox3DCoder(object):
         reg_orient = targets[:, 5:7]
 
         # decode h_2d
-        h_2d = torch.exp(targets[:, 7]) * h
+        # h_2d = torch.exp(targets[:, 7]) * h
 
         # decode c_2d
-        c_2d_x = targets[:, 8] * w + x
-        c_2d_y = targets[:, 9] * h + y
+        # c_2d_x = targets[:, 8] * w + x
+        # c_2d_y = targets[:, 9] * h + y
 
         bbox = torch.stack([h_3d, w_3d, l_3d], dim=-1)
         orient = torch.stack(
@@ -220,7 +219,8 @@ class BBox3DCoder(object):
                 reg_orient[:, 1]
             ],
             dim=-1)
-        info_2d = torch.stack([h_2d, c_2d_x, c_2d_y], dim=-1)
+        # info_2d = torch.stack([h_2d, c_2d_x, c_2d_y], dim=-1)
+        info_2d = targets[:, 7:10]
 
         return torch.cat([bbox, orient, info_2d], dim=-1)
 

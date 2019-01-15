@@ -39,9 +39,16 @@ delta_3d = dim[0]
 f = K[0, 0]
 # validate algorithm
 lambda_ = f * dim[0] / delta_2d[1]
-lambda_ = f * dim[0] / 18.9
+lambda_ = f * dim[0] / 20.2
+
+C_2d = np.asarray([407.9734, 201.73137])
+C_2d_homo = np.append(C_2d, 1)
+
+C_3d_ = lambda_ * np.dot(np.linalg.inv(K), C_2d_homo) - T
 
 # lambda to depth
 depth = lambda_ - T[-1]
-print(depth)
-print(C_3d[-1])
+# print(depth)
+# print(C_3d[-1])
+print(C_3d)
+print(C_3d_)

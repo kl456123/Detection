@@ -243,6 +243,35 @@ def generate_side_points(dets_2d, orient):
     return side_points
 
 
+def calculate_location(dets_3d, p2):
+    """
+    Args:
+        info_3d: shape(N,3)
+    """
+    K = p2[:3, :3]
+    KT = p2[:, -1]
+    T = np.dot(np.linalg.inv(K), KT)
+    f = K[0, 0]
+
+    h_3d = dets_3d[:, 0]
+    lambda_ = f * h_3d / dets_3d[:, 6]
+
+    C_2d = dets_3d[:, 7:9]
+    C_2d_homo = np.concatenate([C_2d, np.ones((C_2d.shape[0], 1))], axis=-1)
+
+    C_3d_cam = lambda_ * np.dot(np.linalg.inv(K), C_2d_homo.T)
+    C_3d_world = C_3d_cam.T - T
+
+    return C_3d_world
+
+
+def direction2angle(x, y):
+    ry = np.arccos(x / (np.sqrt(x * x + y * y)))
+    cond = y < 0
+    ry[cond] = -ry[cond]
+    return -ry
+
+
 def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     """
     May be we can improve performance angle prediction by enumerating
@@ -274,9 +303,21 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
         c = plane[:, 2]
         # direct_line = np.hstack([c,-a])
         # or ry +/- pi
-        ry = np.arccos(c / (np.sqrt(c * c + a * a)))
+        # ry = np.arccos(c / (np.sqrt(c * c + a * a)))
+        ry = direction2angle(c, -a)
+
+        # decode h_2ds and c_2ds
+        h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
+        w = (dets_2d[:, 2] - dets_2d[:, 0] + 1)
+
+        dets_3d[:, 6] *= h
+        dets_3d[:, 7] = dets_3d[:, 7] * w + dets_2d[:, 0]
+        dets_3d[:, 8] = dets_3d[:, 8] * h + dets_2d[:, 1]
     else:
         ry = dets_3d[:, -1]
+
+    C_3d = calculate_location(dets_3d, p2)
+
     # ry[...] = 1.57
     # ry_local = dets_3d[:, -1]
     # # compute global angle
@@ -414,7 +455,28 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     #  ipdb.set_trace()
     translation = np.vstack(rcnn_3d)
     return np.concatenate(
-        [dets_3d[:, :3], translation, ry[..., np.newaxis]], axis=-1)
+        [dets_3d[:, :3], translation, ry[..., np.newaxis]], axis=-1), C_3d
+
+
+def final_decision(errors, trans, r, p2, box_2d, corner):
+    """
+    Two steps to filter final results:
+    1. box_2d iou match
+    2. errors from svd
+    How to combine two constraintions to refine the result
+    Args:
+    """
+
+    # some parameters
+    iou_thresh = 0.8
+    error_top_n = 30
+    keep = np.argsort(errors.flatten())[:error_top_n]
+
+
+    # box_2d match
+    idx = match(box_2d, corner, trans, r, p2)
+
+    #
 
 
 def generate_coeff(points_3d, line_2d):

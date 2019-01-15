@@ -64,7 +64,7 @@ class Mono3DFasterRCNN(Model):
         # normalize to [0,1]
         # reg_orient = F.sigmoid(rcnn_3d[:, 5:7])
         # rcnn_3d = torch.cat([rcnn_3d[:, :-2], reg_orient], dim=-1)
-        rcnn_3d[:, 5:7] = F.sigmoid(rcnn_3d[:, 5:7])
+        rcnn_3d[:, 5:10] = F.sigmoid(rcnn_3d[:, 5:10])
 
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -180,7 +180,7 @@ class Mono3DFasterRCNN(Model):
 
         # self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
         # self.rcnn_3d_loss = MultiBinRegLoss(num_bins=self.num_bins)
-        self.rcnn_3d_loss = OrientationLoss()
+        self.rcnn_3d_loss = OrientationLoss(split_loss=True)
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -334,12 +334,18 @@ class Mono3DFasterRCNN(Model):
         rcnn_3d_loss_dims = self.rcnn_bbox_loss(
             rcnn_3d[:, :3], rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
 
+        # import ipdb
+        # ipdb.set_trace()
         # angles
-        rcnn_3d_loss_angles = self.rcnn_3d_loss(rcnn_3d[:, 3:],
-                                                rcnn_reg_targets_3d[:, 3:])
+        res = self.rcnn_3d_loss(rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, 3:])
+        for res_loss_key in res:
+            tmp = res[res_loss_key] * rcnn_reg_weights_3d
+            res[res_loss_key] = tmp.sum(dim=-1)
+        loss_dict.update(res)
+
         # rcnn_3d_loss_angles = rcnn_3d_loss_angles.sum(dim=-1)
-        rcnn_3d_loss = rcnn_3d_loss_dims + rcnn_3d_loss_angles
-        rcnn_3d_loss *= rcnn_reg_weights_3d
+        # rcnn_3d_loss_dims = rcnn_3d_loss_dims + res
+        rcnn_3d_loss = rcnn_3d_loss_dims * rcnn_reg_weights_3d
         rcnn_3d_loss = rcnn_bbox_loss.sum(dim=-1)
 
         # loss weights has no gradients
@@ -369,7 +375,8 @@ class Mono3DFasterRCNN(Model):
         # ipdb.set_trace()
         orient_tp_mask = cls_orient.type_as(
             cls_orient_preds_argmax) == cls_orient_preds_argmax
-        orient_tp_mask = orient_tp_mask[rcnn_reg_weights_3d > 0]
+        mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
+        orient_tp_mask = orient_tp_mask[mask]
 
         orient_tp_num = orient_tp_mask.int().sum().item()
         orient_all_num = orient_tp_mask.numel()
