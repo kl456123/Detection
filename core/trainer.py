@@ -54,6 +54,8 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
         angle_num_all = 0
         orient_all_num = 0
         orient_tp_num = 0
+        orient_tp_num2 = 0
+
         for step, data in enumerate(data_loader):
 
             data = to_cuda(data)
@@ -97,6 +99,7 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             angle_num_all += stat['angle_num_all']
             orient_all_num += stat['orient_all_num']
             orient_tp_num += stat['orient_tp_num']
+            orient_tp_num2 += stat['orient_tp_num2']
 
             if step % disp_interval == 0:
                 end = time.time()
@@ -145,6 +148,10 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
                 print("\t\t\torient_tp_num/orient_all_num({}/{}/{:.4f}): ".
                       format(orient_tp_num, orient_all_num, orient_tp_num /
                              orient_all_num))
+
+                print("\t\t\torient_tp_num2/orient_all_num({}/{}/{:.4f}): ".
+                      format(orient_tp_num2, orient_all_num, orient_tp_num2 /
+                             orient_all_num))
                 # reset
                 matched = 0
                 num_gt = 0
@@ -154,6 +161,7 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
                 angle_num_tp = 0
                 angle_num_all = 0
                 orient_tp_num = 0
+                orient_tp_num2 = 0
                 orient_all_num = 0
 
                 start = time.time()

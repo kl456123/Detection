@@ -68,7 +68,7 @@
     # --checkpoint 3257 \
     # --checkepoch 100
 
-CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     --net mono_3d \
     --out_path /data/object/liangxiong/mono_3d_angle_reg \
     --config configs/refine_kitti_config.json

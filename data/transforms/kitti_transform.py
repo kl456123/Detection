@@ -7,7 +7,7 @@ import matplotlib
 from PIL import Image, ImageFilter
 from utils.box_vis import compute_box_3d
 from utils.kitti_util import compute_local_angle, compute_2d_proj, truncate_box
-from utils.kitti_util import get_h_2d, get_center_2d
+from utils.kitti_util import get_h_2d, get_center_2d, get_r_2d
 from utils.box_vis import draw_line
 
 
@@ -486,6 +486,7 @@ class Boxes3DTo2D(object):
         boxes_2d_proj = []
         h_2ds = []
         c_2ds = []
+        r_2ds = []
         # import ipdb
         # ipdb.set_trace()
         for i in range(boxes_3d.shape[0]):
@@ -567,7 +568,7 @@ class Boxes3DTo2D(object):
                 visible_side = left_side_points_2d
 
             # visible side truncated with 2d box
-            cls_orient, reg_orient = truncate_box(dims[i], visible_side)
+            cls_orient, reg_orient = truncate_box(box_2d_proj, visible_side)
 
             # import ipdb
             # ipdb.set_trace()
@@ -587,6 +588,8 @@ class Boxes3DTo2D(object):
             ])
 
             c_2ds.append(get_center_2d(target['location'], p2, box_2d_proj))
+
+            r_2ds.append([get_r_2d(visible_side)])
 
         sample['coords'] = np.stack(coords, axis=0).astype(np.float32)
         sample['coords_uncoded'] = np.stack(
@@ -608,6 +611,7 @@ class Boxes3DTo2D(object):
 
         sample['h_2d'] = np.stack(h_2ds, axis=0).astype(np.float32)
         sample['c_2d'] = np.stack(c_2ds, axis=0).astype(np.float32)
+        sample['r_2d'] = np.stack(r_2ds, axis=0).astype(np.float32)
         return sample
 
 

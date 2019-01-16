@@ -55,6 +55,7 @@ class Mono3DKittiDataset(DetDataset):
             reg_orients = transform_sample['reg_orient']
             h_2ds = transform_sample['h_2d']
             c_2ds = transform_sample['c_2d']
+            r_2ds = transform_sample['r_2d']
         else:
             # fake gt
             bbox = torch.zeros((1, 5))
@@ -72,6 +73,7 @@ class Mono3DKittiDataset(DetDataset):
             reg_orients = torch.zeros((1, 2))
             h_2ds = torch.zeros((1, 1))
             c_2ds = torch.zeros((1, 1))
+            r_2ds = torch.zeros((1, 1))
 
         h, w = transform_sample['img'].shape[-2:]
         training_sample = {}
@@ -93,6 +95,7 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['cls_orient'] = cls_orients
         training_sample['h_2d'] = h_2ds
         training_sample['c_2d'] = c_2ds
+        training_sample['r_2d'] = r_2ds
 
         # use proj instead of original box
         # training_sample['boxes_2d_proj'] = boxes_2d_proj

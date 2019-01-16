@@ -215,9 +215,17 @@ def generate_side_points(dets_2d, orient):
     # import ipdb
     # ipdb.set_trace()
     cls_orient_argmax = orient[:, 0].astype(np.int32)
+    # use r_2d
+    r_2ds = orient[:, 6]
+    cls_orient_argmax2 = np.zeros_like(cls_orient_argmax).astype(np.int32)
+    cls_orient_argmax2[r_2ds < 0.5] = 0
+    cls_orient_argmax2[r_2ds > 0.5] = 1
+
     reg_orient = orient[:, 1:3]
     h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
     w = (dets_2d[:, 2] - dets_2d[:, 0] + 1)
+
+    # reg_orient[...] = 0.5
     reg_orient[:, 0] *= w
     reg_orient[:, 1] *= h
 
@@ -293,28 +301,28 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     # ry
     # import ipdb
     # ipdb.set_trace()
-    if dets_3d.shape[1] == 9:
-        lines = generate_side_points(dets_2d, dets_3d[:, 3:])
-        A = lines[:, 3] - lines[:, 1]
-        B = lines[:, 0] - lines[:, 2]
-        C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]
-        plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
-        a = plane[:, 0]
-        c = plane[:, 2]
-        # direct_line = np.hstack([c,-a])
-        # or ry +/- pi
-        # ry = np.arccos(c / (np.sqrt(c * c + a * a)))
-        ry = direction2angle(c, -a)
+    # if dets_3d.shape[1] == 9:
+    lines = generate_side_points(dets_2d, dets_3d[:, 3:])
+    A = lines[:, 3] - lines[:, 1]
+    B = lines[:, 0] - lines[:, 2]
+    C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]
+    plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
+    a = plane[:, 0]
+    c = plane[:, 2]
+    # direct_line = np.hstack([c,-a])
+    # or ry +/- pi
+    # ry = np.arccos(c / (np.sqrt(c * c + a * a)))
+    ry = direction2angle(c, -a)
 
-        # decode h_2ds and c_2ds
-        h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
-        w = (dets_2d[:, 2] - dets_2d[:, 0] + 1)
+    # decode h_2ds and c_2ds
+    h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
+    w = (dets_2d[:, 2] - dets_2d[:, 0] + 1)
 
-        dets_3d[:, 6] *= h
-        dets_3d[:, 7] = dets_3d[:, 7] * w + dets_2d[:, 0]
-        dets_3d[:, 8] = dets_3d[:, 8] * h + dets_2d[:, 1]
-    else:
-        ry = dets_3d[:, -1]
+    dets_3d[:, 6] *= h
+    dets_3d[:, 7] = dets_3d[:, 7] * w + dets_2d[:, 0]
+    dets_3d[:, 8] = dets_3d[:, 8] * h + dets_2d[:, 1]
+    # else:
+    # ry = dets_3d[:, -1]
 
     C_3d = calculate_location(dets_3d, p2)
 
@@ -447,9 +455,11 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
         errors = np.stack(errors, axis=0)
         # idx = errors.argmin()
         # final results
-        idx = match(dets_2d[i, :-1], corners[i], results_x,
-                    R[i][np.newaxis, ...], p2)
-        X = results_x[idx]
+        # idx = match(dets_2d[i, :-1], corners[i], results_x,
+        # R[i][np.newaxis, ...], p2)
+        X = final_decision(errors, dets_2d[i, :-1], corners[i], results_x,
+                           R[i][np.newaxis, ...], p2)
+        # X = results_x[idx]
         rcnn_3d.append(X)
     #  import ipdb
     #  ipdb.set_trace()
@@ -458,7 +468,7 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
         [dets_3d[:, :3], translation, ry[..., np.newaxis]], axis=-1), C_3d
 
 
-def final_decision(errors, trans, r, p2, box_2d, corner):
+def final_decision(errors, box_2d, corner, trans, r, p2):
     """
     Two steps to filter final results:
     1. box_2d iou match
@@ -468,15 +478,27 @@ def final_decision(errors, trans, r, p2, box_2d, corner):
     """
 
     # some parameters
-    iou_thresh = 0.8
+    iou_thresh = None
     error_top_n = 30
-    keep = np.argsort(errors.flatten())[:error_top_n]
+    error_filter = False
 
+    # filtered by real condition
+    z_filter = trans[:, -1] > 0
+    trans = trans[z_filter]
+    errors = errors[z_filter]
+
+    # import ipdb
+    # ipdb.set_trace()
+    if error_filter:
+        keep = np.argsort(errors.flatten())[:error_top_n]
+
+        # filtered by errors
+        trans = trans[keep]
 
     # box_2d match
-    idx = match(box_2d, corner, trans, r, p2)
+    idx = match(box_2d, corner, trans, r, p2, thresh=iou_thresh)
 
-    #
+    return trans[idx]
 
 
 def generate_coeff(points_3d, line_2d):
@@ -728,6 +750,17 @@ def mono_3d_postprocess_angle(dets_3d, dets_2d, p2):
         # two methods
         #  import ipdb
         #  ipdb.set_trace()
+
+        # import ipdb
+        # ipdb.set_trace()
+        # orient_filter
+        orient_filter = get_cls_orient(results_x, ry, p2, dets_3d[i, 3])
+        results_x = results_x[orient_filter]
+        R = R[orient_filter]
+        errors = errors[orient_filter]
+        ry = ry[orient_filter]
+
+        # 2d_filter
         keep = match(dets_2d[i, :-1], corners[i], results_x, R, p2, thresh=0.8)
         if keep.size:
             errors = errors[keep]
@@ -735,6 +768,7 @@ def mono_3d_postprocess_angle(dets_3d, dets_2d, p2):
             ry = ry[keep]
             R = R[keep]
         idx = errors.argmin()
+        # idx = keep
         if errors[idx] > 1e3:
             print('error is too large: {}'.format(errors[idx]))
 
@@ -755,4 +789,46 @@ def mono_3d_postprocess_angle(dets_3d, dets_2d, p2):
     rcnn_ry = np.vstack(rcnn_ry)
     #  import ipdb
     #  ipdb.set_trace()
-    return np.concatenate([dets_3d[:, :-1], translation, rcnn_ry], axis=-1)
+    return np.concatenate([dets_3d[:, :3], translation, rcnn_ry], axis=-1)
+
+
+def get_cls_orient(trans, ry, p2, cls_orient_pred):
+    """
+    Args:
+        trans: shape(N, 3)
+    """
+    ry[...] = 1.57
+    trans_homo = np.concatenate([trans, np.ones((trans.shape[0], 1))], axis=-1)
+    C_2d_homo = np.dot(p2, trans_homo.T).T
+    C_2d_homo /= C_2d_homo[:, -1:]
+    C_2d = C_2d_homo[:, :2]
+
+    num = trans.shape[0]
+    deltas = np.asarray([10, 0, 0])
+
+    zeros = np.zeros_like(ry)
+    ones = np.ones_like(ry)
+    R = np.stack(
+        [
+            np.cos(ry), zeros, np.sin(ry), zeros, ones, zeros, -np.sin(ry),
+            zeros, np.cos(ry)
+        ],
+        axis=-1).reshape(num, 3, 3)
+    trans2 = np.dot(R, deltas) + trans
+    trans2_homo = np.concatenate(
+        [trans2, np.ones((trans2.shape[0], 1))], axis=-1)
+    C_2d2_homo = np.dot(p2, trans2_homo.T).T
+    C_2d2_homo /= C_2d2_homo[:, -1:]
+    C_2d2 = C_2d2_homo[:, :2]
+    line = [C_2d, C_2d2]
+
+    direction = line[0] - line[1]
+    cond = direction[:, 0] * direction[:, 1]
+    cls_orient = np.zeros_like(direction[:, 0]).astype(np.int32)
+    cls_orient[cond == 0] = -1
+    cls_orient[cond > 0] = 1
+    cls_orient[cond < 0] = 0
+
+    orient_filter = (cls_orient == cls_orient_pred.astype(np.int32)) | (
+        cls_orient == -1)
+    return orient_filter

@@ -35,7 +35,8 @@ class OrientationLoss(nn.Module):
                 'cls_orient_loss': cls_loss,
                 'reg_orient_loss': reg_loss[:, :2].sum(dim=-1),
                 'h_2d_loss': reg_loss[:, 2],
-                'c_2d_loss': reg_loss[:, 3:].sum(dim=-1)
+                'c_2d_loss': reg_loss[:, 3:5].sum(dim=-1),
+                'r_2d_loss': reg_loss[:, 5]
             }
             return loss_dict
         else:

@@ -139,8 +139,10 @@ class TargetAssigner(object):
         match += offset.view(batch_size, 1).type_as(match)
         assigned_gt_boxes = gt_boxes.view(-1, 4)[match.view(-1)].view(
             batch_size, -1, 4)
-        assigned_gt_boxes_3d = gt_boxes_3d.view(-1, 9)[match.view(-1)].view(
-            batch_size, -1, 9)
+
+        num_cols = gt_boxes_3d.shape[-1]
+        assigned_gt_boxes_3d = gt_boxes_3d.view(-1, num_cols)[match.view(-1)].view(
+            batch_size, -1, num_cols)
         reg_targets_batch = self.bbox_coder.encode_batch(bboxes,
                                                          assigned_gt_boxes)
         reg_targets_batch_3d = self.bbox_coder_3d.encode_batch_bbox(

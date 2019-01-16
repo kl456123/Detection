@@ -396,7 +396,18 @@ def compute_2d_proj(ry, corners, trans_3d, p):
     return boxes_2d_proj
 
 
-def truncate_box(dims_2d, line):
+def get_r_2d(line):
+    # import ipdb
+    # ipdb.set_trace()
+    direction = (line[0] - line[1])
+    if direction[1] < 0:
+        direction = -direction
+    cos = direction[0] / np.linalg.norm(direction)
+    theta = np.arccos(cos)
+    return 1 - theta / np.pi
+
+
+def truncate_box(box_2d, line):
     """
     Args:
         dims_2d:
@@ -404,6 +415,8 @@ def truncate_box(dims_2d, line):
     Return: cls_orient:
             reg_orient:
     """
+    # import ipdb
+    # ipdb.set_trace()
     direction = (line[0] - line[1])
     if direction[0] * direction[1] == 0:
         cls_orient = -1
@@ -414,7 +427,9 @@ def truncate_box(dims_2d, line):
     reg_orient = np.abs(direction)
 
     # normalize
-    w, h = dims_2d
+    # w, h = dims_2d
+    h = box_2d[3] - box_2d[1] + 1
+    w = box_2d[2] - box_2d[0] + 1
 
     reg_orient[0] /= w
     reg_orient[1] /= h

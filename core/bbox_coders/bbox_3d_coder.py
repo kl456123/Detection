@@ -222,7 +222,11 @@ class BBox3DCoder(object):
         # info_2d = torch.stack([h_2d, c_2d_x, c_2d_y], dim=-1)
         info_2d = targets[:, 7:10]
 
-        return torch.cat([bbox, orient, info_2d], dim=-1)
+        # import ipdb
+        # ipdb.set_trace()
+        r_2ds = targets[:, 10:11] * math.pi
+
+        return torch.cat([bbox, orient, info_2d, r_2ds], dim=-1)
 
     def decode_batch_angle(self, targets, bin_centers=None):
         """

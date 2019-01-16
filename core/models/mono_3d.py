@@ -64,7 +64,7 @@ class Mono3DFasterRCNN(Model):
         # normalize to [0,1]
         # reg_orient = F.sigmoid(rcnn_3d[:, 5:7])
         # rcnn_3d = torch.cat([rcnn_3d[:, :-2], reg_orient], dim=-1)
-        rcnn_3d[:, 5:10] = F.sigmoid(rcnn_3d[:, 5:10])
+        rcnn_3d[:, 5:11] = F.sigmoid(rcnn_3d[:, 5:11])
 
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -176,7 +176,7 @@ class Mono3DFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 3)
+        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 3 + 1)
 
         # self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
         # self.rcnn_3d_loss = MultiBinRegLoss(num_bins=self.num_bins)
@@ -236,12 +236,13 @@ class Mono3DFasterRCNN(Model):
 
         h_2ds = feed_dict['h_2d']
         c_2ds = feed_dict['c_2d']
+        r_2ds = feed_dict['r_2d']
 
         # here just concat them
         # dims and their projection
 
-        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], orient, h_2ds, c_2ds],
-                                dim=-1)
+        gt_boxes_3d = torch.cat(
+            [gt_boxes_3d[:, :, :3], orient, h_2ds, c_2ds, r_2ds], dim=-1)
 
         ##########################
         # assigner
@@ -371,8 +372,6 @@ class Mono3DFasterRCNN(Model):
         cls_orient_preds = rcnn_3d[:, 3:5]
         cls_orient = rcnn_reg_targets_3d[:, 3]
         _, cls_orient_preds_argmax = torch.max(cls_orient_preds, dim=-1)
-        # import ipdb
-        # ipdb.set_trace()
         orient_tp_mask = cls_orient.type_as(
             cls_orient_preds_argmax) == cls_orient_preds_argmax
         mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
@@ -382,6 +381,17 @@ class Mono3DFasterRCNN(Model):
         orient_all_num = orient_tp_mask.numel()
         # orient_pr = orient_tp_num / orient_all_num
 
+        # this mask is converted from reg methods
+        r_2ds_dis = torch.zeros_like(cls_orient)
+        r_2ds = rcnn_3d[:, 10]
+        r_2ds_dis[r_2ds < 0.5] = 0
+        r_2ds_dis[r_2ds > 0.5] = 1
+        orient_tp_mask2 = (r_2ds_dis == cls_orient)
+
+        orient_tp_mask2 = orient_tp_mask2[mask]
+
+        orient_tp_num2 = orient_tp_mask2.int().sum().item()
+
         # store all stats in target assigner
         self.target_assigner.stat.update({
             'angle_num_tp': torch.tensor(0),
@@ -389,6 +399,7 @@ class Mono3DFasterRCNN(Model):
 
             # stats of orient
             'orient_tp_num': orient_tp_num,
+            'orient_tp_num2': orient_tp_num2,
             # 'orient_pr': orient_pr,
             'orient_all_num': orient_all_num
         })

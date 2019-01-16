@@ -130,7 +130,9 @@ def test(eval_config, data_loader, model):
                     # global_angles_gt = gt_boxes_3d[:, -1:]
                     # rcnn_3d = np.concatenate(
                         # [gt_boxes_3d[:, :3], global_angles_gt], axis=-1)
+                    # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
                     rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
+                    # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
                     # rcnn_3d[:, 3:6] = location
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
 
