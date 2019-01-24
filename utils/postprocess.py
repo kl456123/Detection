@@ -221,6 +221,17 @@ def generate_side_points(dets_2d, orient):
     cls_orient_argmax2[r_2ds < 0.5] = 0
     cls_orient_argmax2[r_2ds > 0.5] = 1
 
+    # use cls_orient_4s
+    cls_orient_4s = orient[:, 7]
+    cls_orient_argmax3 = np.zeros_like(cls_orient_argmax).astype(np.int32)
+    cls_orient_argmax3[(cls_orient_4s == 0) | (cls_orient_4s == 2)] = 1
+    cls_orient_argmax3[(cls_orient_4s == 1) | (cls_orient_4s == 3)] = 0
+
+    # use center orient
+    center_orients = orient[:, 8].astype(np.int32)
+
+    # cls_orient_argmax = center_orients
+
     reg_orient = orient[:, 1:3]
     h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
     w = (dets_2d[:, 2] - dets_2d[:, 0] + 1)
@@ -299,9 +310,6 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     num = dets_3d.shape[0]
 
     # ry
-    # import ipdb
-    # ipdb.set_trace()
-    # if dets_3d.shape[1] == 9:
     lines = generate_side_points(dets_2d, dets_3d[:, 3:])
     A = lines[:, 3] - lines[:, 1]
     B = lines[:, 0] - lines[:, 2]
@@ -309,22 +317,16 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
     a = plane[:, 0]
     c = plane[:, 2]
-    # direct_line = np.hstack([c,-a])
-    # or ry +/- pi
-    # ry = np.arccos(c / (np.sqrt(c * c + a * a)))
     ry = direction2angle(c, -a)
 
     # decode h_2ds and c_2ds
-    h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
-    w = (dets_2d[:, 2] - dets_2d[:, 0] + 1)
+    # h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
+    # w = (dets_2d[:, 2] - dets_2d[:, 0] + 1)
 
-    dets_3d[:, 6] *= h
-    dets_3d[:, 7] = dets_3d[:, 7] * w + dets_2d[:, 0]
-    dets_3d[:, 8] = dets_3d[:, 8] * h + dets_2d[:, 1]
-    # else:
-    # ry = dets_3d[:, -1]
-
-    C_3d = calculate_location(dets_3d, p2)
+    # dets_3d[:, 6] *= h
+    # dets_3d[:, 7] = dets_3d[:, 7] * w + dets_2d[:, 0]
+    # dets_3d[:, 8] = dets_3d[:, 8] * h + dets_2d[:, 1]
+    # C_3d = calculate_location(dets_3d, p2)
 
     # ry[...] = 1.57
     # ry_local = dets_3d[:, -1]
@@ -334,6 +336,7 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     # center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
     # center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
     # ry = compute_global_angle(center_2d, p2, ry_local)
+    C_3d = None
     #  ry = ry_local
 
     zeros = np.zeros_like(ry)
@@ -669,7 +672,9 @@ def mono_3d_postprocess_angle(dets_3d, dets_2d, p2):
     rcnn_3d = []
     rcnn_ry = []
 
-    bin_centers = generate_multi_bins(24)
+    num_bins = 30
+
+    bin_centers = generate_multi_bins(num_bins)
     #  import ipdb
     #  ipdb.set_trace()
     for i in range(num):
@@ -754,21 +759,31 @@ def mono_3d_postprocess_angle(dets_3d, dets_2d, p2):
         # import ipdb
         # ipdb.set_trace()
         # orient_filter
-        orient_filter = get_cls_orient(results_x, ry, p2, dets_3d[i, 3])
+        center_orients = dets_3d[i, 11].astype(np.int32)
+        orient_filter = get_cls_orient(results_x, ry, p2, center_orients)
+        z_filter = results_x[:, -1] > 0
+
+        orient_filter = orient_filter & z_filter
+
+        # if orient_filter.sum()==0:
+        # import ipdb
+        # ipdb.set_trace()
+
         results_x = results_x[orient_filter]
         R = R[orient_filter]
         errors = errors[orient_filter]
         ry = ry[orient_filter]
 
         # 2d_filter
-        keep = match(dets_2d[i, :-1], corners[i], results_x, R, p2, thresh=0.8)
-        if keep.size:
-            errors = errors[keep]
-            results_x = results_x[keep]
-            ry = ry[keep]
-            R = R[keep]
-        idx = errors.argmin()
-        # idx = keep
+        keep = match(
+            dets_2d[i, :-1], corners[i], results_x, R, p2, thresh=None)
+        # if keep.size:
+        # errors = errors[keep]
+        # results_x = results_x[keep]
+        # ry = ry[keep]
+        # R = R[keep]
+        # idx = errors.argmin()
+        idx = keep
         if errors[idx] > 1e3:
             print('error is too large: {}'.format(errors[idx]))
 
@@ -792,12 +807,16 @@ def mono_3d_postprocess_angle(dets_3d, dets_2d, p2):
     return np.concatenate([dets_3d[:, :3], translation, rcnn_ry], axis=-1)
 
 
+def get_center_orient():
+    pass
+
+
 def get_cls_orient(trans, ry, p2, cls_orient_pred):
     """
     Args:
         trans: shape(N, 3)
     """
-    ry[...] = 1.57
+    # ry[...] = 1.57
     trans_homo = np.concatenate([trans, np.ones((trans.shape[0], 1))], axis=-1)
     C_2d_homo = np.dot(p2, trans_homo.T).T
     C_2d_homo /= C_2d_homo[:, -1:]

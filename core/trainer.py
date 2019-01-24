@@ -55,6 +55,14 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
         orient_all_num = 0
         orient_tp_num = 0
         orient_tp_num2 = 0
+        orient_tp_num3 = 0
+        orient_all_num3 = 0
+
+        orient_tp_num4 = 0
+        orient_all_num4 = 0
+
+        cls_orient_2s_all_num = 0
+        cls_orient_2s_tp_num = 0
 
         for step, data in enumerate(data_loader):
 
@@ -100,6 +108,13 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             orient_all_num += stat['orient_all_num']
             orient_tp_num += stat['orient_tp_num']
             orient_tp_num2 += stat['orient_tp_num2']
+            orient_tp_num3 += stat['orient_tp_num3']
+            orient_tp_num4 += stat['orient_tp_num4']
+            orient_all_num4 += stat['orient_all_num4']
+            orient_all_num3 += stat['orient_all_num3']
+
+            cls_orient_2s_tp_num += stat['cls_orient_2s_tp_num']
+            cls_orient_2s_all_num += stat['cls_orient_2s_all_num']
 
             if step % disp_interval == 0:
                 end = time.time()
@@ -152,6 +167,36 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
                 print("\t\t\torient_tp_num2/orient_all_num({}/{}/{:.4f}): ".
                       format(orient_tp_num2, orient_all_num, orient_tp_num2 /
                              orient_all_num))
+
+                if orient_all_num3 == 0:
+                    orient_all_num3 = 1
+                print("\t\t\torient_tp_num3/orient_all_num({}/{}/{:.4f}): ".
+                      format(orient_tp_num3, orient_all_num3, orient_tp_num3 /
+                             orient_all_num3))
+
+                summary_writer.add_scalar('metric/orient_tp_num', orient_tp_num
+                                          / orient_all_num, total_step + step)
+                summary_writer.add_scalar('metric/orient_tp_num2',
+                                          orient_tp_num2 / orient_all_num,
+                                          total_step + step)
+                summary_writer.add_scalar('metric/orient_tp_num3',
+                                          orient_tp_num3 / orient_all_num3,
+                                          total_step + step)
+
+                if orient_all_num4 == 0:
+                    orient_all_num4 = 1
+
+                print("\t\t\torient_tp_num4/orient_all_num({}/{}/{:.4f}): ".
+                      format(orient_tp_num4, orient_all_num4, orient_tp_num4 /
+                             orient_all_num4))
+
+                # check label
+                if cls_orient_2s_all_num == 0:
+                    cls_orient_2s_all_num = 1
+                print(
+                    "\t\t\tcls_orient_2s_tp_num/cls_orient_2s_all_num({}/{}/{:.4f}): ".
+                    format(cls_orient_2s_tp_num, cls_orient_2s_all_num,
+                           cls_orient_2s_tp_num / cls_orient_2s_all_num))
                 # reset
                 matched = 0
                 num_gt = 0
@@ -162,7 +207,15 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
                 angle_num_all = 0
                 orient_tp_num = 0
                 orient_tp_num2 = 0
+                orient_tp_num3 = 0
                 orient_all_num = 0
+
+                orient_tp_num4 = 0
+                orient_all_num4 = 0
+                orient_all_num3 = 0
+
+                cls_orient_2s_tp_num = 0
+                cls_orient_2s_all_num = 0
 
                 start = time.time()
 

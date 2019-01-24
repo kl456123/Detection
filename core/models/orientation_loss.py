@@ -24,19 +24,30 @@ class OrientationLoss(nn.Module):
 
         cls_loss = self.cls_loss(cls_preds, cls_orient)
 
-        # import ipdb
-        # ipdb.set_trace()
+        # cls_orient_4s = targets[:, 7].long()
+        # cls_orient_4s_preds = preds[:, 8:12]
+        # cls_4s_loss = self.cls_loss(cls_orient_4s_preds, cls_orient_4s)
+
+        # # import ipdb
+        # # ipdb.set_trace()
+        # center_orients = targets[:, 8].long()
+        # center_orients_preds = preds[:, 12:]
+        # center_orient_loss = self.cls_loss(center_orients_preds,
+                                           # center_orients)
+
         # reg loss
-        reg_orient = targets[:, 1:]
-        reg_preds = preds[:, 2:]
+        reg_orient = targets[:, 1:7]
+        reg_preds = preds[:, 2:8]
         reg_loss = self.reg_loss(reg_preds, reg_orient)
         if self.split_loss:
             loss_dict = {
                 'cls_orient_loss': cls_loss,
                 'reg_orient_loss': reg_loss[:, :2].sum(dim=-1),
-                'h_2d_loss': reg_loss[:, 2],
-                'c_2d_loss': reg_loss[:, 3:5].sum(dim=-1),
-                'r_2d_loss': reg_loss[:, 5]
+                # 'h_2d_loss': reg_loss[:, 2],
+                # 'c_2d_loss': reg_loss[:, 3:5].sum(dim=-1),
+                # 'r_2d_loss': reg_loss[:, 5],
+                # 'cls_orient_4_loss': cls_4s_loss,
+                # 'center_orient': center_orient_loss
             }
             return loss_dict
         else:

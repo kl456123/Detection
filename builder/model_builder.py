@@ -25,6 +25,10 @@ from core.models.double_iou_faster_rcnn_model_second_stage import DoubleIoUSecon
 from core.models.three_iou_faster_rcnn_model_org_ohem_second import OrgOHEMThreeIoUSecondStageFasterRCNN
 from core.models.fpn_faster_rcnn_model import FPNFasterRCNN
 from core.models.mono_3d import Mono3DFasterRCNN
+from core.models.mono_3d_angle import Mono3DAngleFasterRCNN
+from core.models.mono_3d_angle_simpler import Mono3DAngleSimplerFasterRCNN
+from core.models.mono_3d_simpler import Mono3DSimplerFasterRCNN
+from core.models.mono_3d_angle_new import Mono3DAngleNewFasterRCNN
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -94,6 +98,14 @@ def build(model_config, training=True):
         fasterRCNN = OrgOHEMThreeIoUSecondStageFasterRCNN(model_config)
     elif net_arch == 'mono_3d':
         fasterRCNN = Mono3DFasterRCNN(model_config)
+    elif net_arch == 'multibin':
+        fasterRCNN = Mono3DAngleFasterRCNN(model_config)
+    elif net_arch == 'multibin_simpler':
+        fasterRCNN = Mono3DAngleSimplerFasterRCNN(model_config)
+    elif net_arch == 'mono_3d_simpler':
+        fasterRCNN = Mono3DSimplerFasterRCNN(model_config)
+    elif net_arch == 'multibin_new':
+        fasterRCNN = Mono3DAngleNewFasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

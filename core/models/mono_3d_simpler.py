@@ -24,7 +24,7 @@ from utils.visualizer import FeatVisualizer
 import functools
 
 
-class Mono3DFasterRCNN(Model):
+class Mono3DSimplerFasterRCNN(Model):
     def forward(self, feed_dict):
         # import ipdb
         # ipdb.set_trace()
@@ -38,26 +38,27 @@ class Mono3DFasterRCNN(Model):
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
 
-        # proposals = prediction_dict['proposals_batch']
-        # shape(N,num_proposals,5)
-        # pre subsample for reduce consume of memory
         if self.training and self.train_2d:
             self.pre_subsample(prediction_dict, feed_dict)
         rois_batch = prediction_dict['rois_batch']
 
-        # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
         pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
 
-        # shape(N,C,1,1)
-        pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
-        # shape(N,C)
-        if self.reduce:
-            pooled_feat = pooled_feat.mean(3).mean(2)
-        else:
-            pooled_feat = pooled_feat.view(self.rcnn_batch_size, -1)
+        common_pooled_feat = pooled_feat
 
-        rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
-        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
+        pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
+
+        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
+        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
+        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
+        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+
+        pooled_feat = pooled_feat * saliency_map[:, 1:, :, :]
+
+        reduced_pooled_feat = pooled_feat.mean(3).mean(2)
+
+        rcnn_bbox_preds = self.rcnn_bbox_pred(reduced_pooled_feat)
+        # rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
 
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -73,21 +74,16 @@ class Mono3DFasterRCNN(Model):
         ###################################
         # 3d training
         ###################################
-        # if self.train_3d:
-        rcnn_bbox_preds = rcnn_bbox_preds.detach()
-        final_bbox = self.target_assigner.bbox_coder.decode_batch(
-            rcnn_bbox_preds.unsqueeze(0), rois_batch[:, :, 1:])
-        final_rois_inds = torch.zeros_like(final_bbox[:, :, -1:])
-        final_rois_batch = torch.cat([final_rois_inds, final_bbox], dim=-1)
-
-        if self.training and self.train_3d:
-            prediction_dict['rois_batch'] = final_rois_batch
-            self.pre_subsample(prediction_dict, feed_dict)
-            final_rois_batch = prediction_dict['rois_batch']
-
-        mono_3d_pooled_feat = self.rcnn_pooling(base_feat,
-                                                final_rois_batch.view(-1, 5))
-
+        if not self.training:
+            rcnn_bbox_preds = rcnn_bbox_preds.detach()
+            final_bbox = self.target_assigner.bbox_coder.decode_batch(
+                rcnn_bbox_preds.unsqueeze(0), rois_batch[:, :, 1:])
+            final_rois_inds = torch.zeros_like(final_bbox[:, :, -1:])
+            final_rois_batch = torch.cat([final_rois_inds, final_bbox], dim=-1)
+            mono_3d_pooled_feat = self.rcnn_pooling(
+                base_feat, final_rois_batch.view(-1, 5))
+        else:
+            mono_3d_pooled_feat = common_pooled_feat
         mono_3d_pooled_feat = self.feature_extractor.third_stage_feature(
             mono_3d_pooled_feat)
         mono_3d_pooled_feat = mono_3d_pooled_feat.mean(3).mean(2)
@@ -95,7 +91,6 @@ class Mono3DFasterRCNN(Model):
 
         # normalize to [0,1]
         rcnn_3d[:, 5:11] = F.sigmoid(rcnn_3d[:, 5:11])
-
         prediction_dict['rcnn_3d'] = rcnn_3d
 
         if not self.training:
@@ -114,11 +109,12 @@ class Mono3DFasterRCNN(Model):
         Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
-        if self.train_3d and self.training:
-            self.freeze_modules()
-            for parameter in self.feature_extractor.third_stage_feature.parameters(
-            ):
-                parameter.requires_grad = True
+        # if self.train_3d and self.training:
+
+    # self.freeze_modules()
+    # for parameter in self.feature_extractor.third_stage_feature.parameters(
+    # ):
+    # parameter.requires_grad = True
 
     def init_modules(self):
         self.feature_extractor = ResNetFeatureExtractor(
@@ -133,7 +129,8 @@ class Mono3DFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        # self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
         if self.reduce:
             in_channels = 2048
         else:
@@ -191,14 +188,7 @@ class Mono3DFasterRCNN(Model):
 
         self.train_3d = True
 
-        self.train_2d = not self.train_3d
-
-        # more accurate bbox for 3d prediction
-        if self.train_3d:
-            fg_thresh = 0.6
-        else:
-            fg_thresh = 0.5
-        model_config['target_assigner_config']['fg_thresh'] = fg_thresh
+        self.train_2d = True
 
         # assigner
         self.target_assigner = TargetAssigner(
@@ -292,10 +282,10 @@ class Mono3DFasterRCNN(Model):
         """
         loss_dict = {}
 
-        # submodule loss
-        loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
-
         if self.train_2d:
+            # submodule loss
+            loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
+
             # targets and weights
             rcnn_cls_weights = prediction_dict['rcnn_cls_weights']
             rcnn_reg_weights = prediction_dict['rcnn_reg_weights']
@@ -323,7 +313,6 @@ class Mono3DFasterRCNN(Model):
         ######################################
         # 3d loss
         ######################################
-
         rcnn_reg_weights_3d = prediction_dict['rcnn_reg_weights_3d']
         rcnn_reg_targets_3d = prediction_dict['rcnn_reg_targets_3d']
         rcnn_3d = prediction_dict['rcnn_3d']

@@ -9,7 +9,7 @@ import numpy as np
 import argparse
 import pickle
 from utils.generate_anchors import generate_anchors
-import seaborn as sns
+# import seaborn as sns
 import matplotlib.pyplot as plt
 
 
@@ -36,7 +36,8 @@ def visualize_bbox(img,
                    gt_bboxes=[],
                    size=None,
                    save=False,
-                   title='test'):
+                   title='test',
+                   display=True):
     """
     Args:
         bboxes: non-normalized(N,4)
@@ -99,8 +100,9 @@ def visualize_bbox(img,
                 img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
                 color=(255, 255, 255),
                 thickness=2)
-        cv2.imshow(title, img)
-        cv2.waitKey(0)
+        if display:
+            cv2.imshow(title, img)
+            cv2.waitKey(0)
 
         if save:
             img_path = 'res_%d.jpg' % idx

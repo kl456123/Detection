@@ -7,7 +7,8 @@ import matplotlib
 from PIL import Image, ImageFilter
 from utils.box_vis import compute_box_3d
 from utils.kitti_util import compute_local_angle, compute_2d_proj, truncate_box
-from utils.kitti_util import get_h_2d, get_center_2d, get_r_2d
+from utils.kitti_util import get_h_2d, get_center_2d, get_r_2d, get_cls_orient_4
+from utils.kitti_util import get_center_orient
 from utils.box_vis import draw_line
 
 
@@ -487,6 +488,10 @@ class Boxes3DTo2D(object):
         h_2ds = []
         c_2ds = []
         r_2ds = []
+        cls_orient_4s = []
+
+        center_orient = []
+
         # import ipdb
         # ipdb.set_trace()
         for i in range(boxes_3d.shape[0]):
@@ -522,13 +527,14 @@ class Boxes3DTo2D(object):
 
             # local angle
             # use truely center
-            if self.use_proj_2d:
-                center_used = boxes_2d_proj_center
-            else:
-                center_used = center[i]
+            # if self.use_proj_2d:
+            # center_used = boxes_2d_proj_center
+            # else:
+            # center_used = center[i]
             # import ipdb
             # ipdb.set_trace()
-            local_angle = compute_local_angle(center_used, p2, target['ry'])
+            # local_angle = compute_local_angle(center_used, p2, target['ry'])
+            local_angle = compute_local_angle(target['location'], target['ry'])
             local_angles.append([local_angle])
             local_angle_oritations.append(
                 np.asarray([np.sin(local_angle), np.cos(local_angle)]))
@@ -591,6 +597,11 @@ class Boxes3DTo2D(object):
 
             r_2ds.append([get_r_2d(visible_side)])
 
+            cls_orient_4s.append([get_cls_orient_4(visible_side)])
+
+            center_orient.append(
+                [get_center_orient(target['location'], p2, target['ry'])])
+
         sample['coords'] = np.stack(coords, axis=0).astype(np.float32)
         sample['coords_uncoded'] = np.stack(
             corners_xys, axis=0).astype(np.float32)
@@ -612,6 +623,10 @@ class Boxes3DTo2D(object):
         sample['h_2d'] = np.stack(h_2ds, axis=0).astype(np.float32)
         sample['c_2d'] = np.stack(c_2ds, axis=0).astype(np.float32)
         sample['r_2d'] = np.stack(r_2ds, axis=0).astype(np.float32)
+        sample['cls_orient_4'] = np.stack(
+            cls_orient_4s, axis=0).astype(np.float32)
+        sample['center_orient'] = np.stack(
+            center_orient, axis=0).astype(np.float32)
         return sample
 
 

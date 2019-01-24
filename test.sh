@@ -115,11 +115,24 @@
     # --checkepoch 100
 
 # encoded
-CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
-    --net mono_3d \
-    --load_dir /data/object/liangxiong/mono_3d_angle_reg \
+CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    --net mono_3d_simpler \
+    --load_dir /data/object/liangxiong/mono_3d_angle_reg_3d_both \
     --checkpoint 3257 \
-    --checkepoch 55
+    --checkepoch 7
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net multibin_simpler \
+    # --load_dir /data/object/liangxiong/mono_3d_angle_reg_2d_both \
+    # --checkpoint 3257 \
+    # --checkepoch 7
+
+# 3d proj 2d detection
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --net mono_3d \
+    # --load_dir /data/object/liangxiong/faster_rcnn_3d \
+    # --checkpoint 3257 \
+    # --checkepoch 11
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \

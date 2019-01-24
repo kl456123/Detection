@@ -7,7 +7,7 @@ from core.ops import get_angle
 import torch.nn.functional as F
 
 
-class MultiBinLoss(nn.Module):
+class MultiBinNewLoss(nn.Module):
     def __init__(self, num_bins=4, overlaps=1 / 6 * math.pi, angle_offset=0):
         super().__init__()
         self.num_bins = num_bins
@@ -35,9 +35,10 @@ class MultiBinLoss(nn.Module):
         """
         local_angle ranges from [-pi, pi]
         """
-        cos_deltas = torch.cos(local_angle - self.bin_centers)
-        min_deltas = math.cos(self.max_deltas)
-        cls_targets = cos_deltas >= min_deltas
+        angle_dist = -torch.cos(local_angle - self.bin_centers)
+        #  angle_dist = -math.cos(self.max_deltas)
+        _, cls_targets = torch.min(angle_dist, dim=-1)
+        #  cls_targets = cos_deltas >= min_deltas
 
         return cls_targets.long()
 
@@ -54,27 +55,30 @@ class MultiBinLoss(nn.Module):
         """
         # import ipdb
         # ipdb.set_trace()
-        preds = preds.contiguous().view(-1, self.num_bins, 4)
+        preds = preds.contiguous().view(-1, self.num_bins, 3)
         # targets[targets < 0] = targets[targets < 0] + 2 * math.pi
 
         # generate cls target
         cls_targets = self.generate_cls_targets(targets)
 
         # cls loss
-        angle_cls_loss = self.angle_cls_loss(
-            preds[:, :, :2].contiguous().view(-1, 2), cls_targets.view(-1))
-        angle_cls_loss = angle_cls_loss.view(-1, self.num_bins)
+        angle_cls_loss = self.angle_cls_loss(preds[:, :, 0].contiguous(),
+                                             cls_targets.view(-1))
+        #  angle_cls_loss = angle_cls_loss.view(-1, self.num_bins)
         # change from sum to mean
-        angle_cls_loss = angle_cls_loss.mean(dim=-1)
+        #  angle_cls_loss = angle_cls_loss.mean(dim=-1)
 
         # residual loss
         # reg_targets = self.generate_reg_targets(targets)
-        theta = get_angle(preds[:, :, 3], preds[:, :, 2])
-        angle_reg_weights = cls_targets.detach().float()
-        angle_reg_loss = -angle_reg_weights * torch.cos(
-            targets - self.bin_centers - theta)
-        num_covered = angle_reg_weights.sum(dim=-1)
-        angle_reg_loss = 1 / num_covered * angle_reg_loss.sum(dim=-1)
+        theta = get_angle(preds[:, :, 2], preds[:, :, 1])
+        col_inds = cls_targets.detach()
+        #  row = torch.arange(
+        #  0, angles_cls_argmax.shape[0]).type_as(angles_cls_argmax)
+        row_inds = torch.arange(0, col_inds.shape[0]).type_as(col_inds)
+        angle_reg_loss = -torch.cos(targets - self.bin_centers - theta)
+        angle_reg_loss = angle_reg_loss[row_inds, col_inds]
+        # num_covered = angle_reg_weights.sum(dim=-1)
+        # angle_reg_loss = angle_reg_loss.sum(dim=-1)
 
         total_loss = angle_cls_loss + angle_reg_loss
         # total_loss = angle_cls_loss
@@ -82,10 +86,11 @@ class MultiBinLoss(nn.Module):
         # import ipdb
         # ipdb.set_trace()
         # some stats for meansure the cls precision
-        angle_cls_preds = preds[:, :, :2].detach()
+        angle_cls_preds = preds[:, :, 0].detach()
         angle_cls_probs = F.softmax(angle_cls_preds, dim=-1)
-        angle_cls_probs[angle_cls_probs >= 0.5] = 1
-        angle_cls_probs[angle_cls_probs < 0.5] = 0
-        tp_mask = 1 - (angle_cls_probs[:, :, 1].long() ^ cls_targets)
+        _, cls_preds = torch.max(angle_cls_probs, dim=-1)
+        # angle_cls_probs[angle_cls_probs >= 0.5] = 1
+        # angle_cls_probs[angle_cls_probs < 0.5] = 0
+        tp_mask = cls_preds == cls_targets
 
         return total_loss, tp_mask

@@ -85,6 +85,12 @@ def parse_args():
         '--in_path', default=None, type=str, help='Input directory.')
     parser.add_argument(
         '--out_path', default=None, type=str, help='Output directory.')
+    parser.add_argument(
+        '--pretrained_path',
+        default='',
+        type=str,
+        help='Path to pretained model')
+    parser.add_argument('--job_name', default='', type=str, help='name of job')
     args = parser.parse_args()
     return args
 
@@ -98,6 +104,7 @@ def change_lr(lr, optimizer):
 if __name__ == '__main__':
     # parse config of scripts
     args = parse_args()
+    print(args.pretrained_path)
     with open(args.config) as f:
         config = json.load(f)
 
@@ -146,8 +153,7 @@ if __name__ == '__main__':
     if args.cuda:
         fasterRCNN.cuda()
 
-    data_loader_builder = Mono3DKittiDataLoaderBuilder(
-        data_config, training=True)
+    data_loader_builder = Mono3DKittiDataLoaderBuilder(data_config, training=True)
     data_loader = data_loader_builder.build()
 
     # optimizer

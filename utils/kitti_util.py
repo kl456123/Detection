@@ -325,26 +325,35 @@ class Object3d(object):
               (self.t[0],self.t[1],self.t[2],self.ry)))
 
 
-def compute_local_angle(center_2d, p2, ry):
-    """
-    Args:
-        center_2d: shape(N, 2)
-        p2: shape(3,4)
-    """
-    #  import ipdb
-    #  ipdb.set_trace()
-    M = p2[:, :3]
-    center_2d_homo = np.concatenate(
-        [center_2d, np.ones_like(center_2d[-1:])], axis=-1)
-    direction_vector = np.dot(np.linalg.inv(M), center_2d_homo.T).T
-    x_vector = np.array([1, 0, 0])
-    cos = np.dot(direction_vector, x_vector.T) / np.linalg.norm(
-        direction_vector, axis=-1)
-    ray_angle = np.arccos(cos)
-    local_angle = ry + ray_angle
-    if local_angle > np.pi:
-        local_angle = local_angle - 2 * np.pi
-    return local_angle
+def compute_local_angle(location, ry):
+    # [0, pi]
+    alpha = np.arctan2(location[2], location[0])
+    ry_local = ry - (-alpha)
+    if ry_local > np.pi:
+        ry_local -= 2 * np.pi
+    return ry_local
+
+
+# def compute_local_angle(center_2d, p2, ry):
+# """
+# Args:
+# center_2d: shape(N, 2)
+# p2: shape(3,4)
+# """
+# #  import ipdb
+# #  ipdb.set_trace()
+# M = p2[:, :3]
+# center_2d_homo = np.concatenate(
+# [center_2d, np.ones_like(center_2d[-1:])], axis=-1)
+# direction_vector = np.dot(np.linalg.inv(M), center_2d_homo.T).T
+# x_vector = np.array([1, 0, 0])
+# cos = np.dot(direction_vector, x_vector.T) / np.linalg.norm(
+# direction_vector, axis=-1)
+# ray_angle = np.arccos(cos)
+# local_angle = ry + ray_angle
+# if local_angle > np.pi:
+# local_angle = local_angle - 2 * np.pi
+# return local_angle
 
 
 def compute_global_angle(center_2d, p2, local_angle):
@@ -359,10 +368,11 @@ def compute_global_angle(center_2d, p2, local_angle):
         [center_2d, np.ones_like(center_2d[:, -1:])], axis=-1)
     direction_vector = np.dot(np.linalg.inv(M), center_2d_homo.T).T
     x_vector = np.array([1, 0, 0])
+    direction_vector[:, 1] = 0
     cos = np.dot(direction_vector, x_vector) / np.linalg.norm(
         direction_vector, axis=-1)
     ray_angle = np.arccos(cos)
-    ry = local_angle - ray_angle
+    ry = local_angle + (-ray_angle)
     # if ry < -np.pi:
     # ry += np.pi
     cond = ry < -np.pi
@@ -407,6 +417,31 @@ def get_r_2d(line):
     return 1 - theta / np.pi
 
 
+def direction2angle(x, y):
+    # import ipdb
+    # ipdb.set_trace()
+    ry = np.arccos(x / (np.sqrt(x * x + y * y)))
+    if y < 0:
+        ry = -ry
+    return ry
+
+
+def get_cls_orient_4(line):
+    # import ipdb
+    # ipdb.set_trace()
+
+    direction = line[0] - line[1]
+
+    ry = direction2angle(direction[0], direction[1])
+
+    intervals = [[0, np.pi / 2], [np.pi / 2, np.pi], [-np.pi, -np.pi / 2],
+                 [-np.pi / 2, 0]]
+    for ind, interval in enumerate(intervals):
+        if ry >= interval[0] and ry < interval[1]:
+            cls = ind
+    return cls
+
+
 def truncate_box(box_2d, line):
     """
     Args:
@@ -435,6 +470,43 @@ def truncate_box(box_2d, line):
     reg_orient[1] /= h
     # reg_orient = np.log(reg_orient)
     return cls_orient, reg_orient
+
+
+def get_center_orient(location, p2, ry):
+    """
+    Args:
+        location: (3,)
+    """
+    K = p2[:3, :3]
+    l = 4
+
+    R = np.stack(
+        [np.cos(ry), 0, np.sin(ry), 0, 1, 0, -np.sin(ry), 0, np.cos(ry)],
+        axis=-1).reshape(3, 3)
+
+    location1 = location
+    location2 = np.dot(R, np.asarray([l, 0, 0])) + location1
+
+    # their projections
+    homo_2d_1 = np.dot(K, location1)
+    homo_2d_2 = np.dot(K, location2)
+
+    point_2d_1 = homo_2d_1 / homo_2d_1[-1]
+    point_2d_2 = homo_2d_2 / homo_2d_2[-1]
+
+    point_2d_1 = point_2d_1[:-1]
+    point_2d_2 = point_2d_2[:-1]
+
+    direction = point_2d_2 - point_2d_1
+
+    if direction[0] == 0:
+        # boundary line
+        cls_orient = -1
+    else:
+        cls_orient = direction[1] / direction[0] > 0
+        cls_orient = cls_orient.astype(np.int32)
+
+    return cls_orient
 
 
 def get_h_2d(C_3d, dim, P2, box_2d):

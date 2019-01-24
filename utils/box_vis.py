@@ -12,6 +12,9 @@ import cv2
 from utils.visualize import visualize_bbox
 sys.path.append('.')
 
+fv_dir = 'results/fv'
+bev_dir = 'results/bev'
+
 
 def parse_kitti_3d(label_path):
     lines = [line.rstrip() for line in open(label_path)]
@@ -163,7 +166,10 @@ def draw_boxes(img,
                save=True,
                box_2d=None,
                title='',
-               box_3d_gt=None):
+               box_3d_gt=None,
+               display=False,
+               fv_dir=fv_dir,
+               bev_dir=bev_dir):
     '''
     Args:
         img(PIL.Image):
@@ -246,24 +252,34 @@ def draw_boxes(img,
                     draw.line(
                         [start_point, end_point], fill=(255, 0, 0), width=2)
 
-    # display front view
-    img.save(save_path)
-    img = cv2.imread(save_path)
-    if box_2d is not None:
-        visualize_bbox(img, box_2d, title=title)
-    else:
-        cv2.imshow(title, img)
-        cv2.waitKey(0)
+    fv_path = os.path.join(fv_dir, save_path)
 
-    # display bird view
-    # import ipdb
-    # ipdb.set_trace()
-    new_width = 384 / bird_view.height * bird_view.width
-    bird_view = bird_view.resize((int(new_width), 384))
-    bird_view.save(save_path)
-    bird_view = cv2.imread(save_path)
-    cv2.imshow(title, bird_view)
-    cv2.waitKey(0)
+    h = img.height
+    new_width = h / bird_view.height * bird_view.width
+    bird_view = bird_view.resize((int(new_width), h))
+    sum_w = new_width + img.width
+    new_im = Image.new('RGB', (int(sum_w), int(h)), (255, 255, 255))
+    x_offset = 0
+    for im in (img, bird_view):
+        new_im.paste(im, (x_offset, 0))
+        x_offset += im.size[0]
+
+    # display front view
+    new_im.save(fv_path)
+    img = cv2.imread(fv_path)
+    if box_2d is not None:
+        visualize_bbox(img, box_2d, title=title, display=display)
+    else:
+        if display:
+            cv2.imshow(title, img)
+            cv2.waitKey(0)
+
+    #  bev_path = os.path.join(bev_dir, save_path)
+    #  bird_view.save(bev_path)
+    #  bird_view = cv2.imread(bev_path)
+    #  if display:
+    #  cv2.imshow(title, bird_view)
+    #  cv2.waitKey(0)
 
 
 def parse_args():
@@ -291,6 +307,31 @@ def parse_args():
 
     args = parser.parse_args()
     return args
+
+
+def mainv2(img_path, kitti_path, calib_path, save_path, label_path=None):
+    label_dir = '/data/object/training/label_2'
+
+    # load calib matrix(here just P2 is used)
+    p2 = load_projection_matrix(calib_path)
+
+    # img
+    img = Image.open(img_path)
+    # label
+    points_3d, boxes_3d, boxes_2d = parse_kitti_3d(kitti_path)
+    if label_path is None:
+        base_name = os.path.basename(kitti_path)
+        label_path = os.path.join(label_dir, base_name)
+    points_3d_gt, boxes_3d_gt, boxes_2d_gt = parse_kitti_3d(label_path)
+
+    draw_boxes(
+        img,
+        boxes_3d,
+        p2,
+        save_path,
+        title=img_path,
+        box_2d=None,
+        box_3d_gt=boxes_3d_gt)
 
 
 def main():

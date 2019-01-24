@@ -56,9 +56,9 @@ class TargetAssigner(object):
         match_quality_matrix = self.similarity_calc.compare_batch(bboxes,
                                                                   gt_boxes)
         # match 0.7 for truly recall calculation
-        if self.fg_thresh < 0.7:
-            fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
-            self.analyzer.analyze(fake_match, gt_boxes.shape[1])
+        # if self.fg_thresh < 0.7:
+        fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
+        self.analyzer.analyze(fake_match, gt_boxes.shape[1])
         # match
         # shape(N,K)
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)

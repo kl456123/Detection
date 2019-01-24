@@ -16,21 +16,24 @@ def meshgrid(a, b):
     return a_, b_
 
 
-def get_angle(sin, cos):
+def get_angle(y, x):
     """
         Args:
             sin: shape(N,num_bins)
         """
-    sin = sin.detach()
-    cos = cos.detach()
-    norm = torch.sqrt(sin * sin + cos * cos)
-    sin /= norm
-    cos /= norm
+    theta = torch.atan2(y, x)
+    return -theta
 
-    # range in [-pi, pi]
-    theta = torch.asin(sin)
-    cond_pos = (cos < 0) & (sin > 0)
-    cond_neg = (cos < 0) & (sin < 0)
-    theta[cond_pos] = math.pi - theta[cond_pos]
-    theta[cond_neg] = -math.pi - theta[cond_neg]
+    #  sin = sin.detach()
+    #  cos = cos.detach()
+    #  norm = torch.sqrt(sin * sin + cos * cos)
+    #  sin /= norm
+    #  cos /= norm
+
+    #  # range in [-pi, pi]
+    #  theta = torch.asin(sin)
+    #  cond_pos = (cos < 0) & (sin > 0)
+    #  cond_neg = (cos < 0) & (sin < 0)
+    #  theta[cond_pos] = math.pi - theta[cond_pos]
+    #  theta[cond_neg] = -math.pi - theta[cond_neg]
     return theta

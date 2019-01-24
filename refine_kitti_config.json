@@ -7,14 +7,14 @@
         },
         "dataset_config": {
             "cache_bev": false,
-            "dataset_file": "train.txt",
+            "dataset_file": "trainval.txt",
             "root_path": "/data/object/training"
         },
         "name": "kitti",
         "transform_config": {
             "crop_size": [
-                384,
-                1280
+                576,
+                1920
             ],
             "normal_mean": [
                 0.485,
@@ -59,7 +59,7 @@
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
         "max_per_image": 100,
-        "nms": 0.3,
+        "nms": 0.5,
         "rng_seed": 3,
         "thresh": 0.5
     },
@@ -70,11 +70,15 @@
             "shuffle": false
         },
         "dataset_config": {
-            "dataset_file": "val.txt",
-            "root_path": "/data/object/training"
+            "dataset_file": "test.txt",
+            "root_path": "/data/object/testing"
         },
         "name": "kitti",
         "transform_config": {
+            "crop_size": [
+                576,
+                1920
+            ],
             "normal_mean": [
                 0.485,
                 0.456,
@@ -88,6 +92,7 @@
         }
     },
     "model_config": {
+        "din":2048,
         "use_self_attention":false,
         "class_agnostic": true,
         "classes": [
@@ -96,6 +101,7 @@
         ],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
+            "net_arch":"res50",
             "pooling_size":7,
             "class_agnostic": true,
             "classes": [
@@ -103,33 +109,28 @@
                 "Car"
             ],
             "img_channels": 3,
-            "pretrained_model": "data/pretrained_model/resnet50-19c8e357.pth",
-            "pretrained": true,
-            "use_cascade": true
+            "pretrained_model":"./data/pretrained_model/resnet18-5c106cde.pth",
+            "pretrained": true
         },
         "num_classes": 2,
         "pooling_mode": "align",
         "pooling_size": 7,
-        "rcnn_batch_size": 128,
+        "rcnn_batch_size": 512,
         "rpn_config": {
             "use_iou":false,
             "use_focal_loss":true,
             "anchor_generator_config": {
-                "input_size":[384,1280],
+                "input_size":[576,1920],
                 "anchor_offset": [
                     0,
                     0
-                ],
-                "anchor_stride": [
-                    16,
-                    16
                 ],
                 "aspect_ratios": [
                     0.5,
                     0.8,
                     1
                 ],
-                "base_anchor_size": 16,
+                "base_anchor_size": 24,
                 "scales": [
                     4,
                     8,
@@ -140,7 +141,7 @@
             "min_size": 16,
             "nms_thresh": 0.7,
             "num_bbox_samples": 500,
-            "num_cls_samples": 2000,
+            "num_cls_samples": 1000,
             "post_nms_topN": 1000,
             "pre_nms_topN": 12000,
             "rpn_batch_size": 1024,
@@ -164,7 +165,7 @@
             "use_score": false
         },
         "sampler_config": {
-            "fg_fraction": 1
+            "fg_fraction": 0.25
         },
         "subsample_twice": false,
         "target_assigner_config": {

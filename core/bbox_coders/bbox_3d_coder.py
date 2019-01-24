@@ -226,7 +226,21 @@ class BBox3DCoder(object):
         # ipdb.set_trace()
         r_2ds = targets[:, 10:11] * math.pi
 
-        return torch.cat([bbox, orient, info_2d, r_2ds], dim=-1)
+        cls_orient_4s = targets[:, 11:15]
+        cls_orient_4s = F.softmax(cls_orient_4s, dim=-1)
+        cls_orient_4s, cls_orient_4s_argmax = torch.max(cls_orient_4s, dim=-1)
+        cls_orient_4s_idx = cls_orient_4s_argmax.unsqueeze(-1).type_as(r_2ds)
+
+        center_orients = targets[:, 15:17]
+        center_orients = F.softmax(center_orients, dim=-1)
+        _, center_orient_argmax = torch.max(center_orients, dim=-1)
+        center_orients_inds = center_orient_argmax.unsqueeze(-1).type_as(r_2ds)
+
+        return torch.cat([
+            bbox, orient, info_2d, r_2ds, cls_orient_4s_idx,
+            center_orients_inds
+        ],
+                         dim=-1)
 
     def decode_batch_angle(self, targets, bin_centers=None):
         """
@@ -250,11 +264,11 @@ class BBox3DCoder(object):
         # ry
         # sin = targets[:, -2]
         # cos = targets[:, -1]
-        # theta = get_angle(sin, cos)
+        theta = get_angle(targets[:, 4], targets[:, 3])
         if bin_centers is not None:
-            # theta = bin_centers + theta
+            theta = bin_centers + theta
             # theta = bin_centers
-            theta = -torch.acos(targets[:, 3]) - bin_centers
+            # theta = -torch.acos(targets[:, 3]) - bin_centers
 
         # cond_pos = (cos < 0) & (sin > 0)
         # cond_neg = (cos < 0) & (sin < 0)

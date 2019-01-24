@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+"""
+This model is mainly used for estimating angle
+"""
 
 import torch
 import torch.nn as nn
@@ -21,13 +24,15 @@ from core.models.feature_extractors.resnet import ResNetFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
 from utils.visualizer import FeatVisualizer
 
+import math
+
 import functools
 
 
-class Mono3DFasterRCNN(Model):
+class Mono3DAngleSimplerFasterRCNN(Model):
     def forward(self, feed_dict):
-        # import ipdb
-        # ipdb.set_trace()
+        import ipdb
+        ipdb.set_trace()
         prediction_dict = {}
 
         # base model
@@ -41,15 +46,32 @@ class Mono3DFasterRCNN(Model):
         # proposals = prediction_dict['proposals_batch']
         # shape(N,num_proposals,5)
         # pre subsample for reduce consume of memory
-        if self.training and self.train_2d:
+        if self.training:
             self.pre_subsample(prediction_dict, feed_dict)
         rois_batch = prediction_dict['rois_batch']
 
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
         pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
 
+        ###################################
+        # 3d training
+        ###################################
+        mono_3d_pooled_feat = self.feature_extractor.third_stage_feature(
+            pooled_feat)
+        mono_3d_pooled_feat = mono_3d_pooled_feat.mean(3).mean(2)
+        rcnn_3d = self.rcnn_3d_preds_new(mono_3d_pooled_feat)
+
+        prediction_dict['rcnn_3d'] = rcnn_3d
+
         # shape(N,C,1,1)
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
+
+        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
+        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
+        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
+        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+
+        pooled_feat = pooled_feat * saliency_map[:, 1:, :, :]
         # shape(N,C)
         if self.reduce:
             pooled_feat = pooled_feat.mean(3).mean(2)
@@ -57,9 +79,9 @@ class Mono3DFasterRCNN(Model):
             pooled_feat = pooled_feat.view(self.rcnn_batch_size, -1)
 
         rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
-        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
+        #  rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
 
-        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+        #  rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
         prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
@@ -70,38 +92,21 @@ class Mono3DFasterRCNN(Model):
         prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
             proposals_order]
 
-        ###################################
-        # 3d training
-        ###################################
-        # if self.train_3d:
-        rcnn_bbox_preds = rcnn_bbox_preds.detach()
-        final_bbox = self.target_assigner.bbox_coder.decode_batch(
-            rcnn_bbox_preds.unsqueeze(0), rois_batch[:, :, 1:])
-        final_rois_inds = torch.zeros_like(final_bbox[:, :, -1:])
-        final_rois_batch = torch.cat([final_rois_inds, final_bbox], dim=-1)
-
-        if self.training and self.train_3d:
-            prediction_dict['rois_batch'] = final_rois_batch
-            self.pre_subsample(prediction_dict, feed_dict)
-            final_rois_batch = prediction_dict['rois_batch']
-
-        mono_3d_pooled_feat = self.rcnn_pooling(base_feat,
-                                                final_rois_batch.view(-1, 5))
-
-        mono_3d_pooled_feat = self.feature_extractor.third_stage_feature(
-            mono_3d_pooled_feat)
-        mono_3d_pooled_feat = mono_3d_pooled_feat.mean(3).mean(2)
-        rcnn_3d = self.rcnn_3d_pred(mono_3d_pooled_feat)
-
-        # normalize to [0,1]
-        rcnn_3d[:, 5:11] = F.sigmoid(rcnn_3d[:, 5:11])
-
-        prediction_dict['rcnn_3d'] = rcnn_3d
-
         if not self.training:
-            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
-                rcnn_3d, rois_batch)
-
+            # import ipdb
+            # ipdb.set_trace()
+            dims = rcnn_3d[:, :3]
+            angles = rcnn_3d[:, 3:].view(-1, self.num_bins, 4)
+            angles_cls = F.softmax(angles[:, :, :2], dim=-1)
+            _, angles_cls_argmax = torch.max(angles_cls[:, :, 1], dim=-1)
+            row = torch.arange(
+                0, angles_cls_argmax.shape[0]).type_as(angles_cls_argmax)
+            angles_oritations = angles[:, :, 2:][row, angles_cls_argmax]
+            rcnn_3d = torch.cat([dims, angles_oritations], dim=-1)
+            #  import ipdb
+            #  ipdb.set_trace()
+            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_angle(
+                rcnn_3d, self.rcnn_3d_loss.bin_centers[angles_cls_argmax])
             prediction_dict['rcnn_3d'] = rcnn_3d
 
         return prediction_dict
@@ -114,7 +119,9 @@ class Mono3DFasterRCNN(Model):
         Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
-        if self.train_3d and self.training:
+        #  import ipdb
+        #  ipdb.set_trace()
+        if self.train_3d and self.training and not self.train_2d:
             self.freeze_modules()
             for parameter in self.feature_extractor.third_stage_feature.parameters(
             ):
@@ -133,7 +140,8 @@ class Mono3DFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        #  self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
         if self.reduce:
             in_channels = 2048
         else:
@@ -154,11 +162,9 @@ class Mono3DFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 3 + 1 + 4 + 2)
+        self.rcnn_3d_preds_new = nn.Linear(in_channels, 3 + 4 * self.num_bins)
 
-        # self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
-        # self.rcnn_3d_loss = MultiBinRegLoss(num_bins=self.num_bins)
-        self.rcnn_3d_loss = OrientationLoss(split_loss=True)
+        self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -182,23 +188,16 @@ class Mono3DFasterRCNN(Model):
         # sampler
         self.sampler = BalancedSampler(model_config['sampler_config'])
 
-        # self.reduce = model_config.get('reduce')
         self.reduce = True
 
         self.visualizer = FeatVisualizer()
 
-        self.num_bins = 4
+        self.num_bins = 12
 
         self.train_3d = True
 
-        self.train_2d = not self.train_3d
-
-        # more accurate bbox for 3d prediction
-        if self.train_3d:
-            fg_thresh = 0.6
-        else:
-            fg_thresh = 0.5
-        model_config['target_assigner_config']['fg_thresh'] = fg_thresh
+        # self.train_2d = not self.train_3d
+        self.train_2d = True
 
         # assigner
         self.target_assigner = TargetAssigner(
@@ -212,30 +211,17 @@ class Mono3DFasterRCNN(Model):
         #  dims_2d = feed_dict['dims_2d']
         # use local angle
         #  oritations = feed_dict['local_angle_oritation']
-        # local_angle = feed_dict['local_angle']
+        local_angle = feed_dict['local_angle']
 
         # shape(N,7)
         gt_boxes_3d = feed_dict['gt_boxes_3d']
 
         # orient
-        cls_orient = torch.unsqueeze(feed_dict['cls_orient'], dim=-1).float()
-        reg_orient = feed_dict['reg_orient']
-        orient = torch.cat([cls_orient, reg_orient], dim=-1)
-
-        h_2ds = feed_dict['h_2d']
-        c_2ds = feed_dict['c_2d']
-        r_2ds = feed_dict['r_2d']
-        cls_orient_4s = feed_dict['cls_orient_4']
-        center_orients = feed_dict['center_orient']
 
         # here just concat them
         # dims and their projection
 
-        gt_boxes_3d = torch.cat([
-            gt_boxes_3d[:, :, :3], orient, h_2ds, c_2ds, r_2ds, cls_orient_4s,
-            center_orients
-        ],
-                                dim=-1)
+        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], local_angle], dim=-1)
 
         ##########################
         # assigner
@@ -243,7 +229,7 @@ class Mono3DFasterRCNN(Model):
         rcnn_cls_targets, rcnn_reg_targets,\
             rcnn_cls_weights, rcnn_reg_weights,\
             rcnn_reg_targets_3d, rcnn_reg_weights_3d = self.target_assigner.assign(
-            rois_batch[:, :, 1:], gt_boxes, gt_boxes_3d,gt_labels )
+            rois_batch[:, :, 1:], gt_boxes, gt_boxes_3d, gt_labels )
 
         ##########################
         # subsampler
@@ -292,10 +278,9 @@ class Mono3DFasterRCNN(Model):
         """
         loss_dict = {}
 
-        # submodule loss
-        loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
-
         if self.train_2d:
+            # submodule loss
+            loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
             # targets and weights
             rcnn_cls_weights = prediction_dict['rcnn_cls_weights']
             rcnn_reg_weights = prediction_dict['rcnn_reg_weights']
@@ -334,74 +319,25 @@ class Mono3DFasterRCNN(Model):
                 rcnn_3d[:, :3], rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
 
             # angles
-            res = self.rcnn_3d_loss(rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, 3:])
-            for res_loss_key in res:
-                tmp = res[res_loss_key] * rcnn_reg_weights_3d
-                res[res_loss_key] = tmp.sum(dim=-1)
-            loss_dict.update(res)
+            rcnn_angle_loss, angle_tp_mask = self.rcnn_3d_loss(
+                rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, 3:])
 
             rcnn_3d_loss = rcnn_3d_loss_dims * rcnn_reg_weights_3d
             rcnn_3d_loss = rcnn_3d_loss.sum(dim=-1)
 
+            rcnn_angle_loss = rcnn_angle_loss * rcnn_reg_weights_3d
+            rcnn_angle_loss = rcnn_angle_loss.sum(dim=-1)
+
             loss_dict['rcnn_3d_loss'] = rcnn_3d_loss
+            loss_dict['rcnn_angle_loss'] = rcnn_angle_loss
 
-        # stats of orients
-        cls_orient_preds = rcnn_3d[:, 3:5]
-        cls_orient = rcnn_reg_targets_3d[:, 3]
-        _, cls_orient_preds_argmax = torch.max(cls_orient_preds, dim=-1)
-        orient_tp_mask = cls_orient.type_as(
-            cls_orient_preds_argmax) == cls_orient_preds_argmax
-        mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
-        orient_tp_mask = orient_tp_mask[mask]
-
-        orient_tp_num = orient_tp_mask.int().sum().item()
-        orient_all_num = orient_tp_mask.numel()
-
-        # this mask is converted from reg methods
-        r_2ds_dis = torch.zeros_like(cls_orient)
-        r_2ds = rcnn_3d[:, 10]
-        r_2ds_dis[r_2ds < 0.5] = 0
-        r_2ds_dis[r_2ds > 0.5] = 1
-        orient_tp_mask2 = (r_2ds_dis == cls_orient)
-
-        orient_tp_mask2 = orient_tp_mask2[mask]
-        orient_tp_num2 = orient_tp_mask2.int().sum().item()
-
-        # cls_orient_4s
-        cls_orient_4s_pred = rcnn_3d[:, 11:15]
-        _, cls_orient_4s_inds = torch.max(cls_orient_4s_pred, dim=-1)
-        cls_orient_4s = rcnn_reg_targets_3d[:, 10]
-
-        # cls_orient_4s_inds[(cls_orient_4s_inds == 0) | (cls_orient_4s_inds == 2
-        # )] = 1
-        # cls_orient_4s_inds[(cls_orient_4s_inds == 1) | (cls_orient_4s_inds == 3
-        # )] = 0
-        orient_tp_mask3 = cls_orient_4s_inds.type_as(
-            cls_orient_4s) == cls_orient_4s
-        mask3 = (rcnn_reg_weights_3d > 0)
-        orient_tp_mask3 = orient_tp_mask3[mask3]
-        orient_4s_tp_num = orient_tp_mask3.int().sum().item()
-        orient_all_num3 = orient_tp_mask3.numel()
-
-        # test cls_orient_4s(check label)
-        cls_orient_2s_inds = torch.zeros_like(cls_orient)
-        cls_orient_2s_inds[(cls_orient_4s == 0) | (cls_orient_4s == 2)] = 1
-        cls_orient_2s_inds[(cls_orient_4s == 1) | (cls_orient_4s == 3)] = 0
-        cls_orient_2s_mask = (cls_orient_2s_inds == cls_orient)
-        cls_orient_2s_mask = cls_orient_2s_mask[mask]
-        cls_orient_2s_tp_num = cls_orient_2s_mask.int().sum().item()
-        cls_orient_2s_all_num = cls_orient_2s_mask.numel()
-
-        # center_orient
-        center_orients_preds = rcnn_3d[:, 15:17]
-        _, center_orients_inds = torch.max(center_orients_preds, dim=-1)
-        center_orients = rcnn_reg_targets_3d[:, 11]
-        orient_tp_mask4 = center_orients.type_as(
-            center_orients_inds) == center_orients_inds
-        mask4 = (rcnn_reg_weights_3d > 0) & (center_orients > -1)
-        orient_tp_mask4 = orient_tp_mask4[mask4]
-        orient_tp_num4 = orient_tp_mask4.int().sum().item()
-        orient_all_num4 = orient_tp_mask4.numel()
+            # angles stats
+            angle_tp_mask = angle_tp_mask[rcnn_reg_weights_3d > 0]
+            angles_tp_num = angle_tp_mask.int().sum().item()
+            angles_all_num = angle_tp_mask.numel()
+        else:
+            angles_all_num = 0
+            angles_tp_num = 0
 
         # store all stats in target assigner
         self.target_assigner.stat.update({
@@ -409,16 +345,19 @@ class Mono3DFasterRCNN(Model):
             'angle_num_all': 1,
 
             # stats of orient
-            'orient_tp_num': orient_tp_num,
-            'orient_tp_num2': orient_tp_num2,
-            'orient_tp_num3': orient_4s_tp_num,
-            'orient_all_num3': orient_all_num3,
+            'orient_tp_num': 0,
+            'orient_tp_num2': 0,
+            'orient_tp_num3': 0,
+            'orient_all_num3': 0,
             # 'orient_pr': orient_pr,
-            'orient_all_num': orient_all_num,
-            'orient_tp_num4': orient_tp_num4,
-            'orient_all_num4': orient_all_num4,
-            'cls_orient_2s_all_num': cls_orient_2s_all_num,
-            'cls_orient_2s_tp_num': cls_orient_2s_tp_num
+            'orient_all_num': 0,
+            'orient_tp_num4': 0,
+            'orient_all_num4': 0,
+            'cls_orient_2s_all_num': angles_all_num,
+            'cls_orient_2s_tp_num': angles_tp_num
+
+            #  'angles_tp_num': angles_tp_num,
+            #  'angles_all_num': angles_all_num
         })
 
         return loss_dict

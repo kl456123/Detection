@@ -68,11 +68,52 @@
     # --checkpoint 3257 \
     # --checkepoch 100
 
+# 2d box
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net mono_3d \
+    # --out_path /data/object/liangxiong/faster_rcnn_3d \
+    # --config configs/refine_kitti_config.json
+# --model /data/object/liangxiong/faster_rcnn/mono_3d/kitti/faster_rcnn_53_3257.pth
+
 CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
-    --net mono_3d \
-    --out_path /data/object/liangxiong/mono_3d_angle_reg \
-    --config configs/refine_kitti_config.json
-# --checkepoch 20 \
+    --net mono_3d_simpler \
+    --out_path /data/object/liangxiong/mono_3d_angle_reg_3d_both \
+    --config configs/refine_kitti_config.json \
+    --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
+    # --model /data/object/liangxiong/faster_rcnn/mono_3d/kitti/faster_rcnn_53_3257.pth
+
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net multibin \
+    # --out_path /data/object/liangxiong/mono_3d_multibin \
+    # --config configs/refine_kitti_config.json \
+    # --model /data/object/liangxiong/faster_rcnn_3d/mono_3d/kitti/faster_rcnn_60_3257.pth
+
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net multibin \
+    # --out_path /data/object/liangxiong/mono_3d_angle_reg_2d \
+    # --config configs/refine_kitti_config.json \
+    # --r True \
+    # --checkpoint 3257 \
+    # --checkepoch 36
+# --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_27_3257.pth
+
+# CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+    # --net multibin_new \
+    # --out_path /data/object/liangxiong/mono_3d_angle_reg_2d_both \
+    # --config configs/refine_kitti_config.json \
+    # --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net mono_3d \
+    # --out_path /data/object/liangxiong/mono_3d_angle_reg_3d \
+    # --config configs/refine_kitti_config.json \
+    # --model /data/object/liangxiong/faster_rcnn_3d/mono_3d/kitti/faster_rcnn_60_3257.pth
+
+# 3d proj
+# CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+    # --net mono_3d \
+    # --out_path /data/object/liangxiong/mono_3d_angle_reg \
+    # --config configs/refine_kitti_config.json
+# --checkepoch 6 \
 # --checkpoint 3257 \
 # --r True
 

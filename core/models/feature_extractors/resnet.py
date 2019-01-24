@@ -14,7 +14,7 @@ class ResNetFeatureExtractor(Model):
 
     def init_param(self, model_config):
         #  self.model_path = 'data/pretrained_model/resnet50-19c8e357.pth'
-        self.mode_path = model_config['pretrained_model']
+        self.model_path = model_config['pretrained_model']
         self.dout_base_model = 1024
         self.pretrained = model_config['pretrained']
         self.class_agnostic = model_config['class_agnostic']
@@ -22,7 +22,7 @@ class ResNetFeatureExtractor(Model):
         self.img_channels = model_config['img_channels']
 
         self.use_cascade = model_config.get('use_cascade')
-        self.model_path = 'data/pretrained_model/resnet50-19c8e357.pth'
+        # self.model_path = 'data/pretrained_model/resnet50-19c8e357.pth'
         self.separate_feat = model_config.get('separate_feat')
 
     def init_modules(self):
