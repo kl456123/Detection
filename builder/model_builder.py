@@ -113,6 +113,8 @@ def build(model_config, training=True):
         fasterRCNN.train()
     else:
         fasterRCNN.eval()
+
+    fasterRCNN.pre_forward()
     # depercated
     # fasterRCNN.create_architecture()
     return fasterRCNN

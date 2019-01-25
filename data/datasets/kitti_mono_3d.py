@@ -27,7 +27,7 @@ class Mono3DKittiDataset(DetDataset):
 
         self.transforms = transforms
         self.max_num_gt_boxes = 40
-        self.use_proj_2d = True
+        self.use_proj_2d = False
 
     def get_training_sample(self, transform_sample):
         # bbox and num

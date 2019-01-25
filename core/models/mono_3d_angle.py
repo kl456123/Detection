@@ -153,6 +153,8 @@ class Mono3DAngleFasterRCNN(Model):
             for parameter in self.feature_extractor.third_stage_feature.parameters(
             ):
                 parameter.requires_grad = True
+            for param in self.rcnn_3d_preds_new.parameters():
+                param.requires_grad = True
 
     def init_modules(self):
         self.feature_extractor = ResNetFeatureExtractor(

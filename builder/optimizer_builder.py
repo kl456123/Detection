@@ -14,10 +14,16 @@ class OptimizerBuilder(object):
         """
 
         #  return self.module.parameters()
-        all_params = self.module.parameters()
+        all_params = self.module.named_parameters()
         learnable_params = [
-            param for param in all_params if param.requires_grad
+            #  param for name, param in all_params if param.requires_grad
         ]
+        for name, param in all_params:
+            if param.requires_grad:
+                learnable_params.append(param)
+                print('{} is learnable!'.format(name))
+            else:
+                print('{} is not learnable!'.format(name))
         return learnable_params
 
     def build(self):

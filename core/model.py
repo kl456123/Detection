@@ -40,9 +40,24 @@ class Model(nn.Module):
     def init_param(self, model_config):
         pass
 
+    def pre_forward(self):
+        pass
+
     def freeze_modules(self):
         for param in self.parameters():
             param.requires_grad = False
+
+    @staticmethod
+    def freeze_bn(module):
+        for m in module.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eval()
+
+    @staticmethod
+    def unfreeze_bn(module):
+        for m in module.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.train()
 
     def unloaded_parameters(self):
         return []

@@ -310,14 +310,14 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     num = dets_3d.shape[0]
 
     # ry
-    lines = generate_side_points(dets_2d, dets_3d[:, 3:])
-    A = lines[:, 3] - lines[:, 1]
-    B = lines[:, 0] - lines[:, 2]
-    C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]
-    plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
-    a = plane[:, 0]
-    c = plane[:, 2]
-    ry = direction2angle(c, -a)
+    # lines = generate_side_points(dets_2d, dets_3d[:, 3:])
+    # A = lines[:, 3] - lines[:, 1]
+    # B = lines[:, 0] - lines[:, 2]
+    # C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]
+    # plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
+    # a = plane[:, 0]
+    # c = plane[:, 2]
+    # ry = direction2angle(c, -a)
 
     # decode h_2ds and c_2ds
     # h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
@@ -329,13 +329,13 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     # C_3d = calculate_location(dets_3d, p2)
 
     # ry[...] = 1.57
-    # ry_local = dets_3d[:, -1]
-    # # compute global angle
-    # # center of 2d
-    # center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
-    # center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
-    # center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
-    # ry = compute_global_angle(center_2d, p2, ry_local)
+    ry_local = dets_3d[:, -1]
+    # compute global angle
+    # center of 2d
+    center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
+    center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
+    center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
+    ry = compute_global_angle(center_2d, p2, ry_local)
     C_3d = None
     #  ry = ry_local
 

@@ -255,6 +255,8 @@ def draw_boxes(img,
     fv_path = os.path.join(fv_dir, save_path)
 
     h = img.height
+    bird_view = bird_view.rotate(90)
+
     new_width = h / bird_view.height * bird_view.width
     bird_view = bird_view.resize((int(new_width), h))
     sum_w = new_width + img.width

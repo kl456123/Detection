@@ -50,14 +50,18 @@ class Mono3DFasterRCNN(Model):
 
         # shape(N,C,1,1)
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
-        # shape(N,C)
-        if self.reduce:
-            pooled_feat = pooled_feat.mean(3).mean(2)
-        else:
-            pooled_feat = pooled_feat.view(self.rcnn_batch_size, -1)
 
-        rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
-        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
+        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
+        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
+        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
+        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+
+        pooled_feat = pooled_feat * saliency_map[:, 1:, :, :]
+
+        reduced_pooled_feat = pooled_feat.mean(3).mean(2)
+
+        rcnn_bbox_preds = self.rcnn_bbox_pred(reduced_pooled_feat)
+        # rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
 
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -106,6 +110,18 @@ class Mono3DFasterRCNN(Model):
 
         return prediction_dict
 
+    def pre_forward(self):
+        # params
+        if self.train_3d and self.training and not self.train_2d:
+            self.freeze_modules()
+            for parameter in self.feature_extractor.third_stage_feature.parameters(
+            ):
+                parameter.requires_grad = True
+            for param in self.rcnn_3d_pred.parameters():
+                param.requires_grad = True
+        self.freeze_bn(self)
+        self.unfreeze_bn(self.feature_extractor.third_stage_feature)
+
     def init_weights(self):
         # submodule init weights
         self.feature_extractor.init_weights()
@@ -114,11 +130,14 @@ class Mono3DFasterRCNN(Model):
         Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
-        if self.train_3d and self.training:
-            self.freeze_modules()
-            for parameter in self.feature_extractor.third_stage_feature.parameters(
-            ):
-                parameter.requires_grad = True
+        # if self.train_3d and self.training:
+
+    # self.freeze_modules()
+    # for parameter in self.feature_extractor.third_stage_feature.parameters(
+    # ):
+    # parameter.requires_grad = True
+    # for param in self.rcnn_3d_preds_new.parameters():
+    # param.requires_grad = True
 
     def init_modules(self):
         self.feature_extractor = ResNetFeatureExtractor(
@@ -133,7 +152,8 @@ class Mono3DFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
+        # self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
         if self.reduce:
             in_channels = 2048
         else:
@@ -292,10 +312,9 @@ class Mono3DFasterRCNN(Model):
         """
         loss_dict = {}
 
-        # submodule loss
-        loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
-
         if self.train_2d:
+            # submodule loss
+            loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
             # targets and weights
             rcnn_cls_weights = prediction_dict['rcnn_cls_weights']
             rcnn_reg_weights = prediction_dict['rcnn_reg_weights']

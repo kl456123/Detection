@@ -12,7 +12,6 @@ from core.models.rpn_model import RPNModel
 from core.models.focal_loss import FocalLoss
 from core.models.multibin_loss import MultiBinLoss
 from core.models.multibin_reg_loss import MultiBinRegLoss
-from core.models.multibin_new_loss import MultiBinNewLoss
 from core.models.orientation_loss import OrientationLoss
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
@@ -32,6 +31,8 @@ import functools
 
 class Mono3DAngleNewFasterRCNN(Model):
     def forward(self, feed_dict):
+        #  import ipdb
+        #  ipdb.set_trace()
         prediction_dict = {}
 
         # base model
@@ -56,11 +57,11 @@ class Mono3DAngleNewFasterRCNN(Model):
         # 3d training
         ###################################
         mono_3d_pooled_feat = self.feature_extractor.third_stage_feature(
-            pooled_feat)
+            pooled_feat.detach())
         mono_3d_pooled_feat = mono_3d_pooled_feat.mean(3).mean(2)
-        rcnn_3d = self.rcnn_3d_preds_new(mono_3d_pooled_feat)
+        # rcnn_3d = self.rcnn_3d_preds_new(mono_3d_pooled_feat)
 
-        prediction_dict['rcnn_3d'] = rcnn_3d
+        # prediction_dict['rcnn_3d'] = rcnn_3d
 
         # shape(N,C,1,1)
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
@@ -82,6 +83,18 @@ class Mono3DAngleNewFasterRCNN(Model):
 
         #  rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
+        rcnn_3d_dims = self.rcnn_dims_pred(mono_3d_pooled_feat)
+        rcnn_3d_angles = self.rcnn_angle_pred(mono_3d_pooled_feat).view(
+            -1, self.num_bins, 2)
+        rcnn_3d_angles_cls = self.rcnn_angle_conf_pred(
+            mono_3d_pooled_feat).view(-1, self.num_bins, 2)
+        rcnn_3d_angles_cls_reg = torch.cat(
+            [rcnn_3d_angles_cls, rcnn_3d_angles], dim=-1).view(
+                -1, self.num_bins * 4)
+
+        rcnn_3d = torch.cat([rcnn_3d_dims, rcnn_3d_angles_cls_reg], dim=-1)
+        prediction_dict['rcnn_3d'] = rcnn_3d
+
         prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
         prediction_dict['rcnn_cls_scores'] = rcnn_cls_scores
@@ -95,12 +108,12 @@ class Mono3DAngleNewFasterRCNN(Model):
             # import ipdb
             # ipdb.set_trace()
             dims = rcnn_3d[:, :3]
-            angles = rcnn_3d[:, 3:].view(-1, self.num_bins, 3)
-            angles_cls = F.softmax(angles[:, :, 0], dim=-1)
-            _, angles_cls_argmax = torch.max(angles_cls, dim=-1)
+            angles = rcnn_3d[:, 3:].view(-1, self.num_bins, 4)
+            angles_cls = F.softmax(angles[:, :, :2], dim=-1)
+            _, angles_cls_argmax = torch.max(angles_cls[:, :, 1], dim=-1)
             row = torch.arange(
                 0, angles_cls_argmax.shape[0]).type_as(angles_cls_argmax)
-            angles_oritations = angles[:, :, 0:][row, angles_cls_argmax]
+            angles_oritations = angles[:, :, 2:][row, angles_cls_argmax]
             rcnn_3d = torch.cat([dims, angles_oritations], dim=-1)
             #  import ipdb
             #  ipdb.set_trace()
@@ -110,6 +123,25 @@ class Mono3DAngleNewFasterRCNN(Model):
 
         return prediction_dict
 
+    def pre_forward(self):
+        # params
+        if self.train_3d and self.training and not self.train_2d:
+            self.freeze_modules()
+            for parameter in self.feature_extractor.third_stage_feature.parameters(
+            ):
+                parameter.requires_grad = True
+            # for param in self.rcnn_3d_preds_new.parameters():
+            # param.requires_grad = True
+
+            for param in self.rcnn_angle_conf_pred.parameters():
+                param.requires_grad = True
+            for param in self.rcnn_angle_pred.parameters():
+                param.requires_grad = True
+            for param in self.rcnn_dims_pred.parameters():
+                param.requires_grad = True
+        self.freeze_bn(self)
+        self.unfreeze_bn(self.feature_extractor.third_stage_feature)
+
     def init_weights(self):
         # submodule init weights
         self.feature_extractor.init_weights()
@@ -117,14 +149,6 @@ class Mono3DAngleNewFasterRCNN(Model):
 
         Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
-
-        #  import ipdb
-        #  ipdb.set_trace()
-        if self.train_3d and self.training and not self.train_2d:
-            self.freeze_modules()
-            for parameter in self.feature_extractor.third_stage_feature.parameters(
-            ):
-                parameter.requires_grad = True
 
     def init_modules(self):
         self.feature_extractor = ResNetFeatureExtractor(
@@ -161,10 +185,25 @@ class Mono3DAngleNewFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_preds_new = nn.Linear(in_channels, 3 + self.num_bins * 3)
+        # self.rcnn_3d_preds_new = nn.Linear(in_channels, 3 + 4 * self.num_bins)
 
-        # exclude
-        self.rcnn_3d_loss = MultiBinNewLoss(num_bins=self.num_bins)
+        self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
+
+        # dims
+        self.rcnn_dims_pred = nn.Sequential(
+            * [nn.Linear(in_channels, 256), nn.ReLU(), nn.Linear(256, 3)])
+
+        # angle
+        self.rcnn_angle_pred = nn.Sequential(* [
+            nn.Linear(in_channels, 256), nn.ReLU(), nn.Linear(
+                256, self.num_bins * 2)
+        ])
+
+        # angle conf
+        self.rcnn_angle_conf_pred = nn.Sequential(* [
+            nn.Linear(in_channels, 256), nn.ReLU(), nn.Linear(
+                256, self.num_bins * 2)
+        ])
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -192,12 +231,12 @@ class Mono3DAngleNewFasterRCNN(Model):
 
         self.visualizer = FeatVisualizer()
 
-        self.num_bins = 4
+        self.num_bins = 12
 
         self.train_3d = True
 
         # self.train_2d = not self.train_3d
-        self.train_2d = True
+        self.train_2d = False
 
         # assigner
         self.target_assigner = TargetAssigner(
@@ -207,6 +246,10 @@ class Mono3DAngleNewFasterRCNN(Model):
         rois_batch = prediction_dict['rois_batch']
         gt_boxes = feed_dict['gt_boxes']
         gt_labels = feed_dict['gt_labels']
+        #  gt_boxes_3d = feed_dict['coords']
+        #  dims_2d = feed_dict['dims_2d']
+        # use local angle
+        #  oritations = feed_dict['local_angle_oritation']
         local_angle = feed_dict['local_angle']
 
         # shape(N,7)
@@ -355,5 +398,7 @@ class Mono3DAngleNewFasterRCNN(Model):
             #  'angles_tp_num': angles_tp_num,
             #  'angles_all_num': angles_all_num
         })
+        # import ipdb
+        # ipdb.set_trace()
 
         return loss_dict

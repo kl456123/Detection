@@ -31,8 +31,8 @@ import functools
 
 class Mono3DAngleSimplerFasterRCNN(Model):
     def forward(self, feed_dict):
-        import ipdb
-        ipdb.set_trace()
+        #  import ipdb
+        #  ipdb.set_trace()
         prediction_dict = {}
 
         # base model
@@ -56,12 +56,12 @@ class Mono3DAngleSimplerFasterRCNN(Model):
         ###################################
         # 3d training
         ###################################
-        mono_3d_pooled_feat = self.feature_extractor.third_stage_feature(
-            pooled_feat)
-        mono_3d_pooled_feat = mono_3d_pooled_feat.mean(3).mean(2)
-        rcnn_3d = self.rcnn_3d_preds_new(mono_3d_pooled_feat)
+        # mono_3d_pooled_feat = self.feature_extractor.third_stage_feature(
+        # pooled_feat.detach())
+        # mono_3d_pooled_feat = mono_3d_pooled_feat.mean(3).mean(2)
+        # rcnn_3d = self.rcnn_3d_preds_new(mono_3d_pooled_feat)
 
-        prediction_dict['rcnn_3d'] = rcnn_3d
+        # prediction_dict['rcnn_3d'] = rcnn_3d
 
         # shape(N,C,1,1)
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
@@ -82,6 +82,18 @@ class Mono3DAngleSimplerFasterRCNN(Model):
         #  rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
 
         #  rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+
+        rcnn_3d_dims = self.rcnn_dims_pred(pooled_feat)
+        rcnn_3d_angles = self.rcnn_angle_pred(pooled_feat).view(
+            -1, self.num_bins, 2)
+        rcnn_3d_angles_cls = self.rcnn_angle_conf_pred(pooled_feat).view(
+            -1, self.num_bins, 2)
+        rcnn_3d_angles_cls_reg = torch.cat(
+            [rcnn_3d_angles_cls, rcnn_3d_angles], dim=-1).view(
+                -1, self.num_bins * 4)
+
+        rcnn_3d = torch.cat([rcnn_3d_dims, rcnn_3d_angles_cls_reg], dim=-1)
+        prediction_dict['rcnn_3d'] = rcnn_3d
 
         prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
@@ -111,6 +123,25 @@ class Mono3DAngleSimplerFasterRCNN(Model):
 
         return prediction_dict
 
+    def pre_forward(self):
+        # params
+        if self.train_3d and self.training and not self.train_2d:
+            self.freeze_modules()
+            # for parameter in self.feature_extractor.third_stage_feature.parameters(
+            # ):
+            # parameter.requires_grad = True
+            # for param in self.rcnn_3d_preds_new.parameters():
+            # param.requires_grad = True
+
+            for param in self.rcnn_angle_conf_pred.parameters():
+                param.requires_grad = True
+            for param in self.rcnn_angle_pred.parameters():
+                param.requires_grad = True
+            for param in self.rcnn_dims_pred.parameters():
+                param.requires_grad = True
+            self.freeze_bn(self)
+        # self.unfreeze_bn(self.feature_extractor.third_stage_feature)
+
     def init_weights(self):
         # submodule init weights
         self.feature_extractor.init_weights()
@@ -118,14 +149,6 @@ class Mono3DAngleSimplerFasterRCNN(Model):
 
         Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
-
-        #  import ipdb
-        #  ipdb.set_trace()
-        if self.train_3d and self.training and not self.train_2d:
-            self.freeze_modules()
-            for parameter in self.feature_extractor.third_stage_feature.parameters(
-            ):
-                parameter.requires_grad = True
 
     def init_modules(self):
         self.feature_extractor = ResNetFeatureExtractor(
@@ -162,9 +185,25 @@ class Mono3DAngleSimplerFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_preds_new = nn.Linear(in_channels, 3 + 4 * self.num_bins)
+        # self.rcnn_3d_preds_new = nn.Linear(in_channels, 3 + 4 * self.num_bins)
 
         self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
+
+        # dims
+        self.rcnn_dims_pred = nn.Sequential(
+            * [nn.Linear(in_channels, 256), nn.ReLU(), nn.Linear(256, 3)])
+
+        # angle
+        self.rcnn_angle_pred = nn.Sequential(* [
+            nn.Linear(in_channels, 256), nn.ReLU(), nn.Linear(
+                256, self.num_bins * 2)
+        ])
+
+        # angle conf
+        self.rcnn_angle_conf_pred = nn.Sequential(* [
+            nn.Linear(in_channels, 256), nn.ReLU(), nn.Linear(
+                256, self.num_bins * 2)
+        ])
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -197,7 +236,7 @@ class Mono3DAngleSimplerFasterRCNN(Model):
         self.train_3d = True
 
         # self.train_2d = not self.train_3d
-        self.train_2d = True
+        self.train_2d = False
 
         # assigner
         self.target_assigner = TargetAssigner(
@@ -359,5 +398,7 @@ class Mono3DAngleSimplerFasterRCNN(Model):
             #  'angles_tp_num': angles_tp_num,
             #  'angles_all_num': angles_all_num
         })
+        # import ipdb
+        # ipdb.set_trace()
 
         return loss_dict
