@@ -509,7 +509,7 @@ class Boxes3DTo2D(object):
                 target['location'])
             distances.append(distance)
             angles_camera.append(angle_camera)
-            d_ys.append(d_y)
+            d_ys.append([d_y])
 
             # import ipdb
             # ipdb.set_trace()
@@ -639,9 +639,10 @@ class Boxes3DTo2D(object):
             center_orient, axis=0).astype(np.float32)
 
         # used for estimate location directly
-        sample['angles_camera'] = angles_camera
-        sample['distance'] = distances
-        sample['d_y'] = d_ys
+        sample['angles_camera'] = np.stack(
+            angles_camera, axis=0).astype(np.float32)
+        sample['distance'] = np.stack(distances, axis=0).astype(np.float32)
+        sample['d_y'] = np.stack(d_ys, axis=0).astype(np.float32)
 
         return sample
 

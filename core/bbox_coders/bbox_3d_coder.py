@@ -176,6 +176,44 @@ class BBox3DCoder(object):
         dims = torch.stack([h_2d, w_2d, l_2d, h_3d, w_3d, l_3d], dim=-1)
         return dims
 
+    def decode_batch_depth(self, targets):
+        h_3d_mean = 1.67
+        w_3d_mean = 1.87
+        l_3d_mean = 3.7
+
+        h_3d_std = 1
+        w_3d_std = 1
+        l_3d_std = 1
+
+        h_3d = targets[:, 0] * h_3d_std + h_3d_mean
+        w_3d = targets[:, 1] * w_3d_std + w_3d_mean
+        l_3d = targets[:, 2] * l_3d_std + l_3d_mean
+
+        cls_orient = targets[:, 3:5]
+        cls_orient = F.softmax(cls_orient, dim=-1)
+        cls_orient, cls_orient_argmax = torch.max(cls_orient, dim=-1)
+
+        reg_orient = targets[:, 5:7]
+
+        bbox = torch.stack([h_3d, w_3d, l_3d], dim=-1)
+        orient = torch.stack(
+            [
+                cls_orient_argmax.type_as(reg_orient), reg_orient[:, 0],
+                reg_orient[:, 1]
+            ],
+            dim=-1)
+
+        # decode location
+        # depth_ind_preds = targets[:, 7:7 + 11]
+        # depth_ind_preds = F.softmax(depth_ind_preds, dim=-1)
+        # _, depth_ind_preds_argmax = torch.max(depth_ind_preds, dim=-1)
+
+        # depth_ind = depth_ind_preds_argmax.float().unsqueeze(-1)
+
+        # return torch.cat([bbox, orient, depth_ind, targets[:, 7 + 11:]],
+        # dim=-1)
+        return torch.cat([bbox, orient, targets[:, 7:]], dim=-1)
+
     def decode_batch_bbox(self, targets, rois_batch):
 
         # dims

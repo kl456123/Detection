@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.linalg import norm
 from utils.kitti_util import compute_global_angle, roty
+from data.kitti_helper import get_depth_coords
 
 
 def mono_3d_postprocess(dets_3d, p2):
@@ -851,3 +852,67 @@ def get_cls_orient(trans, ry, p2, cls_orient_pred):
     orient_filter = (cls_orient == cls_orient_pred.astype(np.int32)) | (
         cls_orient == -1)
     return orient_filter
+
+
+def mono_3d_postprocess_depth(dets_3d, dets_2d, p2):
+    """
+    May be we can improve performance angle prediction by enumerating
+    when given locations of cars
+    Args:
+        dets_3d: shape(N,3 + 3 + 1 + 2 + 2 + 1) (hwl, ind, deltas, angle, d_y)
+        dets_2d: shape(N,5) (xyxyc)
+        p2: shape(4,3)
+    """
+    K = p2[:3, :3]
+    K_homo = np.eye(4)
+    K_homo[:3, :3] = K
+
+    # K*T
+    KT = p2[:, -1]
+    T = np.dot(np.linalg.inv(K), KT)
+
+    num = dets_3d.shape[0]
+
+    l = dets_3d[:, 2]
+    h = dets_3d[:, 0]
+    w = dets_3d[:, 1]
+    zeros = np.zeros_like(w)
+    x_corners = np.stack(
+        [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2], axis=-1)
+    y_corners = np.stack([zeros, zeros, zeros, zeros, -h, -h, -h, -h], axis=-1)
+    z_corners = np.stack(
+        [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2], axis=-1)
+
+    corners = np.stack([x_corners, y_corners, z_corners], axis=-1)
+
+    rcnn_3d = []
+    rcnn_ry = []
+
+    num_bins = 30
+
+    bin_centers = generate_multi_bins(num_bins)
+    # import ipdb
+    # ipdb.set_trace()
+
+    locations = get_depth_coords(dets_3d[:, 6:17], dets_3d[:, 17:19],
+                                 dets_3d[:, 19:21], dets_3d[:, 21:])
+    for i in range(num):
+        ry = []
+        R = []
+        for bin_center in bin_centers:
+            # generate Rotation matrix
+            R_per = roty(bin_center)
+            R.append(R_per)
+            ry.append(bin_center)
+        ry = np.stack(ry, axis=0)
+        R = np.stack(R, axis=0)
+        results_x = np.stack([locations[i]] * R.shape[0], axis=0)
+
+        # 2d_filter
+        idx = match(dets_2d[i, :-1], corners[i], results_x, R, p2, thresh=None)
+        rcnn_3d.append(results_x[idx])
+        rcnn_ry.append(ry[idx])
+    translation = np.vstack(rcnn_3d)
+    rcnn_ry = np.vstack(rcnn_ry)
+
+    return np.concatenate([dets_3d[:, :3], translation, rcnn_ry], axis=-1)

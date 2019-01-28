@@ -121,11 +121,11 @@
     # --checkpoint 3257 \
     # --checkepoch 25
 
-CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
-    --net ssd \
-    --load_dir /data/object/liangxiong/ssd \
-    --checkpoint 3257 \
-    --checkepoch 57
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net ssd \
+    # --load_dir /data/object/liangxiong/ssd \
+    # --checkpoint 3257 \
+    # --checkepoch 57
 
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --net multibin_simpler \
@@ -134,11 +134,11 @@ CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkepoch 12
 
 # 3d proj 2d detection
-# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    # --net mono_3d \
-    # --load_dir /data/object/liangxiong/faster_rcnn_3d \
-    # --checkpoint 3257 \
-    # --checkepoch 11
+CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    --net mono_3d \
+    --load_dir /data/object/liangxiong/mono_3d_angle_reg_3d \
+    --checkpoint 3257 \
+    --checkepoch 12
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \

@@ -98,13 +98,15 @@ class Mono3DFasterRCNN(Model):
         rcnn_3d = self.rcnn_3d_pred(mono_3d_pooled_feat)
 
         # normalize to [0,1]
-        rcnn_3d[:, 5:11] = F.sigmoid(rcnn_3d[:, 5:11])
+        # rcnn_3d[:, 5:11] = F.sigmoid(rcnn_3d[:, 5:11])
 
         prediction_dict['rcnn_3d'] = rcnn_3d
 
         if not self.training:
-            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
-                rcnn_3d, rois_batch)
+            # rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
+            # rcnn_3d, rois_batch)
+            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_depth(
+                rcnn_3d)
 
             prediction_dict['rcnn_3d'] = rcnn_3d
 
@@ -174,7 +176,8 @@ class Mono3DFasterRCNN(Model):
 
         # some 3d statistic
         # some 2d points projected from 3d
-        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 3 + 1 + 4 + 2)
+        # self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 3 + 1 + 4 + 2)
+        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 11 + 2 + 2 + 1)
 
         # self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
         # self.rcnn_3d_loss = MultiBinRegLoss(num_bins=self.num_bins)
@@ -242,20 +245,21 @@ class Mono3DFasterRCNN(Model):
         reg_orient = feed_dict['reg_orient']
         orient = torch.cat([cls_orient, reg_orient], dim=-1)
 
-        h_2ds = feed_dict['h_2d']
-        c_2ds = feed_dict['c_2d']
-        r_2ds = feed_dict['r_2d']
-        cls_orient_4s = feed_dict['cls_orient_4']
-        center_orients = feed_dict['center_orient']
+        # h_2ds = feed_dict['h_2d']
+        # c_2ds = feed_dict['c_2d']
+        # r_2ds = feed_dict['r_2d']
+        # cls_orient_4s = feed_dict['cls_orient_4']
+        # center_orients = feed_dict['center_orient']
+        distances = feed_dict['distance']
+        d_ys = feed_dict['d_y']
+        angles_camera = feed_dict['angles_camera']
 
         # here just concat them
         # dims and their projection
 
-        gt_boxes_3d = torch.cat([
-            gt_boxes_3d[:, :, :3], orient, h_2ds, c_2ds, r_2ds, cls_orient_4s,
-            center_orients
-        ],
-                                dim=-1)
+        gt_boxes_3d = torch.cat(
+            [gt_boxes_3d[:, :, :3], orient, distances, angles_camera, d_ys],
+            dim=-1)
 
         ##########################
         # assigner
@@ -372,72 +376,81 @@ class Mono3DFasterRCNN(Model):
             cls_orient_preds_argmax) == cls_orient_preds_argmax
         mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
         orient_tp_mask = orient_tp_mask[mask]
-
         orient_tp_num = orient_tp_mask.int().sum().item()
         orient_all_num = orient_tp_mask.numel()
 
-        # this mask is converted from reg methods
-        r_2ds_dis = torch.zeros_like(cls_orient)
-        r_2ds = rcnn_3d[:, 10]
-        r_2ds_dis[r_2ds < 0.5] = 0
-        r_2ds_dis[r_2ds > 0.5] = 1
-        orient_tp_mask2 = (r_2ds_dis == cls_orient)
+        # depth ind ap
+        depth_ind_preds = rcnn_3d[:, 7:7 + 11]
+        depth_ind_targets = rcnn_reg_targets_3d[:, 6]
+        _, depth_ind_preds_argmax = torch.max(depth_ind_preds, dim=-1)
+        depth_ind_mask = depth_ind_targets.type_as(
+            depth_ind_preds_argmax) == depth_ind_preds_argmax
+        depth_ind_mask = depth_ind_mask[rcnn_reg_weights_3d > 0]
+        depth_ind_tp_num = depth_ind_mask.int().sum().item()
+        depth_ind_all_num = depth_ind_mask.numel()
 
-        orient_tp_mask2 = orient_tp_mask2[mask]
-        orient_tp_num2 = orient_tp_mask2.int().sum().item()
+        # # this mask is converted from reg methods
+        # r_2ds_dis = torch.zeros_like(cls_orient)
+        # r_2ds = rcnn_3d[:, 10]
+        # r_2ds_dis[r_2ds < 0.5] = 0
+        # r_2ds_dis[r_2ds > 0.5] = 1
+        # orient_tp_mask2 = (r_2ds_dis == cls_orient)
 
-        # cls_orient_4s
-        cls_orient_4s_pred = rcnn_3d[:, 11:15]
-        _, cls_orient_4s_inds = torch.max(cls_orient_4s_pred, dim=-1)
-        cls_orient_4s = rcnn_reg_targets_3d[:, 10]
+        # orient_tp_mask2 = orient_tp_mask2[mask]
+        # orient_tp_num2 = orient_tp_mask2.int().sum().item()
 
-        # cls_orient_4s_inds[(cls_orient_4s_inds == 0) | (cls_orient_4s_inds == 2
-        # )] = 1
-        # cls_orient_4s_inds[(cls_orient_4s_inds == 1) | (cls_orient_4s_inds == 3
-        # )] = 0
-        orient_tp_mask3 = cls_orient_4s_inds.type_as(
-            cls_orient_4s) == cls_orient_4s
-        mask3 = (rcnn_reg_weights_3d > 0)
-        orient_tp_mask3 = orient_tp_mask3[mask3]
-        orient_4s_tp_num = orient_tp_mask3.int().sum().item()
-        orient_all_num3 = orient_tp_mask3.numel()
+        # # cls_orient_4s
+        # cls_orient_4s_pred = rcnn_3d[:, 11:15]
+        # _, cls_orient_4s_inds = torch.max(cls_orient_4s_pred, dim=-1)
+        # cls_orient_4s = rcnn_reg_targets_3d[:, 10]
 
-        # test cls_orient_4s(check label)
-        cls_orient_2s_inds = torch.zeros_like(cls_orient)
-        cls_orient_2s_inds[(cls_orient_4s == 0) | (cls_orient_4s == 2)] = 1
-        cls_orient_2s_inds[(cls_orient_4s == 1) | (cls_orient_4s == 3)] = 0
-        cls_orient_2s_mask = (cls_orient_2s_inds == cls_orient)
-        cls_orient_2s_mask = cls_orient_2s_mask[mask]
-        cls_orient_2s_tp_num = cls_orient_2s_mask.int().sum().item()
-        cls_orient_2s_all_num = cls_orient_2s_mask.numel()
+        # # cls_orient_4s_inds[(cls_orient_4s_inds == 0) | (cls_orient_4s_inds == 2
+        # # )] = 1
+        # # cls_orient_4s_inds[(cls_orient_4s_inds == 1) | (cls_orient_4s_inds == 3
+        # # )] = 0
+        # orient_tp_mask3 = cls_orient_4s_inds.type_as(
+        # cls_orient_4s) == cls_orient_4s
+        # mask3 = (rcnn_reg_weights_3d > 0)
+        # orient_tp_mask3 = orient_tp_mask3[mask3]
+        # orient_4s_tp_num = orient_tp_mask3.int().sum().item()
+        # orient_all_num3 = orient_tp_mask3.numel()
 
-        # center_orient
-        center_orients_preds = rcnn_3d[:, 15:17]
-        _, center_orients_inds = torch.max(center_orients_preds, dim=-1)
-        center_orients = rcnn_reg_targets_3d[:, 11]
-        orient_tp_mask4 = center_orients.type_as(
-            center_orients_inds) == center_orients_inds
-        mask4 = (rcnn_reg_weights_3d > 0) & (center_orients > -1)
-        orient_tp_mask4 = orient_tp_mask4[mask4]
-        orient_tp_num4 = orient_tp_mask4.int().sum().item()
-        orient_all_num4 = orient_tp_mask4.numel()
+        # # test cls_orient_4s(check label)
+        # cls_orient_2s_inds = torch.zeros_like(cls_orient)
+        # cls_orient_2s_inds[(cls_orient_4s == 0) | (cls_orient_4s == 2)] = 1
+        # cls_orient_2s_inds[(cls_orient_4s == 1) | (cls_orient_4s == 3)] = 0
+        # cls_orient_2s_mask = (cls_orient_2s_inds == cls_orient)
+        # cls_orient_2s_mask = cls_orient_2s_mask[mask]
+        # cls_orient_2s_tp_num = cls_orient_2s_mask.int().sum().item()
+        # cls_orient_2s_all_num = cls_orient_2s_mask.numel()
+
+        # # center_orient
+        # center_orients_preds = rcnn_3d[:, 15:17]
+        # _, center_orients_inds = torch.max(center_orients_preds, dim=-1)
+        # center_orients = rcnn_reg_targets_3d[:, 11]
+        # orient_tp_mask4 = center_orients.type_as(
+        # center_orients_inds) == center_orients_inds
+        # mask4 = (rcnn_reg_weights_3d > 0) & (center_orients > -1)
+        # orient_tp_mask4 = orient_tp_mask4[mask4]
+        # orient_tp_num4 = orient_tp_mask4.int().sum().item()
+        # orient_all_num4 = orient_tp_mask4.numel()
 
         # store all stats in target assigner
         self.target_assigner.stat.update({
-            'angle_num_tp': torch.tensor(0),
-            'angle_num_all': 1,
+            # 'angle_num_tp': torch.tensor(0),
+            # 'angle_num_all': 1,
 
             # stats of orient
             'orient_tp_num': orient_tp_num,
-            'orient_tp_num2': orient_tp_num2,
-            'orient_tp_num3': orient_4s_tp_num,
-            'orient_all_num3': orient_all_num3,
+            # 'orient_tp_num2': orient_tp_num2,
+            # 'orient_tp_num3': orient_4s_tp_num,
+            # 'orient_all_num3': orient_all_num3,
             # 'orient_pr': orient_pr,
             'orient_all_num': orient_all_num,
-            'orient_tp_num4': orient_tp_num4,
-            'orient_all_num4': orient_all_num4,
-            'cls_orient_2s_all_num': cls_orient_2s_all_num,
-            'cls_orient_2s_tp_num': cls_orient_2s_tp_num
+            # 'orient_tp_num4': orient_tp_num4,
+            # 'orient_all_num4': orient_all_num4,
+            'cls_orient_2s_all_num': depth_ind_all_num,
+            'cls_orient_2s_tp_num': depth_ind_tp_num
         })
 
         return loss_dict

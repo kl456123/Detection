@@ -6,7 +6,7 @@ from lib.model.rpn.bbox_transform import bbox_transform_inv
 from lib.model.rpn.bbox_transform import clip_boxes
 from lib.model.nms.nms_wrapper import nms
 from utils.visualize import save_pkl, visualize_bbox
-from utils.postprocess import mono_3d_postprocess_angle, mono_3d_postprocess_bbox
+from utils.postprocess import mono_3d_postprocess_angle, mono_3d_postprocess_bbox, mono_3d_postprocess_depth
 import numpy as np
 import torch
 import os
@@ -141,8 +141,9 @@ def test(eval_config, data_loader, model):
                     # ipdb.set_trace()
                     # rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
+                    rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
                     # rcnn_3d[:, 3:6] = location
-                    rcnn_3d = np.zeros((cls_dets.shape[0], 7))
+                    # rcnn_3d = np.zeros((cls_dets.shape[0], 7))
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
 
             else:

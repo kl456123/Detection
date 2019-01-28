@@ -86,10 +86,10 @@
     # --checkepoch 10 \
     # --r True
 
-CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
-    --net ssd \
-    --out_path /data/object/liangxiong/ssd \
-    --config configs/ssd_config.json
+# CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+    # --net ssd \
+    # --out_path /data/object/liangxiong/ssd \
+    # --config configs/ssd_config.json
 
 # CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     # --net multibin_new \
@@ -124,11 +124,16 @@ CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     # --out_path /data/object/liangxiong/mono_3d_angle_reg_2d_both \
     # --config configs/refine_kitti_config.json \
     # --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
-# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
-    # --net mono_3d \
-    # --out_path /data/object/liangxiong/mono_3d_angle_reg_3d \
-    # --config configs/refine_kitti_config.json \
-    # --model /data/object/liangxiong/faster_rcnn_3d/mono_3d/kitti/faster_rcnn_60_3257.pth
+
+CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+    --net mono_3d \
+    --out_path /data/object/liangxiong/mono_3d_angle_reg_3d \
+    --config configs/refine_kitti_config.json \
+    --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
+# --checkpoint 3257 \
+# --checkepoch 13 \
+# --r True
+
 
 # 3d proj
 # CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \

@@ -58,6 +58,10 @@ class Mono3DKittiDataset(DetDataset):
             r_2ds = transform_sample['r_2d']
             cls_orient_4s = transform_sample['cls_orient_4']
             center_orients = transform_sample['center_orient']
+
+            angles_camera = transform_sample['angles_camera']
+            distances = transform_sample['distance']
+            d_ys = transform_sample['d_y']
         else:
             # fake gt
             bbox = torch.zeros((1, 5))
@@ -78,6 +82,9 @@ class Mono3DKittiDataset(DetDataset):
             r_2ds = torch.zeros((1, 1))
             cls_orient_4s = torch.zeros((1, 1))
             center_orients = torch.zeros((1, 1))
+            distances = torch.zeros((1, 3))
+            angles_camera = torch.zeros((1, 2))
+            d_ys = torch.zeros((1, 1))
 
         h, w = transform_sample['img'].shape[-2:]
         training_sample = {}
@@ -114,6 +121,10 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['gt_boxes_3d'] = bbox_3d
         training_sample['coords'] = coords
         training_sample['p2'] = transform_sample['p2']
+
+        training_sample['angles_camera'] = angles_camera
+        training_sample['distance'] = distances
+        training_sample['d_y'] = d_ys
 
         return training_sample
 
