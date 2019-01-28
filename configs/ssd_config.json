@@ -95,6 +95,9 @@
             "Car"
         ],
         "crop_resize_with_max_pool": false,
+        "multibox_config": {
+
+        },
         "feature_extractor_config": {
             "pooling_size":7,
             "class_agnostic": true,
@@ -103,65 +106,39 @@
                 "Car"
             ],
             "img_channels": 3,
-            "pretrained_model": "data/pretrained_model/resnet50-19c8e357.pth",
+            "din":1024,
+            "pretrained_model": "data/pretrained_model/vgg16_reducedfc.pth",
             "pretrained": true,
             "use_cascade": true
         },
         "num_classes": 2,
         "pooling_mode": "align",
         "pooling_size": 7,
-        "rcnn_batch_size": 128,
-        "rpn_config": {
-            "use_iou":false,
-            "use_focal_loss":true,
-            "anchor_generator_config": {
-                "input_size":[384,1280],
-                "anchor_offset": [
-                    0,
-                    0
-                ],
-                "anchor_stride": [
-                    16,
-                    16
-                ],
-                "aspect_ratios": [
-                    0.5,
-                    0.8,
-                    1
-                ],
-                "base_anchor_size": 16,
-                "scales": [
-                    4,
-                    8,
-                    16
-                ]
-            },
-            "din": 1024,
-            "min_size": 16,
-            "nms_thresh": 0.7,
-            "num_bbox_samples": 500,
-            "num_cls_samples": 2000,
-            "post_nms_topN": 1000,
-            "pre_nms_topN": 12000,
-            "rpn_batch_size": 1024,
-            "sampler_config": {
-                "fg_fraction": 0.25
-            },
-            "target_assigner_config": {
-                "similarity_calc_config":{
-                    "type":"center"
-                },
-                "fg_thresh": 0.3,
-                "bg_thresh":0.3,
-                "coder_config": {
-                    "type":"center",
-                    "bbox_normalize_targets_precomputed": false
-                },
-                "matcher_config": {
-                    "type": "bipartitle"
-                }
-            },
-            "use_score": false
+        "batch_size": 512,
+        "anchor_generator_config": {
+            "input_size":[384,1280],
+            "anchor_offset": [
+                0,
+                0
+            ],
+            "anchor_stride": [
+                16,
+                16
+            ],
+            "aspect_ratios": [
+                0.5,
+                0.8,
+                1
+            ],
+            "base_anchor_size": 16,
+            "scales": [
+                [2],
+                [4],
+                [6],
+                [8],
+                [16],
+                [20]
+            ]
         },
         "sampler_config": {
             "fg_fraction": 1

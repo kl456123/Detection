@@ -10,7 +10,23 @@ class Analyzer(object):
             'num_det': 1,
             'num_tp': 0,
             'matched_thresh': 0,
-            'recall_thresh': 0
+            'recall_thresh': 0,
+
+            # stats for angles
+            'angle_num_tp': torch.tensor(0),
+            'angle_num_all': 1,
+
+            # stats of orient
+            'orient_tp_num': 0,
+            'orient_tp_num2': 0,
+            'orient_tp_num3': 0,
+            'orient_all_num3': 0,
+            # 'orient_pr': orient_pr,
+            'orient_all_num': 0,
+            'orient_tp_num4': 0,
+            'orient_all_num4': 0,
+            'cls_orient_2s_all_num': 0,
+            'cls_orient_2s_tp_num': 0
         }
         self.match = None
 

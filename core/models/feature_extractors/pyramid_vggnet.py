@@ -3,10 +3,14 @@
 from core.model import Model
 import torch.nn as nn
 import torch.nn.functional as F
+from core.layers.l2_norm import L2Norm
+import torch
 
 
 class PyramidVggnetExtractor(Model):
     def forward(self, x):
+        # import ipdb
+        # ipdb.set_trace()
         source_layers = list()
 
         # extract source layers used for prediction
@@ -14,19 +18,20 @@ class PyramidVggnetExtractor(Model):
         for k in range(23):
             x = self.base_feat[k](x)
 
-        s = self.L2Norm(x)
+        s = self.l2_norm(x)
         source_layers.append(s)
 
         # apply vgg up to fc7
-        for k in range(23, len(self.vgg)):
-            x = self.vgg[k](x)
+        for k in range(23, len(self.base_feat)):
+            x = self.base_feat[k](x)
         source_layers.append(x)
 
         # extras layers
-        for k, v in enumerate(self.extras):
+        for k, v in enumerate(self.extras_layers):
             x = F.relu(v(x), inplace=True)
             if k % 2 == 1:
                 source_layers.append(x)
+        return source_layers
 
     def init_param(self, model_config):
         self.base_cfg = [
@@ -34,12 +39,15 @@ class PyramidVggnetExtractor(Model):
             512, 512, 512
         ]
         self.extras_cfg = [256, 'S', 512, 128, 'S', 256, 128, 256, 128, 256]
-        self.multibox_cfg = [4, 6, 6, 6, 4, 4]
-        self.input_channels = model_config['din']
+        self.input_channels = model_config['img_channels']
+        self.din = model_config['din']
+        self.pretrained_path = model_config['pretrained_model']
+        self.pretrained = model_config['pretrained']
 
     def init_modules(self):
         self.base_feat = self.make_base()
         self.extras_layers = self.make_extras()
+        self.l2_norm = L2Norm(512, 20)
         # loc_layers, conf_layers = self.make_multibox(base_feat, extras_layers)
 
         # make list be modules
@@ -76,12 +84,12 @@ class PyramidVggnetExtractor(Model):
         layers += [
             pool5, conv6, nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)
         ]
-        return layers
+        return nn.ModuleList(layers)
 
     def make_extras(self):
         # Extra layers added to VGG for feature scaling
         cfg = self.extras_cfg
-        i = self.input_channels
+        i = self.din
         layers = []
         in_channels = i
         flag = False
@@ -103,7 +111,9 @@ class PyramidVggnetExtractor(Model):
                     ]
                 flag = not flag
             in_channels = v
-        return layers
+        return nn.ModuleList(layers)
 
     def init_weights(self):
-        pass
+        if self.pretrained:
+            pretrained_model = torch.load(self.pretrained_path)
+            self.base_feat.load_state_dict(pretrained_model)

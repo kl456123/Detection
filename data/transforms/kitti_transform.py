@@ -10,6 +10,7 @@ from utils.kitti_util import compute_local_angle, compute_2d_proj, truncate_box
 from utils.kitti_util import get_h_2d, get_center_2d, get_r_2d, get_cls_orient_4
 from utils.kitti_util import get_center_orient
 from utils.box_vis import draw_line
+from ..kitti_helper import process_center_coords
 
 
 class Sample(object):
@@ -494,12 +495,21 @@ class Boxes3DTo2D(object):
 
         # import ipdb
         # ipdb.set_trace()
+        distances = []
+        angles_camera = []
+        d_ys = []
         for i in range(boxes_3d.shape[0]):
             target = {}
             target['ry'] = boxes_3d[i, -1]
             target['dimension'] = boxes_3d[i, :3]
             target['dimension'] = target['dimension']
             target['location'] = boxes_3d[i, 3:-1]
+
+            distance, angle_camera, d_y = process_center_coords(
+                target['location'])
+            distances.append(distance)
+            angles_camera.append(angle_camera)
+            d_ys.append(d_y)
 
             # import ipdb
             # ipdb.set_trace()
@@ -627,6 +637,12 @@ class Boxes3DTo2D(object):
             cls_orient_4s, axis=0).astype(np.float32)
         sample['center_orient'] = np.stack(
             center_orient, axis=0).astype(np.float32)
+
+        # used for estimate location directly
+        sample['angles_camera'] = angles_camera
+        sample['distance'] = distances
+        sample['d_y'] = d_ys
+
         return sample
 
 

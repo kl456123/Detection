@@ -34,6 +34,8 @@ def test(eval_config, data_loader, model):
             model, to_cuda(data), eval_config, im_orig=data['img_orig'])
         duration_time = time.time() - start_time
 
+        # import ipdb
+        # ipdb.set_trace()
         scores = scores.squeeze()
         pred_boxes = pred_boxes.squeeze()
         rois = rois.squeeze()
@@ -128,18 +130,19 @@ def test(eval_config, data_loader, model):
                     # ipdb.set_trace()
                     # sample_name = os.path.splitext(os.path.basename(data['img_name'][0]))[0]
                     # if sample_name=='000031':
-                        # import ipdb
-                        # ipdb.set_trace()
+                    # import ipdb
+                    # ipdb.set_trace()
                     #  rcnn_3d[:, :-1] = gt_boxes_3d[:, :3]
                     # global_angles_gt = gt_boxes_3d[:, -1:]
                     # rcnn_3d = np.concatenate(
-                        # [gt_boxes_3d[:, :3], global_angles_gt], axis=-1)
+                    # [gt_boxes_3d[:, :3], global_angles_gt], axis=-1)
                     # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
                     # import ipdb
                     # ipdb.set_trace()
-                    rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
+                    # rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
                     # rcnn_3d[:, 3:6] = location
+                    rcnn_3d = np.zeros((cls_dets.shape[0], 7))
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
 
             else:

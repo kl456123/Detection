@@ -231,12 +231,12 @@ class Mono3DAngleNewFasterRCNN(Model):
 
         self.visualizer = FeatVisualizer()
 
-        self.num_bins = 12
+        self.num_bins = 2
 
         self.train_3d = True
 
         # self.train_2d = not self.train_3d
-        self.train_2d = False
+        self.train_2d = True
 
         # assigner
         self.target_assigner = TargetAssigner(
