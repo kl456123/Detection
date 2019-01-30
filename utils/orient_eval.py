@@ -184,7 +184,7 @@ def calc_orient_ap_single(sample_name):
     orient_ap = cls_orient_ap(cls_orient_pred, cls_orient_gt)
 
     dist_stats = []
-    nums = [matched.size]
+    nums = [cls_orient_pred.shape[0]]
     for dist_interval in dist_intervals:
         # import ipdb
         # ipdb.set_trace()

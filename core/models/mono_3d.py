@@ -22,6 +22,7 @@ from core.samplers.detection_sampler import DetectionSampler
 from utils.visualizer import FeatVisualizer
 
 import functools
+from core.ops import b_inv
 
 
 class Mono3DFasterRCNN(Model):
@@ -89,8 +90,20 @@ class Mono3DFasterRCNN(Model):
             self.pre_subsample(prediction_dict, feed_dict)
             final_rois_batch = prediction_dict['rois_batch']
 
+        # shape(M,C,7,7)
         mono_3d_pooled_feat = self.rcnn_pooling(base_feat,
                                                 final_rois_batch.view(-1, 5))
+
+        # H-concat to abbrevate the perspective transform
+        # shape(N,M,9)
+        # import ipdb
+        # ipdb.set_trace()
+        H_inv = self.calc_Hinv(
+            final_rois_batch, feed_dict['p2'],
+            feed_dict['im_info'])[0].view(-1, 9, 1, 1).expand(-1, -1, 7, 7)
+        # concat with pooled feat
+        mono_3d_pooled_feat = torch.cat([mono_3d_pooled_feat, H_inv], dim=1)
+        mono_3d_pooled_feat = self.reduced_layer(mono_3d_pooled_feat)
 
         mono_3d_pooled_feat = self.feature_extractor.third_stage_feature(
             mono_3d_pooled_feat)
@@ -111,6 +124,36 @@ class Mono3DFasterRCNN(Model):
             prediction_dict['rcnn_3d'] = rcnn_3d
 
         return prediction_dict
+
+    def calc_Hinv(self, final_rois_batch, p2, img_size):
+        p2 = p2[0]
+        K_c = p2[:, :3]
+        fx = K_c[0, 0]
+        fy = K_c[1, 1]
+        px = K_c[0, 2]
+        py = K_c[1, 2]
+        fw = self.pooling_size
+        fh = self.pooling_size
+
+        proposals = final_rois_batch[:, :, 1:]
+        rw = (proposals[:, :, 2] - proposals[:, :, 0] + 1) / img_size[:, 1]
+        rh = (proposals[:, :, 3] - proposals[:, :, 1] + 1) / img_size[:, 0]
+
+        # roi camera intrinsic parameters
+        fx_roi = fx * fw / rw
+        fy_roi = fy * fh / rh
+        zeros = torch.zeros_like(fx_roi)
+        ones = torch.ones_like(fx_roi)
+
+        px_roi = px - proposals[:, :, 0]
+        py_roi = py - proposals[:, :, 1]
+
+        K_roi = torch.stack(
+            [fx_roi, zeros, px_roi, zeros, fy_roi, py_roi, zeros, zeros, ones],
+            dim=-1).view(-1, 3, 3)
+
+        H = K_roi.matmul(torch.inverse(K_c))
+        return H.view(1, -1, 9)
 
     def pre_forward(self):
         # params
@@ -177,11 +220,15 @@ class Mono3DFasterRCNN(Model):
         # some 3d statistic
         # some 2d points projected from 3d
         # self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 3 + 1 + 4 + 2)
-        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 11 + 2 + 2 + 1)
+        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 11 + 2 + 1)
 
         # self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
         # self.rcnn_3d_loss = MultiBinRegLoss(num_bins=self.num_bins)
         self.rcnn_3d_loss = OrientationLoss(split_loss=True)
+
+        # reduce for concat with the following layers
+        self.reduced_layer = nn.Sequential(
+            * [nn.Conv2d(1024 + 9, 1024, 1, 1, 0), nn.BatchNorm2d(1024)])
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -252,14 +299,13 @@ class Mono3DFasterRCNN(Model):
         # center_orients = feed_dict['center_orient']
         distances = feed_dict['distance']
         d_ys = feed_dict['d_y']
-        angles_camera = feed_dict['angles_camera']
+        # angles_camera = feed_dict['angles_camera']
 
         # here just concat them
         # dims and their projection
 
         gt_boxes_3d = torch.cat(
-            [gt_boxes_3d[:, :, :3], orient, distances, angles_camera, d_ys],
-            dim=-1)
+            [gt_boxes_3d[:, :, :3], orient, distances, d_ys], dim=-1)
 
         ##########################
         # assigner

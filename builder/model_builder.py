@@ -30,6 +30,7 @@ from core.models.mono_3d_angle_simpler import Mono3DAngleSimplerFasterRCNN
 from core.models.mono_3d_simpler import Mono3DSimplerFasterRCNN
 from core.models.mono_3d_angle_new import Mono3DAngleNewFasterRCNN
 from core.models.ssd_model import SSDModel
+from core.models.oft_model import OFTModel
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -109,6 +110,8 @@ def build(model_config, training=True):
         fasterRCNN = Mono3DAngleNewFasterRCNN(model_config)
     elif net_arch == 'ssd':
         fasterRCNN = SSDModel(model_config)
+    elif net_arch == 'oft':
+        fasterRCNN = OFTModel(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

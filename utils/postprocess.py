@@ -2,6 +2,7 @@ import numpy as np
 from numpy.linalg import norm
 from utils.kitti_util import compute_global_angle, roty
 from data.kitti_helper import get_depth_coords
+from utils.kitti_util import compute_ray_angle
 
 
 def mono_3d_postprocess(dets_3d, p2):
@@ -311,14 +312,14 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     num = dets_3d.shape[0]
 
     # ry
-    # lines = generate_side_points(dets_2d, dets_3d[:, 3:])
-    # A = lines[:, 3] - lines[:, 1]
-    # B = lines[:, 0] - lines[:, 2]
-    # C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]
-    # plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
-    # a = plane[:, 0]
-    # c = plane[:, 2]
-    # ry = direction2angle(c, -a)
+    lines = generate_side_points(dets_2d, dets_3d[:, 3:])
+    A = lines[:, 3] - lines[:, 1]
+    B = lines[:, 0] - lines[:, 2]
+    C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]
+    plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
+    a = plane[:, 0]
+    c = plane[:, 2]
+    ry = direction2angle(c, -a)
 
     # decode h_2ds and c_2ds
     # h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
@@ -330,13 +331,13 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     # C_3d = calculate_location(dets_3d, p2)
 
     # ry[...] = 1.57
-    ry_local = dets_3d[:, -1]
-    # compute global angle
-    # center of 2d
-    center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
-    center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
-    center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
-    ry = compute_global_angle(center_2d, p2, ry_local)
+    # ry_local = dets_3d[:, -1]
+    # # compute global angle
+    # # center of 2d
+    # center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
+    # center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
+    # center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
+    # ry = compute_global_angle(center_2d, p2, ry_local)
     C_3d = None
     #  ry = ry_local
 
@@ -854,6 +855,10 @@ def get_cls_orient(trans, ry, p2, cls_orient_pred):
     return orient_filter
 
 
+def get_depth_coords_v2():
+    pass
+
+
 def mono_3d_postprocess_depth(dets_3d, dets_2d, p2):
     """
     May be we can improve performance angle prediction by enumerating
@@ -863,6 +868,7 @@ def mono_3d_postprocess_depth(dets_3d, dets_2d, p2):
         dets_2d: shape(N,5) (xyxyc)
         p2: shape(4,3)
     """
+
     K = p2[:3, :3]
     K_homo = np.eye(4)
     K_homo[:3, :3] = K
@@ -893,9 +899,14 @@ def mono_3d_postprocess_depth(dets_3d, dets_2d, p2):
     bin_centers = generate_multi_bins(num_bins)
     # import ipdb
     # ipdb.set_trace()
+    center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
+    center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
+    center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
+    ray_angle = compute_ray_angle(center_2d, p2)
+    angle = np.stack([np.cos(ray_angle), np.sin(ray_angle)], axis=-1)
 
-    locations = get_depth_coords(dets_3d[:, 6:17], dets_3d[:, 17:19],
-                                 dets_3d[:, 19:21], dets_3d[:, 21:])
+    locations = get_depth_coords(dets_3d[:, 6:17], dets_3d[:, 17:19], angle,
+                                 dets_3d[:, 19:])
     for i in range(num):
         ry = []
         R = []

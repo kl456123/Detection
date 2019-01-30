@@ -11,6 +11,7 @@ from utils.kitti_util import get_h_2d, get_center_2d, get_r_2d, get_cls_orient_4
 from utils.kitti_util import get_center_orient
 from utils.box_vis import draw_line
 from ..kitti_helper import process_center_coords
+from utils.kitti_util import get_gt_boxes_2d_ground_rect
 
 
 class Sample(object):
@@ -496,8 +497,9 @@ class Boxes3DTo2D(object):
         # import ipdb
         # ipdb.set_trace()
         distances = []
-        angles_camera = []
         d_ys = []
+        gt_boxes_2d_ground_rect = []
+
         for i in range(boxes_3d.shape[0]):
             target = {}
             target['ry'] = boxes_3d[i, -1]
@@ -505,15 +507,13 @@ class Boxes3DTo2D(object):
             target['dimension'] = target['dimension']
             target['location'] = boxes_3d[i, 3:-1]
 
-            distance, angle_camera, d_y = process_center_coords(
-                target['location'])
+            distance, d_y = process_center_coords(target['location'])
             distances.append(distance)
-            angles_camera.append(angle_camera)
             d_ys.append([d_y])
 
-            # import ipdb
-            # ipdb.set_trace()
-            # normalize by using gt bbox
+            gt_boxes_2d_ground_rect.append(
+                get_gt_boxes_2d_ground_rect(target['location'],
+                                            target['dimension']))
 
             corners_xy, points_3d = compute_box_3d(target, p2, True)
             # find it 2d proj
@@ -526,24 +526,12 @@ class Boxes3DTo2D(object):
             # encode it by using boxes_2d
             corners_xys.append(corners_xy)
 
-            # encoded in target assigner
-            #  corners_xy = (corners_xy - center[i]) / dims[i]
-
             coords_per_box = corners_xy[[0, 1, 3]].reshape(-1)
             coords_per_box = np.append(coords_per_box, corners_xy[4, 1])
             coords.append(coords_per_box)
             oritations.append(
                 np.asarray([np.sin(target['ry']), np.cos(target['ry'])]))
 
-            # local angle
-            # use truely center
-            # if self.use_proj_2d:
-            # center_used = boxes_2d_proj_center
-            # else:
-            # center_used = center[i]
-            # import ipdb
-            # ipdb.set_trace()
-            # local_angle = compute_local_angle(center_used, p2, target['ry'])
             local_angle = compute_local_angle(target['location'], target['ry'])
             local_angles.append([local_angle])
             local_angle_oritations.append(
@@ -561,8 +549,6 @@ class Boxes3DTo2D(object):
             dims_2d.append(np.array([h_2d, w_2d, l_2d]))
 
             # some labels for estimating orientation
-            # import ipdb
-            # ipdb.set_trace()
             left_side_points_2d = corners_xy[[0, 3]]
             right_side_points_2d = corners_xy[[1, 2]]
             left_side_points_3d = points_3d.T[[0, 3]]
@@ -586,18 +572,9 @@ class Boxes3DTo2D(object):
             # visible side truncated with 2d box
             cls_orient, reg_orient = truncate_box(box_2d_proj, visible_side)
 
-            # import ipdb
-            # ipdb.set_trace()
-            # used for debug
-            # draw_line(sample['img_name'], visible_side)
-
             cls_orients.append(cls_orient)
             reg_orients.append(reg_orient)
 
-            # normalize it at the same time
-            # use 2d proj instead of boxes_2d
-            # import ipdb
-            # ipdb.set_trace()
             h_2ds.append([
                 get_h_2d(target['location'], target['dimension'], p2,
                          box_2d_proj)
@@ -639,10 +616,14 @@ class Boxes3DTo2D(object):
             center_orient, axis=0).astype(np.float32)
 
         # used for estimate location directly
-        sample['angles_camera'] = np.stack(
-            angles_camera, axis=0).astype(np.float32)
+        # sample['angles_camera'] = np.stack(
+        # angles_camera, axis=0).astype(np.float32)
         sample['distance'] = np.stack(distances, axis=0).astype(np.float32)
         sample['d_y'] = np.stack(d_ys, axis=0).astype(np.float32)
+        sample['p2'] = p2.astype(np.float32)
+
+        sample['gt_boxes_2d_ground_rect'] = np.stack(
+            gt_boxes_2d_ground_rect, axis=0).astype(np.float32)
 
         return sample
 

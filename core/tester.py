@@ -139,9 +139,9 @@ def test(eval_config, data_loader, model):
                     # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
                     # import ipdb
                     # ipdb.set_trace()
-                    # rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
+                    rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
-                    rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
+                    # rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
                     # rcnn_3d[:, 3:6] = location
                     # rcnn_3d = np.zeros((cls_dets.shape[0], 7))
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))

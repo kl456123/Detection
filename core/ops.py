@@ -37,3 +37,9 @@ def get_angle(y, x):
     #  theta[cond_pos] = math.pi - theta[cond_pos]
     #  theta[cond_neg] = -math.pi - theta[cond_neg]
     return theta
+
+
+def b_inv(b_mat):
+    eye = b_mat.new_ones(b_mat.size(-1)).diag().expand_as(b_mat)
+    b_inv, _ = torch.gesv(eye, b_mat)
+    return b_inv

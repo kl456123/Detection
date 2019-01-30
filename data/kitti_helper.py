@@ -19,10 +19,11 @@ IMG_PATH = '/home/duan/data/KITTI/training/image_2'
 LABEL_PATH = "/home/duan/data/KITTI/training/label_2"
 CALIB_PATH = '/home/duan/data/KITTI/training/calib'
 
+
 def draw_3d_box():
     for img_file in os.listdir(IMG_PATH):
-        label_name = os.path.join(LABEL_PATH, img_file.split('.')[0]+'.txt')
-        calib_name = os.path.join(CALIB_PATH, img_file.split('.')[0]+'.txt')
+        label_name = os.path.join(LABEL_PATH, img_file.split('.')[0] + '.txt')
+        calib_name = os.path.join(CALIB_PATH, img_file.split('.')[0] + '.txt')
 
         img_path = os.path.join(IMG_PATH, img_file)
         label_path = os.path.join(LABEL_PATH, label_name)
@@ -55,14 +56,15 @@ def convert_target(obj):
     confidence = np.zeros(BIN)
 
     alpha = obj['alpha']
-    new_alpha = alpha + np.pi/2.
+    new_alpha = alpha + np.pi / 2.
     if new_alpha < 0:
-        new_alpha += 2.*np.pi
-    new_alpha -= int(new_alpha/(2.*np.pi)*(2.*np.pi))
+        new_alpha += 2. * np.pi
+    new_alpha -= int(new_alpha / (2. * np.pi) * (2. * np.pi))
 
     anchors = compute_anchors(new_alpha)
     for anchor in anchors:
-        orientation[anchor[0]] = np.array([np.cos(anchor[1]), np.sin(anchor[1])])
+        orientation[anchor[0]] = np.array(
+            [np.cos(anchor[1]), np.sin(anchor[1])])
         confidence[anchor[0]] = 1.
 
     confidence /= np.sum(confidence)
@@ -85,7 +87,7 @@ def get_depth_index(depth):
     else:
         l_index = 10
         l_error = depth - 55
-        l_cos = l_error / (90.-55)
+        l_cos = l_error / (90. - 55)
         l_sin = (1 - l_cos**2)**0.5
         return [l_index, l_cos, l_sin]
 
@@ -103,9 +105,10 @@ def compute_box_3d_in_world(target, p):
 
     """
     rotation_y = target['ry']
-    r = [math.cos(rotation_y), 0, math.sin(rotation_y),
-         0, 1, 0,
-         -math.sin(rotation_y), 0, math.cos(rotation_y)]
+    r = [
+        math.cos(rotation_y), 0, math.sin(rotation_y), 0, 1, 0,
+        -math.sin(rotation_y), 0, math.cos(rotation_y)
+    ]
     r = np.array(r).reshape(3, 3)
 
     h, w, l = target['dimension']
@@ -113,9 +116,11 @@ def compute_box_3d_in_world(target, p):
     # The points sequence is 1, 2, 3, 4, 5, 6, 7, 8.
     # Front face: 1, 2, 6, 5; left face: 2, 3, 7, 6
     # Back face: 3, 4, 8, 7; Right face: 4, 1, 5, 8
-    x_corners = np.array([l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2, 0])
+    x_corners = np.array(
+        [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2, 0])
     y_corners = np.array([0, 0, 0, 0, -h, -h, -h, -h, 0])
-    z_corners = np.array([w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2, 0])
+    z_corners = np.array(
+        [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2, 0])
 
     box_points_coords = np.vstack((x_corners, y_corners, z_corners))
     corners_3d = np.dot(r, box_points_coords)
@@ -137,9 +142,10 @@ def compute_box_3d(target, p):
 
     """
     rotation_y = target['ry']
-    r = [math.cos(rotation_y), 0, math.sin(rotation_y),
-         0, 1, 0,
-         -math.sin(rotation_y), 0, math.cos(rotation_y)]
+    r = [
+        math.cos(rotation_y), 0, math.sin(rotation_y), 0, 1, 0,
+        -math.sin(rotation_y), 0, math.cos(rotation_y)
+    ]
     r = np.array(r).reshape(3, 3)
 
     h, w, l = target['dimension']
@@ -147,14 +153,17 @@ def compute_box_3d(target, p):
     # The points sequence is 1, 2, 3, 4, 5, 6, 7, 8.
     # Front face: 1, 2, 6, 5; left face: 2, 3, 7, 6
     # Back face: 3, 4, 8, 7; Right face: 4, 1, 5, 8
-    x_corners = np.array([l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2, 0])
+    x_corners = np.array(
+        [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2, 0])
     y_corners = np.array([0, 0, 0, 0, -h, -h, -h, -h, 0])
-    z_corners = np.array([w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2, 0])
+    z_corners = np.array(
+        [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2, 0])
 
     box_points_coords = np.vstack((x_corners, y_corners, z_corners))
     corners_3d = np.dot(r, box_points_coords)
-    corners_3d = corners_3d + np.array(target['location']).reshape(3,1)
-    corners_3d_homo = np.vstack((corners_3d, np.ones((1, corners_3d.shape[1]))))
+    corners_3d = corners_3d + np.array(target['location']).reshape(3, 1)
+    corners_3d_homo = np.vstack((corners_3d, np.ones(
+        (1, corners_3d.shape[1]))))
 
     corners_2d = np.dot(p, corners_3d_homo)
     corners_2d_xy = corners_2d[:2, :] / corners_2d[2, :]
@@ -190,9 +199,9 @@ def get_alpha(alpha_anchors, alpha_errors):
         alpha_error = max(-1.0, alpha_error)
         alpha = math.acos(alpha_error)
         if alpha_anchor == 0:
-            alpha += 0.5*np.pi
+            alpha += 0.5 * np.pi
         else:
-            alpha += -.5*np.pi
+            alpha += -.5 * np.pi
 
         alphas.append(alpha)
 
@@ -214,16 +223,19 @@ def get_depth_coords(length_anchors, length_errors, angles, y_lens):
 
     coords = []
 
-    for anchor, error, angle_cos, angle_sin, y in zip(length_anchors, length_errors, angles_cos, angles_sin, y_lens):
+    for anchor, error, angle_cos, angle_sin, y in zip(
+            length_anchors, length_errors, angles_cos, angles_sin, y_lens):
         if anchor == 10:
-            length = 55. + (90.-55.)*error
+            length = 55. + (90. - 55.) * error
         else:
-            length = 5.*(anchor+1)+5.*error
+            length = 5. * (anchor + 1) + 5. * error
 
-        x = length * angle_cos
-        z = length * angle_sin
+        # x = length * angle_cos
+        # z = length * angle_sin
+        z = length
+        x = z * angle_cos / angle_sin
 
-        coords.append([x, y[0]+Y_AVG, z])
+        coords.append([x, y[0] + Y_AVG, z])
 
     return coords
 
@@ -240,24 +252,25 @@ def get_depth_index_v2(depth):
     else:
         l_index = 28
         l_error = depth - 60
-        l_cos = l_error / (90.-60.)
+        l_cos = l_error / (90. - 60.)
         l_sin = (1 - l_cos**2)**0.5
         return [l_index, l_cos, l_sin]
 
 
 def process_center_coords(coords):
-    d_x = float(coords[0])
+    # d_x = float(coords[0])
     d_y = float(coords[1])
     d_z = float(coords[2])
 
-    depth = (d_x**2+d_z**2)**0.5
-    angle = math.acos(d_x/depth)
+    # depth = (d_x**2+d_z**2)**0.5
+    depth = d_z
+    # angle = math.acos(d_x/depth)
 
     depth_anchor = get_depth_index(depth)
     d_y_anchor = d_y - Y_AVG
-    angle_anchor = [math.cos(angle), math.sin(angle)]
+    # angle_anchor = [math.cos(angle), math.sin(angle)]
 
-    return depth_anchor, angle_anchor, d_y_anchor
+    return depth_anchor, d_y_anchor
 
 
 if __name__ == '__main__':
@@ -265,6 +278,3 @@ if __name__ == '__main__':
     for item in test_depth:
         result = get_depth_index(item)
         print('result is:', result)
-
-
-

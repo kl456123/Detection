@@ -356,13 +356,7 @@ def compute_local_angle(location, ry):
 # return local_angle
 
 
-def compute_global_angle(center_2d, p2, local_angle):
-    """
-    Note that just batch is supported
-    Args:
-        center_2d: shape(N, 2)
-        p2: shape(3,4)
-    """
+def compute_ray_angle(center_2d, p2):
     M = p2[:, :3]
     center_2d_homo = np.concatenate(
         [center_2d, np.ones_like(center_2d[:, -1:])], axis=-1)
@@ -372,6 +366,17 @@ def compute_global_angle(center_2d, p2, local_angle):
     cos = np.dot(direction_vector, x_vector) / np.linalg.norm(
         direction_vector, axis=-1)
     ray_angle = np.arccos(cos)
+    return ray_angle
+
+
+def compute_global_angle(center_2d, p2, local_angle):
+    """
+    Note that just batch is supported
+    Args:
+        center_2d: shape(N, 2)
+        p2: shape(3,4)
+    """
+    ray_angle = compute_ray_angle(center_2d, p2)
     ry = local_angle + (-ray_angle)
     # if ry < -np.pi:
     # ry += np.pi
@@ -554,3 +559,17 @@ def get_center_2d(C_3d, P2, box_2d):
     C_2d_normalized = ((C_2d[0] - x) / w, (C_2d[1] - y) / h)
 
     return C_2d_normalized
+
+
+def get_gt_boxes_2d_ground_rect(loc, dim):
+    """
+    ry=-0.5*np.pi
+    z-x coords
+    """
+    h, w, l = dim
+    x, y, z = loc
+    zmax = z + 0.5 * l
+    zmin = z - 0.5 * l
+    xmin = x - 0.5 * w
+    xmax = x + 0.5 * w
+    return [zmin, xmin, zmax, xmax]
