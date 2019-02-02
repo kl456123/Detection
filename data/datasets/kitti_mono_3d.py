@@ -138,7 +138,7 @@ class Mono3DKittiDataset(DetDataset):
         img = Image.open(img_file)
 
         calib_file = self.calibs[index]
-        p2 = self.read_calibration(calib_file)
+        p2 = self.read_calibration(calib_file).astype(numpy.float32)
 
         if self.training:
             lbl_file = self.labels[index]

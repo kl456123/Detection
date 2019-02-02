@@ -17,7 +17,7 @@ class ArgmaxMatcher(Matcher):
         """
 
         max_overlaps, argmax_overlaps = torch.max(match_quality_matrix, dim=1)
-        argmax_overlaps[max_overlaps < thresh] = -1
+        argmax_overlaps[max_overlaps <= thresh] = -1
 
         self._assigned_overlaps = max_overlaps
         return argmax_overlaps

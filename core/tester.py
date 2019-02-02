@@ -7,6 +7,7 @@ from lib.model.rpn.bbox_transform import clip_boxes
 from lib.model.nms.nms_wrapper import nms
 from utils.visualize import save_pkl, visualize_bbox
 from utils.postprocess import mono_3d_postprocess_angle, mono_3d_postprocess_bbox, mono_3d_postprocess_depth
+from utils.kitti_util import proj_3dTo2d
 import numpy as np
 import torch
 import os
@@ -23,6 +24,76 @@ def to_cuda(target):
 
 
 def test(eval_config, data_loader, model):
+    """
+    Only one image in batch is supported
+    """
+    # import ipdb
+    # ipdb.set_trace()
+    num_samples = len(data_loader)
+    for i, data in enumerate(data_loader):
+        img_file = data['img_name']
+        start_time = time.time()
+
+        with torch.no_grad():
+            data = to_cuda(data)
+            prediction = model(data)
+
+        pred_probs_3d = prediction['pred_probs_3d']
+        pred_boxes_3d = prediction['pred_boxes_3d']
+
+        duration_time = time.time() - start_time
+
+        scores = pred_probs_3d.squeeze()
+        pred_boxes_3d = pred_boxes_3d.squeeze()
+
+        classes = eval_config['classes']
+        thresh = eval_config['thresh']
+        thresh = 0.1
+        #  import ipdb
+        #  ipdb.set_trace()
+
+        dets = []
+        # nms
+        for j in range(1, len(classes)):
+            inds = torch.nonzero(scores[:, j] > thresh).view(-1)
+            # if there is det
+            if inds.numel() > 0:
+                cls_scores = scores[:, j][inds]
+                _, order = torch.sort(cls_scores, 0, True)
+                if eval_config['class_agnostic']:
+                    pred_boxes_3d = pred_boxes_3d[inds, :]
+                else:
+                    pred_boxes_3d = pred_boxes_3d[inds][:, j * 4:(j + 1) * 4]
+
+                pred_boxes_3d = pred_boxes_3d[order]
+
+                # keep = nms(pred_boxes_3d, eval_config['nms'])
+
+                # pred_boxes_3d = pred_boxes_3d[keep.view(-1).long()]
+
+                pred_boxes_3d = pred_boxes_3d.detach().cpu().numpy()
+                p2 = data['p2'][0].detach().cpu().numpy()
+                cls_scores = cls_scores.cpu().numpy()
+
+                cls_boxes = proj_3dTo2d(pred_boxes_3d, p2)
+
+                # import ipdb
+                # ipdb.set_trace()
+                cls_dets = np.concatenate(
+                    (cls_boxes, cls_scores[..., np.newaxis]), 1)
+                dets.append(np.concatenate([cls_dets, pred_boxes_3d], axis=-1))
+
+            else:
+                dets.append([])
+
+        save_dets(dets[0], img_file[0], 'kitti', eval_config['eval_out'])
+
+        sys.stdout.write(
+            '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
+        sys.stdout.flush()
+
+
+def old_test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -139,9 +210,10 @@ def test(eval_config, data_loader, model):
                     # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
                     # import ipdb
                     # ipdb.set_trace()
-                    rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d, cls_dets, p2)
+                    # rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d,
+                                                                 # cls_dets, p2)
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
-                    # rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
+                    rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
                     # rcnn_3d[:, 3:6] = location
                     # rcnn_3d = np.zeros((cls_dets.shape[0], 7))
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))

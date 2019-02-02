@@ -68,7 +68,14 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
 
             data = to_cuda(data)
 
+            # with profiler.profile(use_cuda=True) as prof:
+            # with profiler.emit_nvtx(use_cuda=True):
+            profiler = model.profiler
+            profiler.start('9')
             prediction = model(data)
+            profiler.end('9')
+            loss_dict = model.loss(prediction, data)
+
             # proposals_batch = prediction['proposals_batch'][0]
             # rois = prediction['rois_batch'][0]
             # proposals_batch = rois.data[:, 1:5]
@@ -80,7 +87,6 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             # img.cpu().numpy()[0], anchors.cpu().numpy(), save=True)
 
             # loss
-            loss_dict = model.loss(prediction, data)
 
             loss = 0
             for loss_key, loss_val in loss_dict.items():
@@ -91,10 +97,15 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
 
             # backward
             optimizer.zero_grad()
+            profiler.start('10')
             loss.backward()
+            profiler.end('10')
 
+            # print(prof)
             nn.utils.clip_grad_norm_(model.parameters(), clip_gradient)
+            profiler.start('11')
             optimizer.step()
+            profiler.end('11')
 
             # statistics
             stat = model.target_assigner.stat
@@ -218,6 +229,12 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
                 cls_orient_2s_all_num = 0
 
                 start = time.time()
+                time_stats = model.profiler.duration
+                loop_nums = model.profiler.loop_nums
+                for name in time_stats:
+                    print('{} loop time: {} duration: {}'.format(
+                        name, loop_nums[name], time_stats[name]))
+                model.profiler.clear()
 
         checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(epoch, step)
         params_dict = {

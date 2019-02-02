@@ -68,6 +68,9 @@ class Analyzer(object):
         if match.dim() == 2:
             assert match.shape[0] == 1
             match = match[0]
+        if rcnn_cls_probs.dim() == 2:
+            assert rcnn_cls_probs.shape[0] == 1
+            rcnn_cls_probs = rcnn_cls_probs[0]
         num_det = torch.nonzero(rcnn_cls_probs > thresh).numel()
         num_tp = torch.nonzero((rcnn_cls_probs > thresh) & (match > -1
                                                             )).numel()

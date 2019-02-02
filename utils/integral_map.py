@@ -23,11 +23,23 @@ class IntegralMapGenerator(object):
         Args:
             bbox_2d: shape(N, 4)
         """
+        # import ipdb
+        # ipdb.set_trace()
         F = integral_map
         # be sure integral number first
-        bbox_2d = bbox_2d.long()
-        bbox_2d[:, ::2].clamp_(min=0, max=F.shape[3] - 1)
-        bbox_2d[:, 1::2].clamp_(min=0, max=F.shape[2] - 1)
+        used_coords_filter = (bbox_2d[:, 0] >= 0) & (bbox_2d[:, 1] >= 0) & (
+            bbox_2d[:, 2] <= 1) & (bbox_2d[:, 3] <= 1)
+        # import ipdb
+        # ipdb.set_trace()
+        unused_coords_filter = torch.nonzero(~used_coords_filter)
+
+        bbox_2d[:, ::2].clamp_(min=0, max=1)
+        bbox_2d[:, 1::2].clamp_(min=0, max=1)
+
+        bbox_2d[:, ::2] = bbox_2d[:, ::2] * (F.shape[3] - 1)
+        bbox_2d[:, 1::2] = bbox_2d[:, 1::2] * (F.shape[2] - 1)
+
+        bbox_2d = torch.round(bbox_2d).long()
 
         xmin = bbox_2d[:, 0]
         ymin = bbox_2d[:, 1]
@@ -37,13 +49,40 @@ class IntegralMapGenerator(object):
 
         # import ipdb
         # ipdb.set_trace()
-        area_filter = area < min_area
-        area[area_filter] = 1
-        inds_filter = torch.nonzero(area_filter)[:, 0]
-        # F[:, :, inds_filter, inds_filter] = 0
 
+        # used_area_filter = area >= min_area
+        unused_area_filter = area < min_area
+        area[unused_area_filter] = 1
+        inds_filter = torch.nonzero(unused_area_filter)[:, 0]
+        # # F[:, :, inds_filter, inds_filter] = 0
+
+        # import ipdb
+        # ipdb.set_trace()
+        # F = F.permute(2, 3, 0, 1).contiguous()
+        # res = (F[ymin, xmin, :, :] + F[ymax, xmax, :, :] - F[ymin, xmax, :, :]
+        # - F[ymax, xmin, :, :])
+        # res = res.permute(1, 2, 0).contiguous()
+
+        # # filter
+        # xmin = xmin[used_area_filter]
+        # ymin = ymin[used_area_filter]
+        # xmax = xmax[used_area_filter]
+        # ymax = ymax[used_area_filter]
+
+        # start = torch.cuda.Event(enable_timing=True)
+        # end = torch.cuda.Event(enable_timing=True)
+
+        # start.record()
         res = (F[:, :, ymin, xmin] + F[:, :, ymax, xmax] - F[:, :, ymin, xmax]
                - F[:, :, ymax, xmin]) / area.type_as(F)
-        res[:, :, inds_filter] = 0
+        # end.record()
+        # torch.cuda.synchronize()
+        # print(start.elapsed_time(end))
+        # res = F[:, :, ymin, xmin]
+        mask = torch.ones_like(res)
+        mask[:, :, inds_filter] = 0
+        mask[:, :, unused_coords_filter] = 0
+
+        res = res * mask
 
         return res

@@ -4,6 +4,8 @@
 # kitti utils
 
 import numpy as np
+# from utils.box_vis import compute_box_3d as compute_box_3dv3
+import math
 
 
 def roty(t):
@@ -77,6 +79,61 @@ def project_to_image(pts_3d, P):
     pts_2d[:, 0] /= pts_2d[:, 2]
     pts_2d[:, 1] /= pts_2d[:, 2]
     return pts_2d[:, 0:2]
+
+
+def proj_3dTo2d(pred_boxes_3d, p2):
+    """
+    Args:
+        pred_boxes_3d: shape(N, 3,3,1) (dim,pos,ry)
+    """
+    num = pred_boxes_3d.shape[0]
+    boxes_2d_projs = []
+
+    for i in range(num):
+        target = {}
+        target['ry'] = pred_boxes_3d[i, -1]
+        target['dimension'] = pred_boxes_3d[i, :3]
+        target['location'] = pred_boxes_3d[i, 3:6]
+        # corners_2d_xy = compute_box_3dv3(target, p2)
+        rotation_y = target['ry']
+        r = [
+            math.cos(rotation_y), 0, math.sin(rotation_y), 0, 1, 0,
+            -math.sin(rotation_y), 0, math.cos(rotation_y)
+        ]
+        r = np.array(r).reshape(3, 3)
+
+        h, w, l = target['dimension']
+
+        # The points sequence is 1, 2, 3, 4, 5, 6, 7, 8.
+        # Front face: 1, 2, 6, 5; left face: 2, 3, 7, 6
+        # Back face: 3, 4, 8, 7; Right face: 4, 1, 5, 8
+        x_corners = np.array(
+            [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2])
+        y_corners = np.array([0, 0, 0, 0, -h, -h, -h, -h])
+        z_corners = np.array(
+            [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2])
+
+        box_points_coords = np.vstack((x_corners, y_corners, z_corners))
+        corners_3d = np.dot(r, box_points_coords)
+        corners_3d = corners_3d + np.array(target['location']).reshape(3, 1)
+        corners_3d_homo = np.vstack((corners_3d, np.ones(
+            (1, corners_3d.shape[1]))))
+
+        corners_2d = np.dot(p2, corners_3d_homo)
+        corners_2d_xy = corners_2d[:2, :] / corners_2d[2, :]
+
+        # find the bbox 2d
+        corners_2d_xy = corners_2d_xy.reshape(2, 8)
+        xmin = corners_2d_xy[0, :].min(axis=0)
+        ymin = corners_2d_xy[1, :].min(axis=0)
+        xmax = corners_2d_xy[0, :].max(axis=0)
+        ymax = corners_2d_xy[1, :].max(axis=0)
+
+        boxes_2d_proj = np.stack([xmin, ymin, xmax, ymax], axis=-1)
+        boxes_2d_projs.append(boxes_2d_proj)
+
+    boxes_2d_projs = np.stack(boxes_2d_projs, axis=0)
+    return boxes_2d_projs
 
 
 def compute_box_3d(obj, P):
@@ -385,9 +442,38 @@ def compute_global_angle(center_2d, p2, local_angle):
     return ry
 
 
+def compute_2d_projv2(ry, corners, trans_3d, p):
+    """
+    Args:
+        ry: scalar
+        corners: shape(8, 3)
+        trans_3d: shape(3)
+        p: shape(3,4)
+    """
+    r = np.stack(
+        [np.cos(ry), 0, np.sin(ry), 0, 1, 0, -np.sin(ry), 0, np.cos(ry)],
+        axis=-1).reshape(3, 3)
+    corners_3d = np.dot(r, corners.T)
+    trans_3d = np.repeat(np.expand_dims(trans_3d.T, axis=1), 8, axis=1)
+    corners_3d = corners_3d[..., np.newaxis] + trans_3d
+    # corners_3d = corners_3d.reshape(3, -1)
+    corners_3d_homo = np.vstack((corners_3d, np.ones(
+        (1, corners_3d.shape[1]))))
+
+    corners_2d = np.dot(p, corners_3d_homo)
+    corners_2d_xy = corners_2d[:2] / corners_2d[2]
+
+    corners_2d_xy = corners_2d_xy.reshape(2, 8)
+    xmin = corners_2d_xy[0, :, :].min(axis=0)
+    ymin = corners_2d_xy[1, :, :].min(axis=0)
+    xmax = corners_2d_xy[0, :, :].max(axis=0)
+    ymax = corners_2d_xy[1, :, :].max(axis=0)
+
+    boxes_2d_proj = np.stack([xmin, ymin, xmax, ymax], axis=-1)
+    return boxes_2d_proj
+
+
 def compute_2d_proj(ry, corners, trans_3d, p):
-    import ipdb
-    ipdb.set_trace()
     r = np.stack(
         [np.cos(ry), 0, np.sin(ry), 0, 1, 0, -np.sin(ry), 0, np.cos(ry)],
         axis=-1).reshape(3, 3)

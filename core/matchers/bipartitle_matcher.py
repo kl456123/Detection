@@ -37,7 +37,7 @@ class BipartitleMatcher(Matcher):
 
         # shape(N,1)
         max_overlaps, argmax_overlaps = torch.max(overlaps, dim=1)
-        argmax_overlaps[max_overlaps < thresh] = -1
+        argmax_overlaps[max_overlaps <= thresh] = -1
         # matched_gt = torch.ones(overlaps.shape[1])
         # matched_gt[argmax_overlaps[max_overlaps<thresh]] = 0
 

@@ -89,7 +89,7 @@
     },
     "model_config": {
         "common_feat_size":256,
-        "sample_size":512,
+        "sample_size":128,
         "batch_size":1,
         "class_agnostic": true,
         "classes": [
@@ -111,9 +111,41 @@
         },
         "num_classes": 2,
         "sampler_config": {
-            "fg_fraction": 1
+            "fg_fraction": 0.5
         },
         "subsample_twice": false,
+        "eval_target_assigner_config":{
+            "similarity_calc_config":{
+                "type":"center"
+            },
+            "fg_thresh": 0.5,
+            "bg_thresh":0.5,
+            "coder_config": {
+                "type":"center",
+                "bbox_inside_weights": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "bbox_normalize_means": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "bbox_normalize_stds": [
+                    0.1,
+                    0.1,
+                    0.2,
+                    0.2
+                ],
+                "bbox_normalize_targets_precomputed": true
+            },
+            "matcher_config": {
+                "type": "argmax"
+            }
+        },
         "target_assigner_config": {
             "similarity_calc_config":{
                 "type":"center"
@@ -151,9 +183,10 @@
         "truncated": false,
         "use_focal_loss": true,
         "voxel_generator_config":{
+            "z_offset": 3,
             "voxel_size":0.5,
-            "grid_dims":[40, 4,40],
-            "high_interval":[2, -3],
+            "grid_dims":[40, 4, 80],
+            "high_interval":[-3.7,0.3],
             "ground_plane":1.6
         }
     },

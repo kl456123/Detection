@@ -15,6 +15,9 @@ class VoxelGenerator(object):
         # from bottom to top
         self.high_interval = voxel_generator_config['high_interval']
         self.y0 = voxel_generator_config['ground_plane']
+        self.z_offset = voxel_generator_config['z_offset']
+        # self.original_offset = torch.tensor(
+        # voxel_generator_config['original_offset']).cuda().float()
 
         self.voxel_centers = None
         self.voxel_proj_2d = None
@@ -45,9 +48,12 @@ class VoxelGenerator(object):
                                      3).type_as(corner_coords)
         center_coords = corner_coords + center_offset
 
-        original_offset = [self.grid_dims[0], self.grid_dims[1], 0]
-        original_offset = -0.5 * torch.tensor(original_offset).type_as(
-            center_coords)
+        high_interval = self.high_interval
+        y_offset = (high_interval[0] + high_interval[1]) / 2
+
+        original_offset = [-0.5 * self.grid_dims[0], y_offset, self.z_offset]
+        # original_offset  = self.original_offset
+        original_offset = torch.tensor(original_offset).type_as(center_coords)
         center_coords = center_coords + original_offset
 
         # tmp_coords = torch.tensor(
@@ -72,7 +78,8 @@ class VoxelGenerator(object):
         pts_3d_homo = torch.cat([pts_3d, ones], dim=-1).transpose(1, 0)
         pts_2d_homo = p2.matmul(pts_3d_homo).transpose(2, 1)
 
-        pts_2d_homo /= pts_2d_homo[:, :, -1:]
+        # inplace op is prohibited here
+        pts_2d_homo = pts_2d_homo / pts_2d_homo[:, :, -1:]
         return pts_2d_homo[:, :, :-1]
 
     def proj_voxels_to_ground(self):
@@ -88,7 +95,7 @@ class VoxelGenerator(object):
         xmax = x + 0.5 * self.voxel_size
         zmax = z + 0.5 * self.voxel_size
 
-        voxels_ground_2d = torch.stack([xmin, zmin, xmax, zmax], dim=-1)
+        voxels_ground_2d = torch.stack([zmin, xmin, zmax, xmax], dim=-1)
 
         # Only one slice of voxels remains
         lattice_dims = self.lattice_dims.cpu().numpy()
@@ -96,7 +103,7 @@ class VoxelGenerator(object):
         voxels_ground_2d = voxels_ground_2d.view(-1, D, 4)
         return voxels_ground_2d[:, 0, :]
 
-    def proj_voxels_3dTo2d(self, p2):
+    def proj_voxels_3dTo2d(self, p2, img_size):
         """
         Project bbox in 3d to bbox in 2d
         """
@@ -118,6 +125,9 @@ class VoxelGenerator(object):
             dim=-1).type_as(self.voxel_centers)
         corners_3d = corners_3d + self.voxel_centers.unsqueeze(1)
 
+        # import ipdb
+        # ipdb.set_trace()
+
         corners_2d = self.project_to_image(corners_3d.view(-1, 3), p2).view(
             -1, 8, 2)
 
@@ -130,6 +140,15 @@ class VoxelGenerator(object):
         boxes_2d = torch.stack([xmin, ymin, xmax, ymax], dim=-1)
 
         self.voxel_proj_2d = boxes_2d
+
+        normalized_boxes_2d = torch.stack(
+            [
+                xmin / img_size[:, 1], ymin / img_size[:, 0],
+                xmax / img_size[:, 1], ymax / img_size[:, 0]
+            ],
+            dim=-1)
+        # normalize it
+        self.normalized_voxel_proj_2d = normalized_boxes_2d
 
         return boxes_2d
 

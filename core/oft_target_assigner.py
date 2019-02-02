@@ -63,14 +63,14 @@ class TargetAssigner(object):
                                                       gt_boxes_3d)
 
         # assign classification targets
-        cls_targets = self._assign_classification_targets(match, gt_labels)
+        cls_targets = self._assign_classification_targets(voxel_centers,
+                                                          gt_boxes_3d)
 
         # create regression weights
         reg_weights = self._create_regression_weights(assigned_overlaps_batch)
 
         # create classification weights
-        cls_weights = self._create_classification_weights(
-            assigned_overlaps_batch)
+        cls_weights = self._create_classification_weights(cls_targets)
 
         ####################################
         # postprocess
@@ -81,10 +81,9 @@ class TargetAssigner(object):
         reg_weights[match == -1] = 0
 
         # as for cls weights, ignore according to bg_thresh
-        if self.bg_thresh > 0:
-            ignored_bg = (assigned_overlaps_batch > self.bg_thresh) & (
-                match == -1)
-            cls_weights[ignored_bg] = 0
+        # if self.bg_thresh > 0:
+        ignored_bg = (assigned_overlaps_batch > self.bg_thresh) & (match == -1)
+        cls_weights[ignored_bg] = 0
 
         return cls_weights, reg_weights, cls_targets, reg_targets
 
@@ -99,11 +98,12 @@ class TargetAssigner(object):
         #  return torch.pow(1 - assigned_overlaps_batch, gamma).detach()
         return torch.ones_like(assigned_overlaps_batch)
 
-    def _create_classification_weights(self, assigned_overlaps_batch):
+    def _create_classification_weights(self, scores_map):
         """
         All samples can be used for calculating loss,So reserve all.
         """
-        cls_weights = torch.ones_like(assigned_overlaps_batch)
+        cls_weights = torch.ones_like(scores_map)
+        cls_weights[scores_map < 5e-2] = 1e-2
         return cls_weights
 
     def _assign_regression_targets(self, match, voxel_centers, gt_boxes_3d):
@@ -127,25 +127,28 @@ class TargetAssigner(object):
 
         return reg_targets_batch_3d
 
-    def _assign_classification_targets(self, match, gt_labels):
-        """
-        Just return the countpart labels
-        Note that use zero to represent background labels
-        For the first stage, generate binary labels, For the second stage
-        generate countpart gt_labels
-        """
-        # binary labels classifcation
-        if gt_labels is None:
-            # consider it as binary classification problem
-            return self._generate_binary_labels(match)
+    def _assign_classification_targets(self, voxel_centers, gt_boxes_3d):
+        return self.bbox_coder.encode_batch_labels(voxel_centers, gt_boxes_3d)
 
-        # multiple labels classification
-        batch_size = match.shape[0]
-        offset = torch.arange(0, batch_size) * gt_labels.size(1)
-        match += offset.view(batch_size, 1).type_as(match)
-        cls_targets_batch = gt_labels.view(-1)[match.view(-1)].view(
-            batch_size, match.shape[1])
-        return cls_targets_batch
+    # def _assign_classification_targets(self, match, gt_labels):
+    # """
+    # Just return the countpart labels
+    # Note that use zero to represent background labels
+    # For the first stage, generate binary labels, For the second stage
+    # generate countpart gt_labels
+    # """
+    # # binary labels classifcation
+    # if gt_labels is None:
+    # # consider it as binary classification problem
+    # return self._generate_binary_labels(match)
+
+    # # multiple labels classification
+    # batch_size = match.shape[0]
+    # offset = torch.arange(0, batch_size) * gt_labels.size(1)
+    # match += offset.view(batch_size, 1).type_as(match)
+    # cls_targets_batch = gt_labels.view(-1)[match.view(-1)].view(
+    # batch_size, match.shape[1])
+    # return cls_targets_batch
 
     def _generate_binary_labels(self, match):
         gt_labels_batch = torch.ones_like(match).long()

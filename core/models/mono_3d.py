@@ -19,10 +19,13 @@ from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
+from core.profiler import Profiler
 from utils.visualizer import FeatVisualizer
 
 import functools
 from core.ops import b_inv
+
+import numpy as np
 
 
 class Mono3DFasterRCNN(Model):
@@ -98,16 +101,21 @@ class Mono3DFasterRCNN(Model):
         # shape(N,M,9)
         # import ipdb
         # ipdb.set_trace()
-        H_inv = self.calc_Hinv(
-            final_rois_batch, feed_dict['p2'],
-            feed_dict['im_info'])[0].view(-1, 9, 1, 1).expand(-1, -1, 7, 7)
+
         # concat with pooled feat
-        mono_3d_pooled_feat = torch.cat([mono_3d_pooled_feat, H_inv], dim=1)
-        mono_3d_pooled_feat = self.reduced_layer(mono_3d_pooled_feat)
+        # mono_3d_pooled_feat = torch.cat([mono_3d_pooled_feat, H_inv], dim=1)
+        # mono_3d_pooled_feat = self.reduced_layer(mono_3d_pooled_feat)
 
         mono_3d_pooled_feat = self.feature_extractor.third_stage_feature(
             mono_3d_pooled_feat)
         mono_3d_pooled_feat = mono_3d_pooled_feat.mean(3).mean(2)
+
+        if self.h_cat:
+            H_inv = self.calc_Hinv(final_rois_batch, feed_dict['p2'],
+                                   feed_dict['im_info'],
+                                   base_feat.shape[-2:])[0].view(-1, 9)
+            mono_3d_pooled_feat = torch.cat([mono_3d_pooled_feat, H_inv],
+                                            dim=-1)
         rcnn_3d = self.rcnn_3d_pred(mono_3d_pooled_feat)
 
         # normalize to [0,1]
@@ -125,7 +133,7 @@ class Mono3DFasterRCNN(Model):
 
         return prediction_dict
 
-    def calc_Hinv(self, final_rois_batch, p2, img_size):
+    def calc_Hinv(self, final_rois_batch, p2, img_size, feat_size):
         p2 = p2[0]
         K_c = p2[:, :3]
         fx = K_c[0, 0]
@@ -136,24 +144,43 @@ class Mono3DFasterRCNN(Model):
         fh = self.pooling_size
 
         proposals = final_rois_batch[:, :, 1:]
-        rw = (proposals[:, :, 2] - proposals[:, :, 0] + 1) / img_size[:, 1]
-        rh = (proposals[:, :, 3] - proposals[:, :, 1] + 1) / img_size[:, 0]
+        rw = (proposals[:, :, 2] - proposals[:, :, 0] + 1
+              ) / img_size[:, 1] * feat_size[1]
+        rh = (proposals[:, :, 3] - proposals[:, :, 1] + 1
+              ) / img_size[:, 0] * feat_size[0]
+        # rx = (proposals[:, :, 0] + proposals[:, :, 2]) / 2
+        # ry = (proposals[:, :, 1] + proposals[:, :, 3]) / 2
 
         # roi camera intrinsic parameters
-        fx_roi = fx * fw / rw
-        fy_roi = fy * fh / rh
+        sw = fw / rw
+        sh = fh / rh
+        fx_roi = fx * sw
+        fy_roi = fy * sh
         zeros = torch.zeros_like(fx_roi)
         ones = torch.ones_like(fx_roi)
 
-        px_roi = px - proposals[:, :, 0]
-        py_roi = py - proposals[:, :, 1]
+        px_roi = (px - proposals[:, :, 0]) * sw
+        py_roi = (py - proposals[:, :, 1]) * sh
 
         K_roi = torch.stack(
             [fx_roi, zeros, px_roi, zeros, fy_roi, py_roi, zeros, zeros, ones],
             dim=-1).view(-1, 3, 3)
 
         H = K_roi.matmul(torch.inverse(K_c))
-        return H.view(1, -1, 9)
+        # import ipdb
+        # ipdb.set_trace()
+        # Too slow
+        # H_inv = []
+        # for i in range(H.shape[0]):
+        # H_inv.append(torch.inverse(H[i]))
+        # H_inv = torch.stack(H_inv, dim=0)
+        # import ipdb
+        # ipdb.set_trace()
+        H_np = H.cpu().numpy()
+        H_inv_np = np.linalg.inv(H_np)
+        H_inv = torch.from_numpy(H_inv_np).cuda().float()
+
+        return H_inv.view(1, -1, 9)
 
     def pre_forward(self):
         # params
@@ -164,8 +191,8 @@ class Mono3DFasterRCNN(Model):
                 parameter.requires_grad = True
             for param in self.rcnn_3d_pred.parameters():
                 param.requires_grad = True
-        self.freeze_bn(self)
-        self.unfreeze_bn(self.feature_extractor.third_stage_feature)
+            self.freeze_bn(self)
+            self.unfreeze_bn(self.feature_extractor.third_stage_feature)
 
     def init_weights(self):
         # submodule init weights
@@ -220,7 +247,11 @@ class Mono3DFasterRCNN(Model):
         # some 3d statistic
         # some 2d points projected from 3d
         # self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 3 + 1 + 4 + 2)
-        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 11 + 2 + 1)
+        if self.h_cat:
+            c = in_channels + 9
+        else:
+            c = in_channels
+        self.rcnn_3d_pred = nn.Linear(c, 3 + 4 + 11 + 2 + 1)
 
         # self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
         # self.rcnn_3d_loss = MultiBinRegLoss(num_bins=self.num_bins)
@@ -273,6 +304,10 @@ class Mono3DFasterRCNN(Model):
         # assigner
         self.target_assigner = TargetAssigner(
             model_config['target_assigner_config'])
+
+        self.profiler = Profiler()
+
+        self.h_cat = True
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']

@@ -620,7 +620,7 @@ class Boxes3DTo2D(object):
         # angles_camera, axis=0).astype(np.float32)
         sample['distance'] = np.stack(distances, axis=0).astype(np.float32)
         sample['d_y'] = np.stack(d_ys, axis=0).astype(np.float32)
-        sample['p2'] = p2.astype(np.float32)
+        # sample['p2'] = p2.astype(np.float32)
 
         sample['gt_boxes_2d_ground_rect'] = np.stack(
             gt_boxes_2d_ground_rect, axis=0).astype(np.float32)
