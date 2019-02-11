@@ -27,11 +27,11 @@ class IntegralMapGenerator(object):
         # ipdb.set_trace()
         F = integral_map
         # be sure integral number first
-        used_coords_filter = (bbox_2d[:, 0] >= 0) & (bbox_2d[:, 1] >= 0) & (
-            bbox_2d[:, 2] <= 1) & (bbox_2d[:, 3] <= 1)
+        # used_coords_filter = (bbox_2d[:, 0] >= 0) & (bbox_2d[:, 1] >= 0) & (
+            # bbox_2d[:, 2] <= 1) & (bbox_2d[:, 3] <= 1)
         # import ipdb
         # ipdb.set_trace()
-        unused_coords_filter = torch.nonzero(~used_coords_filter)
+        # unused_coords_filter = torch.nonzero(~used_coords_filter)
 
         bbox_2d[:, ::2].clamp_(min=0, max=1)
         bbox_2d[:, 1::2].clamp_(min=0, max=1)
@@ -81,7 +81,7 @@ class IntegralMapGenerator(object):
         # res = F[:, :, ymin, xmin]
         mask = torch.ones_like(res)
         mask[:, :, inds_filter] = 0
-        mask[:, :, unused_coords_filter] = 0
+        # mask[:, :, unused_coords_filter] = 0
 
         res = res * mask
 

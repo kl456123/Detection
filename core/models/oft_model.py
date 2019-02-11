@@ -208,57 +208,54 @@ class OFTModel(Model):
         # subsample
         ################################
 
-        pos_indicator = reg_weights > 0
-        indicator = cls_weights > 0
+        # pos_indicator = reg_weights > 0
+        # indicator = cls_weights > 0
 
-        rpn_cls_probs = prediction_dict['pred_probs_3d'][:, :, 1]
-        cls_criterion = rpn_cls_probs
+        # rpn_cls_probs = prediction_dict['pred_probs_3d'][:, :, 1]
+        # cls_criterion = rpn_cls_probs
 
-        batch_sampled_mask = self.sampler.subsample_batch(
-            self.sample_size,
-            pos_indicator,
-            criterion=cls_criterion,
-            indicator=indicator)
+        # batch_sampled_mask = self.sampler.subsample_batch(
+        # self.sample_size,
+        # pos_indicator,
+        # criterion=cls_criterion,
+        # indicator=indicator)
 
         # import ipdb
         # ipdb.set_trace()
         # batch_sampled_mask = batch_sampled_mask.type_as(cls_weights)
-        rpn_cls_weights = cls_weights[batch_sampled_mask]
-        rpn_reg_weights = reg_weights[batch_sampled_mask]
-        cls_targets = cls_targets[batch_sampled_mask]
-        reg_targets = reg_targets[batch_sampled_mask]
+        # rpn_cls_weights = cls_weights[batch_sampled_mask]
+        # rpn_reg_weights = reg_weights[batch_sampled_mask]
+        # cls_targets = cls_targets[batch_sampled_mask]
+        # reg_targets = reg_targets[batch_sampled_mask]
 
-        num_cls_coeff = (rpn_cls_weights > 0).sum(dim=-1)
-        num_reg_coeff = (rpn_reg_weights > 0).sum(dim=-1)
-        # check
-        #  assert num_cls_coeff, 'bug happens'
-        #  assert num_reg_coeff, 'bug happens'
-        if num_cls_coeff == 0:
-            num_cls_coeff = torch.ones([]).type_as(num_cls_coeff)
-        if num_reg_coeff == 0:
-            num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
+        # num_cls_coeff = (rpn_cls_weights > 0).sum(dim=-1)
+        # import ipdb
+        # ipdb.set_trace()
+        # num_reg_coeff = (reg_weights > 0).sum(dim=-1)
+        # # check
+        # #  assert num_cls_coeff, 'bug happens'
+        # #  assert num_reg_coeff, 'bug happens'
+        # if num_cls_coeff == 0:
+        # num_cls_coeff = torch.ones([]).type_as(num_cls_coeff)
+        # if num_reg_coeff == 0:
+        # num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
         # import ipdb
         # ipdb.set_trace()
         # cls loss
-        rpn_cls_score = prediction_dict['pred_probs_3d']
-        rpn_cls_loss = self.conf_loss(rpn_cls_score[batch_sampled_mask][:, -1],
-                                      cls_targets.view(-1))
-        rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
-        rpn_cls_loss = rpn_cls_loss * rpn_cls_weights
-        rpn_cls_loss = rpn_cls_loss.sum(dim=-1) / num_cls_coeff.float()
+        rpn_cls_probs = prediction_dict['pred_probs_3d'][:, :, -1]
+        rpn_cls_loss = self.conf_loss(rpn_cls_probs, cls_targets)
+        rpn_cls_loss = rpn_cls_loss.view_as(cls_weights)
+        rpn_cls_loss = rpn_cls_loss * cls_weights
+        rpn_cls_loss = rpn_cls_loss.sum(dim=-1)
 
         # bbox loss
-        # shape(N,num,4)
-
         rpn_bbox_preds = prediction_dict['pred_boxes_3d']
-        rpn_reg_loss = self.reg_loss(rpn_bbox_preds[batch_sampled_mask],
-                                     reg_targets)
-        rpn_reg_loss = rpn_reg_loss * rpn_reg_weights.unsqueeze(-1).expand(
-            -1, self.reg_channels)
-        rpn_reg_loss = rpn_reg_loss.sum(dim=-1) / num_reg_coeff.float()
+        rpn_reg_loss = self.reg_loss(rpn_bbox_preds, reg_targets)
+        rpn_reg_loss = rpn_reg_loss * reg_weights.unsqueeze(-1)
+        rpn_reg_loss = rpn_reg_loss.sum(dim=-1).sum(dim=-1)
 
-        prediction_dict['rcnn_reg_weights'] = rpn_reg_weights
+        prediction_dict['rcnn_reg_weights'] = reg_weights
 
         loss_dict = {}
 
@@ -291,5 +288,5 @@ class OFTModel(Model):
         # import ipdb
         # ipdb.set_trace()
         self.target_assigner.analyzer.analyze_ap(
-            fake_match, rpn_cls_probs, num_gt, thresh=0.5)
+            fake_match, rpn_cls_probs, num_gt, thresh=0.1)
         return loss_dict

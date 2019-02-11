@@ -183,11 +183,10 @@
         "truncated": false,
         "use_focal_loss": true,
         "voxel_generator_config":{
-            "z_offset": 3,
+            "z_offset": 0,
             "voxel_size":0.5,
             "grid_dims":[40, 4, 80],
-            "high_interval":[-3.7,0.3],
-            "ground_plane":1.6
+            "high_interval":[-0.3, 3.7]
         }
     },
     "train_config": {

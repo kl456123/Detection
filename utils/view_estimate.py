@@ -21,13 +21,66 @@ def point2angle(point_2d, D):
     return point_3d
 
 
-point_3ds = []
-for point_2d in point_2ds:
-    D = 80
-    point_3d = point2angle(point_2d, D)
-    point_3ds.append(point_3d)
-    # print(point_3ds)
+def view_estimate():
+    point_3ds = []
+    for point_2d in point_2ds:
+        D = 80
+        point_3d = point2angle(point_2d, D)
+        point_3ds.append(point_3d)
+        # print(point_3ds)
+
+    deltas = point_3ds[0] - point_3ds[3]
+    print(deltas)
 
 
-deltas = point_3ds[0] - point_3ds[3]
-print(deltas)
+def data_analysis():
+    from utils.orient_eval import read_labels, label_dir
+    import os
+    total_3ds_label = np.empty((0, 7))
+    # collect
+    for lbl_file in os.listdir(label_dir):
+        sample_name = os.path.splitext(lbl_file)[0]
+        box_2ds_label, box_3ds_label = read_labels(label_dir, sample_name)
+        total_3ds_label = np.append(total_3ds_label, box_3ds_label, axis=0)
+
+    # analysis
+    dim = total_3ds_label[:, :3]
+    pos = total_3ds_label[:, 3:6]
+    ry = total_3ds_label[:, 6:]
+    dim_mean = dim.mean(axis=0)
+    pos_max = pos.max(axis=0)
+    pos_min = pos.min(axis=0)
+    print(dim_mean)
+    print(pos_max)
+    print(pos_min)
+    return pos
+
+
+def draw_3d(pos):
+    from matplotlib import pyplot
+    from mpl_toolkits.mplot3d import Axes3D
+
+    fig = pyplot.figure()
+    ax = Axes3D(fig)
+
+    #  sequence_containing_x_vals = list(range(0, 100))
+    #  sequence_containing_y_vals = list(range(0, 100))
+    #  sequence_containing_z_vals = list(range(0, 100))
+
+    #  random.shuffle(sequence_containing_x_vals)
+    #  random.shuffle(sequence_containing_y_vals)
+    #  random.shuffle(sequence_containing_z_vals)
+
+    ax.scatter(pos[:, 0], pos[:, 1], pos[:, 2])
+    pyplot.show()
+
+
+if __name__ == '__main__':
+    #  import ipdb
+    #  ipdb.set_trace()
+    pos = data_analysis()
+    draw_3d(pos)
+    from utils.analysis import data_vis
+    data_vis(pos[:, 1])
+    data_vis(pos[:,0])
+    data_vis(pos[:,2])

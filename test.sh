@@ -125,7 +125,7 @@ CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     --net oft \
     --load_dir /data/object/liangxiong/oft \
     --checkpoint 3257 \
-    --checkepoch 12
+    --checkepoch 100
 
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --net ssd \

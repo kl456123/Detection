@@ -14,7 +14,7 @@ class VoxelGenerator(object):
             voxel_generator_config['grid_dims']).cuda().float()
         # from bottom to top
         self.high_interval = voxel_generator_config['high_interval']
-        self.y0 = voxel_generator_config['ground_plane']
+        # self.y0 = voxel_generator_config['ground_plane']
         self.z_offset = voxel_generator_config['z_offset']
         # self.original_offset = torch.tensor(
         # voxel_generator_config['original_offset']).cuda().float()
