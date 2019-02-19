@@ -23,7 +23,7 @@ def to_cuda(target):
         return target.cuda()
 
 
-def test(eval_config, data_loader, model):
+def new_test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -93,7 +93,7 @@ def test(eval_config, data_loader, model):
         sys.stdout.flush()
 
 
-def old_test(eval_config, data_loader, model):
+def test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -164,6 +164,8 @@ def old_test(eval_config, data_loader, model):
                 local_angles_gt = data['local_angle'][0].detach().cpu().numpy()
                 local_angle_oritation_gt = data['local_angle_oritation'][
                     0].detach().cpu().numpy()
+                encoded_side_points = data['encoded_side_points'][0].detach(
+                ).cpu().numpy()
                 points_3d = points_3d.T
 
                 p2 = data['p2'][0].detach().cpu().numpy()
@@ -177,16 +179,27 @@ def old_test(eval_config, data_loader, model):
                     import ipdb
                     ipdb.set_trace()
 
+                    center_x = (gt_boxes[:, 0] + gt_boxes[:, 2]) / 2
+                    center_y = (gt_boxes[:, 1] + gt_boxes[:, 3]) / 2
+                    gt_boxes_w = gt_boxes[:, 2] - gt_boxes[:, 0] + 1
+                    gt_boxes_h = gt_boxes[:, 3] - gt_boxes[:, 1] + 1
+                    center = np.stack([center_x, center_y], axis=-1)
+                    gt_boxes_dims = np.stack([gt_boxes_w, gt_boxes_h], axis=-1)
+
+                    point1 = encoded_side_points[:,:2] * gt_boxes_dims + center
+                    point2 = encoded_side_points[:,2:] * gt_boxes_dims + center
+
                     global_angles_gt = gt_boxes_3d[:, -1:]
+
                     rcnn_3d_gt = np.concatenate(
-                        [gt_boxes_3d[:, :3], global_angles_gt], axis=-1)
+                        [gt_boxes_3d[:, :3], point1, point2], axis=-1)
                     # just for debug
                     if len(rcnn_3d_gt):
                         cls_dets_gt = np.concatenate(
                             [gt_boxes, np.zeros_like(gt_boxes[:, -1:])],
                             axis=-1)
-                        rcnn_3d_gt = mono_3d_postprocess_bbox(rcnn_3d_gt,
-                                                              cls_dets_gt, p2)
+                        rcnn_3d_gt, _ = mono_3d_postprocess_bbox(
+                            rcnn_3d_gt, cls_dets_gt, p2)
 
                         dets.append(
                             np.concatenate(
@@ -210,10 +223,10 @@ def old_test(eval_config, data_loader, model):
                     # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
                     # import ipdb
                     # ipdb.set_trace()
-                    # rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d,
-                                                                 # cls_dets, p2)
+                    rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d,
+                                                                 cls_dets, p2)
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
-                    rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
+                    # rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
                     # rcnn_3d[:, 3:6] = location
                     # rcnn_3d = np.zeros((cls_dets.shape[0], 7))
                     dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))

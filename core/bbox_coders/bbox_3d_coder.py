@@ -149,18 +149,13 @@ class BBox3DCoder(object):
         targets = torch.cat([targets, dims[:, 3:]], dim=-1)
         return targets
 
-    def decode_batch_dims(self, boxes_2d, targets):
+    def decode_batch_dims(self, targets, rois_batch):
         """
         Args:
             boxes_2d: shape(N,)
             targets: shape(N,)
         """
-        w = (boxes_2d[:, 2] - boxes_2d[:, 0] + 1)
-        h = (boxes_2d[:, 3] - boxes_2d[:, 1] + 1)
-        h_2d = h * torch.exp(targets[:, 0])
-        w_2d = w * torch.exp(targets[:, 1])
-        l_2d = w * torch.exp(targets[:, 2])
-
+        # dims
         h_3d_mean = 1.67
         w_3d_mean = 1.87
         l_3d_mean = 3.7
@@ -169,12 +164,39 @@ class BBox3DCoder(object):
         w_3d_std = 1
         l_3d_std = 1
 
-        h_3d = targets[:, 3] * h_3d_std + h_3d_mean
-        w_3d = targets[:, 4] * w_3d_std + w_3d_mean
-        l_3d = targets[:, 5] * l_3d_std + l_3d_mean
+        h_3d = targets[:, 0] * h_3d_std + h_3d_mean
+        w_3d = targets[:, 1] * w_3d_std + w_3d_mean
+        l_3d = targets[:, 2] * l_3d_std + l_3d_mean
 
-        dims = torch.stack([h_2d, w_2d, l_2d, h_3d, w_3d, l_3d], dim=-1)
-        return dims
+        # rois w and h
+        rois = rois_batch[0, :, 1:]
+        w = rois[:, 2] - rois[:, 0] + 1
+        h = rois[:, 3] - rois[:, 1] + 1
+        x = (rois[:, 2] + rois[:, 0]) / 2
+        y = (rois[:, 3] + rois[:, 1]) / 2
+        centers = torch.stack([x, y], dim=-1)
+        dims = torch.stack([w, h], dim=-1)
+
+        point1 = centers + targets[:, 3:5] * dims
+        point2 = centers + targets[:, 5:7] * dims
+
+        # cls orient
+        # cls_orient = targets[:, 3:5]
+        # cls_orient = F.softmax(cls_orient, dim=-1)
+        # cls_orient, cls_orient_argmax = torch.max(cls_orient, dim=-1)
+
+        # reg_orient = targets[:, 5:7]
+
+        # decode h_2d
+        # h_2d = torch.exp(targets[:, 7]) * h
+
+        # decode c_2d
+        # c_2d_x = targets[:, 8] * w + x
+        # c_2d_y = targets[:, 9] * h + y
+
+        bbox = torch.stack([h_3d, w_3d, l_3d], dim=-1)
+        return torch.cat([bbox, point1, point2], dim=-1)
+        # return torch.cat([bbox, targets[:, 3:]], dim=-1)
 
     def decode_batch_depth(self, targets):
         h_3d_mean = 1.67

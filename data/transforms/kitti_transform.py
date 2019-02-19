@@ -11,7 +11,8 @@ from utils.kitti_util import get_h_2d, get_center_2d, get_r_2d, get_cls_orient_4
 from utils.kitti_util import get_center_orient
 from utils.box_vis import draw_line
 from ..kitti_helper import process_center_coords
-from utils.kitti_util import get_gt_boxes_2d_ground_rect
+from utils.kitti_util import get_gt_boxes_2d_ground_rect, get_gt_boxes_2d_ground_rect_v2
+from utils.kitti_util import encode_side_points, encode_bottom_points
 
 
 class Sample(object):
@@ -228,6 +229,31 @@ class RandomSampleCrop(object):
                 sample['img'] = Image.fromarray(current_image)
                 sample['bbox'] = current_boxes
                 sample['label'] = current_labels
+
+                if sample.get('bbox_3d') is not None:
+                    current_boxes_3d = sample['bbox_3d'][mask, :]
+                    sample['bbox_3d'] = current_boxes_3d
+
+                # modify the project matrix
+                if sample.get('p2') is not None:
+                    # p2 = sample['p2']
+                    # K = p2[:3, :3]
+                    # KT = p2[:, 3]
+                    # T = np.dot(np.linalg.inv(K), KT)
+                    K = sample['K']
+                    T = sample['T']
+
+                    K[0, 2] -= rect[0]
+                    K[1, 2] -= rect[1]
+                    KT = np.dot(K, T)
+
+                    p2 = np.zeros((3, 4))
+                    p2[:3, :3] = K
+                    p2[:, 3] = KT
+
+                    sample['p2'] = p2
+                    sample['K'] = K
+
                 return sample
 
 
@@ -311,9 +337,23 @@ class RandomHorizontalFlip(object):
             bbox[:, 2] = xmax
             sample['img'] = img.transpose(Image.FLIP_LEFT_RIGHT)
             sample['bbox'] = bbox
-            return sample
-        else:
-            return sample
+
+            if sample.get('p2') is not None:
+                K = sample['K']
+                T = sample['T']
+                K[0, 0] = -K[0, 0]
+                # K[1, 1] = -K[1, 1]
+                # import ipdb
+                # ipdb.set_trace()
+                K[0, 2] = img.size[0] - K[0, 2]
+                KT = np.dot(K, T)
+
+                p2 = np.zeros((3, 4))
+                p2[:3, :3] = K
+                p2[:, 3] = KT
+                sample['p2'] = p2
+                sample['K'] = K
+        return sample
 
 
 class Resize(object):
@@ -345,13 +385,7 @@ class Resize(object):
         """
         img = sample['img']
         w, h = img.size
-        if sample.get('bbox') is not None:
-            bbox = sample['bbox']
-            bbox[:, 2] /= w
-            bbox[:, 0] /= w
-            bbox[:, 1] /= h
-            bbox[:, 3] /= h
-            sample['bbox'] = bbox
+
         if w > h:
             im_scale = float(self.target_size) / h
             target_shape = (im_scale * w, self.target_size)
@@ -363,6 +397,43 @@ class Resize(object):
 
         sample['img'] = img.resize(target_shape, self.interpolation)
         sample['im_scale'] = im_scale
+
+        if sample.get('bbox') is not None:
+            bbox = sample['bbox']
+            bbox[:, 2] /= w
+            bbox[:, 0] /= w
+            bbox[:, 1] /= h
+            bbox[:, 3] /= h
+
+            bbox[:, 2] *= target_shape[0]
+            bbox[:, 0] *= target_shape[0]
+            bbox[:, 1] *= target_shape[1]
+            bbox[:, 3] *= target_shape[1]
+            sample['bbox'] = bbox
+
+        if sample.get('p2') is not None:
+            # p2 = sample['p2']
+            # K = p2[:3, :3]
+            # KT = p2[:, 3]
+            # T = np.dot(np.linalg.inv(K), KT)
+            K = sample['K']
+            T = sample['T']
+
+            K *= im_scale
+            K[2, 2] = 1
+            KT = np.dot(K, T)
+
+            p2 = np.zeros((3, 4))
+            # assign back
+            p2[:3, :3] = K
+            p2[:, 3] = KT
+
+            # p2[0, 0] *= im_scale
+            # p2[1, 1] *= im_scale
+            # p2[0, 2] *= im_scale
+            # p2[1, 2] *= im_scale
+            sample['p2'] = p2
+            sample['K'] = K
 
         return sample
 
@@ -427,9 +498,25 @@ class BEVRandomHorizontalFlip(object):
             sample['ry'] = ry
             sample['bbox'] = bbox
             sample['img'] = np.flip(img, axis=1).copy()
-            return sample
-        else:
-            return sample
+            # return sample
+            # else:
+            # return sample
+
+            if sample.get('p2') is not None:
+                K = sample['K']
+                T = sample['T']
+                K[0, 0] = -K[0, 0]
+                # K[1, 1] = -K[1, 1]
+                K[0, 2] = img.size[0] - K[0, 2]
+                KT = np.dot(K, T)
+
+                p2 = np.zeros((3, 4))
+                p2[:3, :3] = K
+                p2[:, 3] = KT
+
+                sample['p2'] = p2
+                sample['K'] = K
+        return sample
 
 
 class BEVToTensor(object):
@@ -499,6 +586,9 @@ class Boxes3DTo2D(object):
         distances = []
         d_ys = []
         gt_boxes_2d_ground_rect = []
+        gt_boxes_2d_ground = []
+        encoded_side_points = []
+        encoded_bottom_points = []
 
         for i in range(boxes_3d.shape[0]):
             target = {}
@@ -514,6 +604,9 @@ class Boxes3DTo2D(object):
             gt_boxes_2d_ground_rect.append(
                 get_gt_boxes_2d_ground_rect(target['location'],
                                             target['dimension']))
+            gt_boxes_2d_ground.append(
+                get_gt_boxes_2d_ground_rect_v2(
+                    target['location'], target['dimension'], target['ry']))
 
             corners_xy, points_3d = compute_box_3d(target, p2, True)
             # find it 2d proj
@@ -589,6 +682,12 @@ class Boxes3DTo2D(object):
             center_orient.append(
                 [get_center_orient(target['location'], p2, target['ry'])])
 
+            encoded_side_points.append(
+                encode_side_points(visible_side, box_2d_proj))
+
+            encoded_bottom_points.append(
+                encode_bottom_points(corners_xy, box_2d_proj))
+
         sample['coords'] = np.stack(coords, axis=0).astype(np.float32)
         sample['coords_uncoded'] = np.stack(
             corners_xys, axis=0).astype(np.float32)
@@ -624,6 +723,14 @@ class Boxes3DTo2D(object):
 
         sample['gt_boxes_2d_ground_rect'] = np.stack(
             gt_boxes_2d_ground_rect, axis=0).astype(np.float32)
+        sample['gt_boxes_2d_ground_rect_v2'] = np.stack(
+            gt_boxes_2d_ground, axis=0).astype(np.float32)
+
+        sample['encoded_side_points'] = np.stack(
+            encoded_side_points, axis=0).astype(np.float32)
+        sample['p2'] = sample['p2'].astype(np.float32)
+        sample['encoded_bottom_points'] = np.stack(
+            encoded_bottom_points, axis=0).astype(np.float32)
 
         return sample
 

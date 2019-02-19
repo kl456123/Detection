@@ -27,7 +27,8 @@ class Mono3DKittiDataset(DetDataset):
 
         self.transforms = transforms
         self.max_num_gt_boxes = 40
-        self.use_proj_2d = False
+        self.use_proj_2d = dataset_config['use_proj_2d']
+        self.use_rect_v2 = dataset_config['use_rect_v2']
 
     def get_training_sample(self, transform_sample):
         # bbox and num
@@ -64,6 +65,10 @@ class Mono3DKittiDataset(DetDataset):
             d_ys = transform_sample['d_y']
             gt_boxes_2d_ground_rect = transform_sample[
                 'gt_boxes_2d_ground_rect']
+            gt_boxes_2d_ground_rect_v2 = transform_sample[
+                'gt_boxes_2d_ground_rect_v2']
+            encoded_side_points = transform_sample['encoded_side_points']
+            encoded_bottom_points = transform_sample['encoded_bottom_points']
         else:
             # fake gt
             bbox = torch.zeros((1, 5))
@@ -88,6 +93,9 @@ class Mono3DKittiDataset(DetDataset):
             # angles_camera = torch.zeros((1, 2))
             d_ys = torch.zeros((1, 1))
             gt_boxes_2d_ground_rect = torch.zeros((1, 4))
+            gt_boxes_2d_ground_rect_v2 = torch.zeros((1, 4))
+            encoded_side_points = torch.zeros((1, 4))
+            encoded_bottom_points = torch.zeros((1, 8))
 
         h, w = transform_sample['img'].shape[-2:]
         training_sample = {}
@@ -112,6 +120,8 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['r_2d'] = r_2ds
         training_sample['cls_orient_4'] = cls_orient_4s
         training_sample['center_orient'] = center_orients
+        training_sample['encoded_side_points'] = encoded_side_points
+        training_sample['encoded_bottom_points'] = encoded_bottom_points
 
         # use proj instead of original box
         # training_sample['boxes_2d_proj'] = boxes_2d_proj
@@ -129,16 +139,31 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['distance'] = distances
         training_sample['d_y'] = d_ys
 
-        training_sample['gt_boxes_ground_2d_rect'] = gt_boxes_2d_ground_rect
+        if self.use_rect_v2:
+            training_sample[
+                'gt_boxes_ground_2d_rect'] = gt_boxes_2d_ground_rect_v2
+        else:
+            training_sample['gt_boxes_ground_2d_rect'] = gt_boxes_2d_ground_rect
 
         return training_sample
+
+    def _decompose_project_matrix(self, p2):
+        K = p2[:3, :3]
+        KT = p2[:, 3]
+        T = numpy.dot(numpy.linalg.inv(K), KT)
+        return K, T
 
     def get_transform_sample(self, index):
         img_file = self.imgs[index]
         img = Image.open(img_file)
 
-        calib_file = self.calibs[index]
+        if self.training:
+            calib_file = self.calibs[index]
+        else:
+            calib_file = '/data/object/training/calib/000001.txt'
         p2 = self.read_calibration(calib_file).astype(numpy.float32)
+        # decompose p2
+        K, T = self._decompose_project_matrix(p2)
 
         if self.training:
             lbl_file = self.labels[index]
@@ -152,7 +177,9 @@ class Mono3DKittiDataset(DetDataset):
                 'im_scale': 1.0,
                 'img_name': img_file,
                 'bbox_3d': bbox_3d,
-                'p2': p2
+                'p2': p2,
+                'K': K,
+                'T': T
             }
         else:
             # make sample
@@ -160,7 +187,9 @@ class Mono3DKittiDataset(DetDataset):
                 'img': img,
                 'im_scale': 1.0,
                 'img_name': img_file,
-                'p2': p2
+                'p2': p2,
+                'K': K,
+                'T': T
             }
         transform_sample.update({'img_orig': numpy.asarray(img).copy()})
 

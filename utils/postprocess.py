@@ -312,7 +312,8 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     num = dets_3d.shape[0]
 
     # ry
-    lines = generate_side_points(dets_2d, dets_3d[:, 3:])
+    lines = dets_3d[:, 3:]
+    #  lines = generate_side_points(dets_2d, dets_3d[:, 3:])
     A = lines[:, 3] - lines[:, 1]
     B = lines[:, 0] - lines[:, 2]
     C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]

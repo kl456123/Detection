@@ -48,8 +48,8 @@ def get_lidar_in_image_fov(pc_velo,
                            clip_distance=2.0):
     ''' Filter lidar points, keep those in image FOV '''
     pts_2d = calib.project_velo_to_image(pc_velo)
-    fov_inds = (pts_2d[:,0]<xmax) & (pts_2d[:,0]>=xmin) & \
-               (pts_2d[:,1]<ymax) & (pts_2d[:,1]>=ymin)
+    fov_inds = (pts_2d[:, 0] < xmax) & (pts_2d[:, 0] >= xmin) & \
+               (pts_2d[:, 1] < ymax) & (pts_2d[:, 1] >= ymin)
     fov_inds = fov_inds & (pc_velo[:, 0] > clip_distance)
 
     imgfov_pc_velo = pc_velo[fov_inds, :]
@@ -158,11 +158,11 @@ def compute_box_3d(obj, P):
 
     # rotate and translate 3d bounding box
     corners_3d = np.dot(R, np.vstack([x_corners, y_corners, z_corners]))
-    #print corners_3d.shape
+    # print corners_3d.shape
     corners_3d[0, :] = corners_3d[0, :] + obj.t[0]
     corners_3d[1, :] = corners_3d[1, :] + obj.t[1]
     corners_3d[2, :] = corners_3d[2, :] + obj.t[2]
-    #print 'cornsers_3d: ', corners_3d
+    # print 'cornsers_3d: ', corners_3d
     # only draw 3d bounding box for objs in front of the camera
     if np.any(corners_3d[2, :] < 0.1):
         corners_2d = None
@@ -170,7 +170,7 @@ def compute_box_3d(obj, P):
 
     # project the 3d bounding box into the image plane
     corners_2d = project_to_image(np.transpose(corners_3d), P)
-    #print 'corners_2d: ', corners_2d
+    # print 'corners_2d: ', corners_2d
     return corners_2d, np.transpose(corners_3d)
 
 
@@ -242,7 +242,8 @@ class Calibration(object):
         with open(filepath, 'r') as f:
             for line in f.readlines():
                 line = line.rstrip()
-                if len(line) == 0: continue
+                if len(line) == 0:
+                    continue
                 key, value = line.split(':', 1)
                 # The only non-float values in these files are dates, which
                 # we don't care about anyway
@@ -372,14 +373,13 @@ class Object3d(object):
             [self.ry, self.h, self.w, self.l, data[11], data[12], data[13]])
 
     def print_object(self):
-        print(('Type, truncation, occlusion, alpha: %s, %d, %d, %f' % \
-              (self.type, self.truncation, self.occlusion, self.alpha)))
-        print(('2d bbox (x0,y0,x1,y1): %f, %f, %f, %f' % \
-              (self.xmin, self.ymin, self.xmax, self.ymax)))
-        print(('3d bbox h,w,l: %f, %f, %f' % \
-              (self.h, self.w, self.l)))
-        print(('3d bbox location, ry: (%f, %f, %f), %f' % \
-              (self.t[0],self.t[1],self.t[2],self.ry)))
+        print(('Type, truncation, occlusion, alpha: %s, %d, %d, %f' %
+               (self.type, self.truncation, self.occlusion, self.alpha)))
+        print(('2d bbox (x0,y0,x1,y1): %f, %f, %f, %f' %
+               (self.xmin, self.ymin, self.xmax, self.ymax)))
+        print(('3d bbox h,w,l: %f, %f, %f' % (self.h, self.w, self.l)))
+        print(('3d bbox location, ry: (%f, %f, %f), %f' %
+               (self.t[0], self.t[1], self.t[2], self.ry)))
 
 
 def compute_local_angle(location, ry):
@@ -530,7 +530,7 @@ def get_cls_orient_4(line):
     for ind, interval in enumerate(intervals):
         if ry >= interval[0] and ry < interval[1]:
             cls = ind
-    return cls
+            return cls
 
 
 def truncate_box(box_2d, line):
@@ -659,3 +659,64 @@ def get_gt_boxes_2d_ground_rect(loc, dim):
     xmin = x - 0.5 * w
     xmax = x + 0.5 * w
     return [zmin, xmin, zmax, xmax]
+
+
+def get_gt_boxes_2d_ground_rect_v2(loc, dim, ry):
+    """
+    Args:
+    Returns:
+    """
+    h, w, l = dim
+    x, y, z = loc
+
+    ry = math.fabs(ry)
+    closure_w = l * math.cos(ry) + w * math.sin(ry)
+    closure_h = l * math.sin(ry) + w * math.cos(ry)
+
+    zmax = z + 0.5 * closure_h
+    zmin = z - 0.5 * closure_h
+    xmin = x - 0.5 * closure_w
+    xmax = x + 0.5 * closure_w
+    return [zmin, xmin, zmax, xmax]
+
+
+def encode_side_points(line, box_2d_proj):
+    """
+    Args:
+        line: []
+        box_2d_proj: []
+    """
+    # import ipdb
+    # ipdb.set_trace()
+    xmin, ymin, xmax, ymax = box_2d_proj
+    center_proj_x = (xmin + xmax) / 2
+    center_proj_y = (ymin + ymax) / 2
+
+    proj_h = ymax - ymin + 1
+    proj_w = xmax - xmin + 1
+
+    # center and side points
+    center_proj = np.asarray([center_proj_x, center_proj_y])
+    dims_proj = np.asarray([proj_w, proj_h])
+    point1, point2 = line
+    point1_encoded = (point1 - center_proj) / dims_proj
+    point2_encoded = (point2 - center_proj) / dims_proj
+    return np.concatenate([point1_encoded, point2_encoded], axis=-1)
+
+
+def encode_bottom_points(corners_xy, box_2d_proj):
+    xmin, ymin, xmax, ymax = box_2d_proj
+    center_proj_x = (xmin + xmax) / 2
+    center_proj_y = (ymin + ymax) / 2
+
+    proj_h = ymax - ymin + 1
+    proj_w = xmax - xmin + 1
+
+    # import ipdb
+    # ipdb.set_trace()
+    # center and side points
+    center_proj = np.asarray([center_proj_x, center_proj_y])
+    dims_proj = np.asarray([proj_w, proj_h])
+    bottom_points = corners_xy[[0, 1, 2, 3]]
+    encoded_bottom_points = (bottom_points - center_proj) / dims_proj
+    return encoded_bottom_points.reshape(-1)

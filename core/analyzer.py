@@ -29,6 +29,7 @@ class Analyzer(object):
             'cls_orient_2s_tp_num': 0
         }
         self.match = None
+        self.append_gt = True
 
     def analyze(self, match, num_gt):
         """
@@ -43,7 +44,10 @@ class Analyzer(object):
         match = match[0]
         match = match[match > -1]
         gt_mask = torch.zeros(num_gt).type_as(match)
-        gt_mask[match[:-num_gt]] = 1
+        if self.append_gt:
+            gt_mask[match[:-num_gt]] = 1
+        else:
+            gt_mask[match] = 1
         matched = gt_mask.sum().item()
         recall = matched / num_gt
         self.stat.update({
@@ -62,7 +66,11 @@ class Analyzer(object):
     # num_matched_samples = num_all_samples - num_unmatched_samples
     # print('match rate: ', num_matched_samples / num_all_samples)
 
-    def analyze_ap(self, match, rcnn_cls_probs, num_gt, thresh=0.5):
+    def analyze_ap(self,
+                   match,
+                   rcnn_cls_probs,
+                   num_gt,
+                   thresh=0.5):
         # import ipdb
         # ipdb.set_trace()
         if match.dim() == 2:
@@ -78,7 +86,10 @@ class Analyzer(object):
         match_thresh = match[(rcnn_cls_probs > thresh) & (match > -1)]
 
         gt_mask = torch.zeros(num_gt).type_as(match_thresh)
-        gt_mask[match_thresh[:-num_gt]] = 1
+        if self.append_gt:
+            gt_mask[match_thresh[:-num_gt]] = 1
+        else:
+            gt_mask[match_thresh] = 1
         matched_thresh = gt_mask.sum().item()
         recall_thresh = matched_thresh / num_gt
         # if num_det:

@@ -8,7 +8,9 @@
         "dataset_config": {
             "cache_bev": false,
             "dataset_file": "train.txt",
-            "root_path": "/data/object/training"
+            "root_path": "/data/object/training",
+            "use_proj_2d":false,
+            "use_rect_v2":false
         },
         "name": "kitti",
         "transform_config": {
@@ -71,7 +73,9 @@
         },
         "dataset_config": {
             "dataset_file": "val.txt",
-            "root_path": "/data/object/training"
+            "root_path": "/data/object/training",
+            "use_proj_2d":false,
+            "use_rect_v2":false
         },
         "name": "kitti",
         "transform_config": {
@@ -210,7 +214,7 @@
         ],
         "disp_interval": 100,
         "mGPUs": true,
-        "max_epochs": 100,
+        "max_epochs": 200,
         "optimizer_config": {
             "lr": 0.001,
             "momentum": 0.9,

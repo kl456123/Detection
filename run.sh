@@ -68,11 +68,22 @@
     # --checkpoint 3257 \
     # --checkepoch 100
 
-# 2d box
-# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+# CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     # --net mono_3d \
-    # --out_path /data/object/liangxiong/mono_3d_angle_reg_3d \
+    # --out_path /data/object/liangxiong/tmp \
     # --config configs/refine_kitti_config.json \
+    # --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
+    # --lr 1e-2
+
+# 2d box
+CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    --net mono_3d_better \
+    --out_path /data/object/liangxiong/mono_3d_angle_reg_3d \
+    --config configs/refine_kitti_config.json \
+    --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
+    # --checkpoint 3257 \
+    # --checkepoch 100 \
+# --r True
     # --model /data/object/liangxiong/semantic_3d/multibin/kitti/faster_rcnn_40_3257.pth
 # --model /data/object/liangxiong/faster_rcnn/mono_3d/kitti/faster_rcnn_53_3257.pth
 
@@ -125,14 +136,25 @@
     # --config configs/refine_kitti_config.json \
     # --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
 
-CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
-    --net oft \
-    --out_path /data/object/liangxiong/oft \
-    --config configs/oft_config.json
-# --checkpoint 3257 \
-# --checkepoch 13 \
-# --r True
-# --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
+# CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
+    # --net oft \
+    # --out_path /data/object/liangxiong/oft_refine \
+    # --config configs/oft_config.json \
+    # --lr 1e-7 \
+    # --checkpoint 3257 \
+    # --checkepoch 49 \
+    # --r True
+
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net oft \
+    # --out_path /data/object/liangxiong/oft \
+    # --config configs/oft_config.json \
+    # --model /data/object/liangxiong/oft/oft/kitti/faster_rcnn_100_3257.pth \
+    # --lr 1e-7
+    # --checkpoint 3257 \
+    # --checkepoch 100 \
+    # --r True
+    # --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
 
 # CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     # --net mono_3d \

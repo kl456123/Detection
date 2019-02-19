@@ -54,7 +54,7 @@ class OFTBBoxCoder(object):
 
         # decode angle
         targets_angle = targets[:, :, 6:]
-        ry = -torch.atan2(targets_angle[:, :, 1],
+        ry = torch.atan2(targets_angle[:, :, 1],
                           targets_angle[:, :, 0]).unsqueeze(-1)
 
         return torch.cat([decoded_dims, decoded_pos, ry], dim=-1)

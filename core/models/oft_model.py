@@ -142,6 +142,7 @@ class OFTModel(Model):
 
         self.target_assigner = TargetAssigner(
             model_config['eval_target_assigner_config'])
+        self.target_assigner.analyzer.append_gt = False
 
         self.sampler = DetectionSampler(model_config['sampler_config'])
 
@@ -231,14 +232,14 @@ class OFTModel(Model):
         # num_cls_coeff = (rpn_cls_weights > 0).sum(dim=-1)
         # import ipdb
         # ipdb.set_trace()
-        # num_reg_coeff = (reg_weights > 0).sum(dim=-1)
+        num_reg_coeff = (reg_weights > 0).sum(dim=-1)
         # # check
         # #  assert num_cls_coeff, 'bug happens'
         # #  assert num_reg_coeff, 'bug happens'
         # if num_cls_coeff == 0:
         # num_cls_coeff = torch.ones([]).type_as(num_cls_coeff)
-        # if num_reg_coeff == 0:
-        # num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
+        if num_reg_coeff == 0:
+            num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
         # import ipdb
         # ipdb.set_trace()
@@ -247,20 +248,33 @@ class OFTModel(Model):
         rpn_cls_loss = self.conf_loss(rpn_cls_probs, cls_targets)
         rpn_cls_loss = rpn_cls_loss.view_as(cls_weights)
         rpn_cls_loss = rpn_cls_loss * cls_weights
-        rpn_cls_loss = rpn_cls_loss.sum(dim=-1)
+        rpn_cls_loss = rpn_cls_loss.mean(dim=-1)
 
         # bbox loss
         rpn_bbox_preds = prediction_dict['pred_boxes_3d']
         rpn_reg_loss = self.reg_loss(rpn_bbox_preds, reg_targets)
         rpn_reg_loss = rpn_reg_loss * reg_weights.unsqueeze(-1)
-        rpn_reg_loss = rpn_reg_loss.sum(dim=-1).sum(dim=-1)
+        num_reg_coeff = num_reg_coeff.type_as(reg_weights)
+
+        # split reg loss
+        dim_loss = rpn_reg_loss[:, :, :3].sum(dim=-1).sum(
+            dim=-1) / num_reg_coeff
+        pos_loss = rpn_reg_loss[:, :, 3:6].sum(dim=-1).sum(
+            dim=-1) / num_reg_coeff
+        angle_loss = rpn_reg_loss[:, :, 6:].sum(dim=-1).sum(
+            dim=-1) / num_reg_coeff
+        # rpn_reg_loss = rpn_reg_loss.sum(dim=-1).sum(dim=-1)
 
         prediction_dict['rcnn_reg_weights'] = reg_weights
 
         loss_dict = {}
 
         loss_dict['rpn_cls_loss'] = rpn_cls_loss
-        loss_dict['rpn_bbox_loss'] = rpn_reg_loss
+        # loss_dict['rpn_bbox_loss'] = rpn_reg_loss
+        # split bbox loss instead of fusing them
+        loss_dict['dim_loss'] = dim_loss
+        loss_dict['pos_loss'] = pos_loss
+        loss_dict['angle_loss'] = angle_loss
 
         self.profiler.end('8')
 
@@ -268,11 +282,22 @@ class OFTModel(Model):
         # final_boxes = self.bbox_coder.decode_batch(rpn_bbox_preds, )
         # self.target_assigner.assign(final_boxes, gt_boxes)
 
+        # import ipdb
+        # ipdb.set_trace()
         voxel_centers = self.voxel_generator.voxel_centers
         D = self.voxel_generator.lattice_dims[1]
         voxel_centers = voxel_centers.view(-1, D, 3)[:, 0, :]
         pred_boxes_3d = self.bbox_coder.decode_batch_bbox(voxel_centers,
                                                           rpn_bbox_preds)
+        # import ipdb
+        # ipdb.set_trace()
+        # select the top n
+        order = torch.sort(rpn_cls_probs, descending=True)[1]
+        topn = 1000
+        order = order[:, :topn]
+        rpn_cls_probs = rpn_cls_probs[0][order[0]].unsqueeze(0)
+        pred_boxes_3d = pred_boxes_3d[0][order[0]].unsqueeze(0)
+
         target = {
             'dimension': pred_boxes_3d[0, :, :3],
             'location': pred_boxes_3d[0, :, 3:6],

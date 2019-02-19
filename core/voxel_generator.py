@@ -49,7 +49,9 @@ class VoxelGenerator(object):
         center_coords = corner_coords + center_offset
 
         high_interval = self.high_interval
-        y_offset = (high_interval[0] + high_interval[1]) / 2
+        # bugs here
+        # y_offset = (high_interval[0] + high_interval[1]) / 2
+        y_offset = high_interval[0]
 
         original_offset = [-0.5 * self.grid_dims[0], y_offset, self.z_offset]
         # original_offset  = self.original_offset
