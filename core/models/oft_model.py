@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from core.model import Model
 from core.models.feature_extractors.oft import OFTNetFeatureExtractor
+from core.models.multibin_loss import MultiBinLoss
 from core.voxel_generator import VoxelGenerator
 from core.oft_target_assigner import TargetAssigner as OFTargetAssigner
 from core.target_assigner import TargetAssigner
@@ -148,13 +149,16 @@ class OFTModel(Model):
 
         self.bbox_coder = self.oft_target_assigner.bbox_coder
 
-        self.reg_channels = 3 + 3 + 2
+        # find the most expensive operators
+        self.profiler = Profiler()
+
+        # self.multibin = model_config['multibin']
+        self.num_bins = model_config['num_bins']
+
+        self.reg_channels = 3 + 3 + self.num_bins * 4
 
         # score, pos, dim, ang
         self.output_channels = self.n_classes + self.reg_channels
-
-        # find the most expensive operators
-        self.profiler = Profiler()
 
     def init_modules(self):
         """
@@ -183,6 +187,8 @@ class OFTModel(Model):
         # else:
         # self.conf_loss = nn.CrossEntropyLoss(reduce=False)
         self.conf_loss = nn.L1Loss(reduce=False)
+
+        self.angle_loss = MultiBinLoss(num_bins=self.num_bins)
 
     def init_weights(self):
         self.feature_extractor.init_weights()
@@ -252,18 +258,22 @@ class OFTModel(Model):
 
         # bbox loss
         rpn_bbox_preds = prediction_dict['pred_boxes_3d']
-        rpn_reg_loss = self.reg_loss(rpn_bbox_preds, reg_targets)
+        rpn_reg_loss = self.reg_loss(rpn_bbox_preds[:, :, :6],
+                                     reg_targets[:, :, :-1])
         rpn_reg_loss = rpn_reg_loss * reg_weights.unsqueeze(-1)
         num_reg_coeff = num_reg_coeff.type_as(reg_weights)
+
+        # angle_loss
+        angle_loss, angle_tp_mask = self.angle_loss(rpn_bbox_preds[:, :, 6:],
+                                                    reg_targets[:, :, -1:])
+        rpn_angle_loss = angle_loss * reg_weights
 
         # split reg loss
         dim_loss = rpn_reg_loss[:, :, :3].sum(dim=-1).sum(
             dim=-1) / num_reg_coeff
         pos_loss = rpn_reg_loss[:, :, 3:6].sum(dim=-1).sum(
             dim=-1) / num_reg_coeff
-        angle_loss = rpn_reg_loss[:, :, 6:].sum(dim=-1).sum(
-            dim=-1) / num_reg_coeff
-        # rpn_reg_loss = rpn_reg_loss.sum(dim=-1).sum(dim=-1)
+        angle_loss = rpn_angle_loss.sum(dim=-1).sum(dim=-1) / num_reg_coeff
 
         prediction_dict['rcnn_reg_weights'] = reg_weights
 
@@ -287,8 +297,17 @@ class OFTModel(Model):
         voxel_centers = self.voxel_generator.voxel_centers
         D = self.voxel_generator.lattice_dims[1]
         voxel_centers = voxel_centers.view(-1, D, 3)[:, 0, :]
-        pred_boxes_3d = self.bbox_coder.decode_batch_bbox(voxel_centers,
-                                                          rpn_bbox_preds)
+        # import ipdb
+        # ipdb.set_trace()
+        # decode bbox
+        pred_boxes_3d = self.bbox_coder.decode_batch_bbox(
+            voxel_centers, rpn_bbox_preds[:, :, :6])
+        # decode angle
+        angles_oritations = self.bbox_coder.decode_batch_angle(
+            rpn_bbox_preds[:, :, 6:], self.angle_loss.bin_centers,
+            self.num_bins)
+        pred_boxes_3d = torch.cat([pred_boxes_3d, angles_oritations], dim=-1)
+
         # import ipdb
         # ipdb.set_trace()
         # select the top n
@@ -314,4 +333,17 @@ class OFTModel(Model):
         # ipdb.set_trace()
         self.target_assigner.analyzer.analyze_ap(
             fake_match, rpn_cls_probs, num_gt, thresh=0.1)
+
+        # import ipdb
+        # ipdb.set_trace()
+        # angle stats
+        angle_tp_mask = angle_tp_mask[reg_weights > 0]
+        angles_tp_num = angle_tp_mask.int().sum().item()
+        angles_all_num = angle_tp_mask.numel()
+
+        self.target_assigner.stat.update({
+            'cls_orient_2s_all_num': angles_all_num,
+            'cls_orient_2s_tp_num': angles_tp_num
+        })
+
         return loss_dict

@@ -23,7 +23,7 @@ def to_cuda(target):
         return target.cuda()
 
 
-def new_test(eval_config, data_loader, model):
+def test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -48,7 +48,7 @@ def new_test(eval_config, data_loader, model):
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
-        thresh = 0.1
+        thresh = 0.07
         #  import ipdb
         #  ipdb.set_trace()
 
@@ -93,7 +93,7 @@ def new_test(eval_config, data_loader, model):
         sys.stdout.flush()
 
 
-def test(eval_config, data_loader, model):
+def old_test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -342,7 +342,10 @@ def save_dets(dets, label_info, data_format='kitti', output_dir=''):
 
 def save_dets_kitti(dets, label_info, output_dir):
     class_name = 'Car'
-    label_idx = os.path.splitext(label_info)[0][-6:]
+    # import ipdb
+    # ipdb.set_trace()
+    label_info = os.path.basename(label_info)
+    label_idx = os.path.splitext(label_info)[0]
     label_file = label_idx + '.txt'
     label_path = os.path.join(output_dir, label_file)
     res_str = []

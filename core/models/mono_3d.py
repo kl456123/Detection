@@ -30,8 +30,6 @@ import numpy as np
 
 class Mono3DFasterRCNN(Model):
     def forward(self, feed_dict):
-        import ipdb
-        ipdb.set_trace()
         prediction_dict = {}
 
         # base model
@@ -248,7 +246,7 @@ class Mono3DFasterRCNN(Model):
         else:
             c = in_channels
         # self.rcnn_3d_pred = nn.Linear(c, 3 + 4 + 11 + 2 + 1)
-        self.rcnn_3d_pred = nn.Linear(c, 3 + 4)
+        self.rcnn_3d_pred = nn.Linear(c, 3 + 4*2)
 
         # self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
         # self.rcnn_3d_loss = MultiBinRegLoss(num_bins=self.num_bins)

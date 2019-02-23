@@ -40,9 +40,10 @@ class Mono3DBetterFasterRCNN(Model):
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
 
-        if self.training and self.train_2d:
+        rois_batch = prediction_dict['rois_batch']
+        if self.training:
             second_stage_auxiliary_dict, rois_batch = self.pre_subsample(
-                prediction_dict['rois_batch'], feed_dict)
+                rois_batch, feed_dict)
 
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
         pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
@@ -82,7 +83,7 @@ class Mono3DBetterFasterRCNN(Model):
         final_rois_inds = torch.zeros_like(final_bbox[:, :, -1:])
         final_rois_batch = torch.cat([final_rois_inds, final_bbox], dim=-1)
 
-        if self.training and self.train_3d:
+        if self.training:
             third_stage_auxiliary_dict, final_rois_batch = self.pre_subsample(
                 final_rois_batch, feed_dict)
 
@@ -105,11 +106,12 @@ class Mono3DBetterFasterRCNN(Model):
             prediction_dict['rcnn_3d'] = rcnn_3d
 
         # put all auxiliary_dict into prediction_dict
-        prediction_dict.update(second_stage_auxiliary_dict)
-        prediction_dict['rcnn_reg_weights_3d'] = third_stage_auxiliary_dict[
-            'rcnn_reg_weights_3d']
-        prediction_dict['rcnn_reg_targets_3d'] = third_stage_auxiliary_dict[
-            'rcnn_reg_targets_3d']
+        if self.training:
+            prediction_dict.update(second_stage_auxiliary_dict)
+            prediction_dict['rcnn_reg_weights_3d'] = third_stage_auxiliary_dict[
+                'rcnn_reg_weights_3d']
+            prediction_dict['rcnn_reg_targets_3d'] = third_stage_auxiliary_dict[
+                'rcnn_reg_targets_3d']
 
         return prediction_dict
 

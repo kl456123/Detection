@@ -4,6 +4,8 @@ Convert disp/depth map to point cloud
 """
 
 import numpy as np
+import sys
+import os
 from PIL import Image
 import matplotlib.pyplot as plt
 import scipy.misc
@@ -19,11 +21,11 @@ p2 = np.asarray([[
 ]]).reshape((3, 4))
 # f = p2[0, 0]
 
-K = p2[:3, :3]
-KT = p2[:, 3]
-K_inv = np.linalg.inv(K)
-T = np.dot(K_inv, KT)
-C = -T
+# K = p2[:3, :3]
+# KT = p2[:, 3]
+# K_inv = np.linalg.inv(K)
+# T = np.dot(K_inv, KT)
+# C = -T
 
 MAX_DEPTH = 100
 original_width = 1280
@@ -55,7 +57,7 @@ def load_npy(file_name):
     return pred_disp
 
 
-def disp2pc(img):
+def disp2pc(img, K_inv, C):
     disp = np.copy(img)
     disp = disp.flatten()
     disp[disp == 0] = MAX_DEPTH
@@ -102,33 +104,94 @@ def pc2bev(pc):
     return bev
 
 
-if __name__ == '__main__':
-    import ipdb
-    ipdb.set_trace()
-    img_name = './000008_disp.npy'
-    # img = read_img(img_name)
-    img = load_npy(img_name)
-    pc = disp2pc(img)
-    depth = disp2depth(img)
+def _extend_matrix(mat):
+    mat = np.concatenate([mat, np.array([[0., 0., 0., 1.]])], axis=0)
+    return mat
 
-    # depth
-    depth_name = './depth.png'
-    plt.imsave(depth_name, depth)
 
-    # disp
-    disp_name = './disp.png'
-    plt.imsave(disp_name, img)
+def read_calib(calib_path, extend_matrix=True):
+    with open(calib_path, 'r') as f:
+        lines = f.readlines()
+    P0 = np.array([float(info) for info in lines[0].split(' ')[1:13]]).reshape(
+        [3, 4])
+    P1 = np.array([float(info) for info in lines[1].split(' ')[1:13]]).reshape(
+        [3, 4])
+    P2 = np.array([float(info) for info in lines[2].split(' ')[1:13]]).reshape(
+        [3, 4])
+    P3 = np.array([float(info) for info in lines[3].split(' ')[1:13]]).reshape(
+        [3, 4])
+    if extend_matrix:
+        P0 = _extend_matrix(P0)
+        P1 = _extend_matrix(P1)
+        P2 = _extend_matrix(P2)
+        P3 = _extend_matrix(P3)
+    image_info = {}
+    image_info['calib/P0'] = P0
+    image_info['calib/P1'] = P1
+    image_info['calib/P2'] = P2
+    image_info['calib/P3'] = P3
+    R0_rect = np.array([float(info)
+                        for info in lines[4].split(' ')[1:10]]).reshape([3, 3])
+    if extend_matrix:
+        rect_4x4 = np.zeros([4, 4], dtype=R0_rect.dtype)
+        rect_4x4[3, 3] = 1.
+        rect_4x4[:3, :3] = R0_rect
+    else:
+        rect_4x4 = R0_rect
+    image_info['calib/R0_rect'] = rect_4x4
+    Tr_velo_to_cam = np.array(
+        [float(info) for info in lines[5].split(' ')[1:13]]).reshape([3, 4])
+    Tr_imu_to_velo = np.array(
+        [float(info) for info in lines[6].split(' ')[1:13]]).reshape([3, 4])
+    if extend_matrix:
+        Tr_velo_to_cam = _extend_matrix(Tr_velo_to_cam)
+        Tr_imu_to_velo = _extend_matrix(Tr_imu_to_velo)
+    image_info['calib/Tr_velo_to_cam'] = Tr_velo_to_cam
+    image_info['calib/Tr_imu_to_velo'] = Tr_imu_to_velo
+    return image_info
 
+
+def cam2velo(pc, calib_info):
     # import ipdb
     # ipdb.set_trace()
-    bev = pc2bev(pc)
+    R0_rect = calib_info['calib/R0_rect']
+    Tr_velo_to_cam = calib_info['calib/Tr_velo_to_cam']
+    Pr = np.dot(R0_rect, Tr_velo_to_cam)
+    pc_velo = np.dot(np.linalg.inv(Pr), pc.T).T
+    return pc_velo
 
-    bev_name = './bev.png'
-    plt.imsave(bev_name, bev)
 
-    one = np.ones_like(pc[:, -1:])
-    pc = np.concatenate([pc, one], axis=-1)
+def main():
+    npy_dir = '/data/object/liangxiong/disparity/data/'
+    saved_path = '/data/liangxiong/KITTI/training/velodyne'
+    calib_dir = '/data/object/training/calib/'
+    for idx, file in enumerate(sorted(os.listdir(npy_dir))):
+        sample_idx = os.path.splitext(file)[0][:6]
+        calib_path = os.path.join(calib_dir, '{}.txt'.format(sample_idx))
+        calib_info = read_calib(calib_path)
+        p2 = calib_info['calib/P2'][:3, :]
+        K = p2[:3, :3]
+        KT = p2[:, 3]
+        K_inv = np.linalg.inv(K)
+        T = np.dot(K_inv, KT)
+        C = -T
 
-    # np.save('000008_pc.npy', pc)
-    pc.astype(np.float32).tofile('000001.bin')
-    # draw_3d(pc)
+        img_name = os.path.join(npy_dir, file)
+        img = load_npy(img_name)
+
+        pc = disp2pc(img, K_inv, C)
+        one = np.ones_like(pc[:, -1:])
+        pc = np.concatenate([pc, one], axis=-1)
+
+        velo = cam2velo(pc, calib_info)
+
+        sample_idx = os.path.splitext(file)[0]
+        velo.astype(np.float32).tofile(
+            os.path.join(saved_path, '{}.bin'.format(sample_idx[:6])))
+        sys.stdout.write(
+            '\r({}/{}) filename: {}'.format(idx, 7480, sample_idx))
+        sys.stdout.flush()
+
+
+if __name__ == '__main__':
+    main()

@@ -293,6 +293,23 @@ def direction2angle(x, y):
     return -ry
 
 
+def twopoints2direction(lines, p2):
+    A = lines[:, 3] - lines[:, 1]
+    B = lines[:, 0] - lines[:, 2]
+    C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]
+    plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
+    a = plane[:, 0]
+    c = plane[:, 2]
+    ry = direction2angle(c, -a)
+    return ry
+
+
+def fourpoints2direction(points, p2):
+    ones = np.ones_like(points[:, -1:])
+    points_2d_homo = np.concatenate([points, ones], axis=-1)
+    np.dot(p2.T, points_2d_homo)
+
+
 def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     """
     May be we can improve performance angle prediction by enumerating
@@ -314,13 +331,8 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     # ry
     lines = dets_3d[:, 3:]
     #  lines = generate_side_points(dets_2d, dets_3d[:, 3:])
-    A = lines[:, 3] - lines[:, 1]
-    B = lines[:, 0] - lines[:, 2]
-    C = lines[:, 2] * lines[:, 1] - lines[:, 0] * lines[:, 3]
-    plane = np.dot(p2.T, np.stack([A, B, C], axis=-1).T).T
-    a = plane[:, 0]
-    c = plane[:, 2]
-    ry = direction2angle(c, -a)
+    ry = twopoints2direction(lines)
+    # ry = fourpoints2direction(lines)
 
     # decode h_2ds and c_2ds
     # h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)

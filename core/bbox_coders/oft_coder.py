@@ -31,8 +31,9 @@ class OFTBBoxCoder(object):
         targets_pos = (gt_boxes_3d[:, :, 3:6] - voxel_centers) / self.etha
 
         # encode angle
-        ry = gt_boxes_3d[:, :, -1]
-        targets_angle = torch.stack([torch.cos(ry), torch.sin(ry)], dim=-1)
+        # ry = gt_boxes_3d[:, :, -1]
+        # targets_angle = torch.stack([torch.cos(ry), torch.sin(ry)], dim=-1)
+        targets_angle = gt_boxes_3d[:, :, -1:]
 
         targets = torch.cat([targets_dim, targets_pos, targets_angle], dim=-1)
         return targets
@@ -53,11 +54,11 @@ class OFTBBoxCoder(object):
         decoded_pos = voxel_centers + targets_pos * self.etha
 
         # decode angle
-        targets_angle = targets[:, :, 6:]
-        ry = torch.atan2(targets_angle[:, :, 1],
-                          targets_angle[:, :, 0]).unsqueeze(-1)
+        # targets_angle = targets[:, :, 6:]
+        # ry = torch.atan2(targets_angle[:, :, 1],
+                         # targets_angle[:, :, 0]).unsqueeze(-1)
 
-        return torch.cat([decoded_dims, decoded_pos, ry], dim=-1)
+        return torch.cat([decoded_dims, decoded_pos], dim=-1)
 
     def encode_batch_labels(self, voxel_centers, gt_boxes_3d):
         """
@@ -83,3 +84,22 @@ class OFTBBoxCoder(object):
             (gt_z - voxel_z), 2)) / (2 * self.etha * self.etha))
         scores_map = scores_map.max(dim=1)[0]
         return scores_map
+
+    def decode_batch_angle(self, targets, bin_centers, num_bins):
+        """
+        Args:
+            targets: shape(N, 3)
+        """
+        # find the best angle
+        angles = targets.view(-1, num_bins, 4)
+        angles_cls = F.softmax(angles[:, :, :2], dim=-1)
+        _, angles_cls_argmax = torch.max(angles_cls[:, :, 1], dim=-1)
+        row = torch.arange(
+            0, angles_cls_argmax.shape[0]).type_as(angles_cls_argmax)
+        angles_oritations = angles[:, :, 2:][row, angles_cls_argmax]
+
+        # decode
+        bin_centers = bin_centers[angles_cls_argmax]
+        theta = get_angle(angles_oritations[:, 1], angles_oritations[:, 0])
+        theta = bin_centers + theta
+        return theta.unsqueeze(0).unsqueeze(-1)

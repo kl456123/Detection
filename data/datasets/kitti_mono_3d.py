@@ -19,7 +19,12 @@ class Mono3DKittiDataset(DetDataset):
         # if self.training:
         if dataset_config['dataset_file'] is None:
             print('Demo mode enabled!')
-            self.imgs = [dataset_config['demo_file']]
+            if dataset_config.get('demo_file') is not None:
+                self.imgs = [dataset_config['demo_file']]
+                self.calib_file = dataset_config['calib_file']
+            else:
+                self.imgs = self._read_imgs_from_dir(dataset_config['img_dir'])
+                self.calib_file = dataset_config['calib_file']
         else:
             self.labels = self.make_label_list(dataset_config['dataset_file'])
             self.imgs = self.make_image_list()
@@ -29,6 +34,12 @@ class Mono3DKittiDataset(DetDataset):
         self.max_num_gt_boxes = 40
         self.use_proj_2d = dataset_config['use_proj_2d']
         self.use_rect_v2 = dataset_config['use_rect_v2']
+
+    def _read_imgs_from_dir(self, img_dir):
+        imgs = []
+        for img_name in os.listdir(img_dir):
+            imgs.append(os.path.join(img_dir, img_name))
+        return imgs
 
     def get_training_sample(self, transform_sample):
         # bbox and num
@@ -157,10 +168,11 @@ class Mono3DKittiDataset(DetDataset):
         img_file = self.imgs[index]
         img = Image.open(img_file)
 
-        if self.training:
+        if self.training or not hasattr(self, 'calib_file'):
             calib_file = self.calibs[index]
         else:
-            calib_file = '/data/object/training/calib/000001.txt'
+            calib_file = self.calib_file
+
         p2 = self.read_calibration(calib_file).astype(numpy.float32)
         # decompose p2
         K, T = self._decompose_project_matrix(p2)
@@ -280,7 +292,7 @@ class Mono3DKittiDataset(DetDataset):
 
     def make_label_list(self, dataset_file):
         train_list_path = os.path.join(self.root_path, dataset_file)
-        # train_list_path = './train.txt'
+        train_list_path = './train.txt'
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]

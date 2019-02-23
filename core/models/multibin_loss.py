@@ -52,8 +52,6 @@ class MultiBinLoss(nn.Module):
             preds: shape(N,num*4)
             targets: shape(N,1)
         """
-        # import ipdb
-        # ipdb.set_trace()
         preds = preds.contiguous().view(-1, self.num_bins, 4)
         # targets[targets < 0] = targets[targets < 0] + 2 * math.pi
 

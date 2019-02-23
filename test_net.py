@@ -98,6 +98,13 @@ def parse_args():
         type=str,
         default='kitti')
     parser.add_argument(
+        '--img_dir',
+        dest='img_dir',
+        help='directory used for storing imgs',
+        type=str)
+    parser.add_argument(
+        '--calib_file', dest='calib_file', help='calib file', type=str)
+    parser.add_argument(
         '--config', dest='config', help='config file(.json)', type=str)
     parser.add_argument(
         "--nms", dest='nms', help='nms to suppress bbox', type=float)
@@ -111,6 +118,7 @@ def infer_config_fn(args):
     import glob
     output_dir = args.load_dir + '/' + args.net + '/' + args.dataset
     possible_config = glob.glob(os.path.join(output_dir, '*.json'))
+    print(output_dir)
     assert len(possible_config) == 1
     return os.path.join(output_dir, possible_config[0])
 
@@ -154,6 +162,13 @@ if __name__ == '__main__':
         # disable dataset file,just use image directly
         dataset_config['dataset_file'] = None
         dataset_config['demo_file'] = args.img_path
+        dataset_config['calib_file'] = args.calib_file
+
+    if args.img_dir:
+        dataset_config = data_config['dataset_config']
+        dataset_config['dataset_file'] = None
+        dataset_config['img_dir'] = args.img_dir
+        dataset_config['calib_file'] = args.calib_file
 
     print('Called with args:')
     print(args)

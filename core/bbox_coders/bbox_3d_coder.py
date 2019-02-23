@@ -177,8 +177,11 @@ class BBox3DCoder(object):
         centers = torch.stack([x, y], dim=-1)
         dims = torch.stack([w, h], dim=-1)
 
-        point1 = centers + targets[:, 3:5] * dims
-        point2 = centers + targets[:, 5:7] * dims
+        # import ipdb
+        # ipdb.set_trace()
+        points = centers.unsqueeze(1) + targets[:, 3:].view(
+            -1, 4, 2) * dims.unsqueeze(1)
+        # point2 = centers + targets[:, 5:7] * dims
 
         # cls orient
         # cls_orient = targets[:, 3:5]
@@ -195,7 +198,7 @@ class BBox3DCoder(object):
         # c_2d_y = targets[:, 9] * h + y
 
         bbox = torch.stack([h_3d, w_3d, l_3d], dim=-1)
-        return torch.cat([bbox, point1, point2], dim=-1)
+        return torch.cat([bbox, points[:, 1], points[:, 2]], dim=-1)
         # return torch.cat([bbox, targets[:, 3:]], dim=-1)
 
     def decode_batch_depth(self, targets):
