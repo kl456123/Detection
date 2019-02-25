@@ -38,6 +38,12 @@ def test(eval_config, data_loader, model):
             data = to_cuda(data)
             prediction = model(data)
 
+        if eval_config.get('feat_vis'):
+            featmaps_dict = model.get_feat()
+            from utils.visualizer import FeatVisualizer
+            feat_visualizer = FeatVisualizer()
+            feat_visualizer.visualize_maps(featmaps_dict)
+
         pred_probs_3d = prediction['pred_probs_3d']
         pred_boxes_3d = prediction['pred_boxes_3d']
 
@@ -48,7 +54,7 @@ def test(eval_config, data_loader, model):
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
-        thresh = 0.07
+        thresh = 0.15
         #  import ipdb
         #  ipdb.set_trace()
 
