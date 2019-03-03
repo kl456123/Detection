@@ -412,10 +412,6 @@ class Resize(object):
             sample['bbox'] = bbox
 
         if sample.get('p2') is not None:
-            # p2 = sample['p2']
-            # K = p2[:3, :3]
-            # KT = p2[:, 3]
-            # T = np.dot(np.linalg.inv(K), KT)
             K = sample['K']
             T = sample['T']
 
@@ -427,11 +423,6 @@ class Resize(object):
             # assign back
             p2[:3, :3] = K
             p2[:, 3] = KT
-
-            # p2[0, 0] *= im_scale
-            # p2[1, 1] *= im_scale
-            # p2[0, 2] *= im_scale
-            # p2[1, 2] *= im_scale
             sample['p2'] = p2
             sample['K'] = K
 

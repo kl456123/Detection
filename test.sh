@@ -126,24 +126,24 @@ rm results/data/*
     # --checkpoint 3257 \
     # --checkepoch 25
 
-CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --net refine_oft \
+    # --load_dir /data/object/liangxiong/tmp/oft \
+    # --checkpoint 6683 \
+    # --checkepoch 10 \
+    # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
+    # --calib_file ./000000.txt
+
+CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     --net oft \
     --load_dir /data/object/liangxiong/tmp/oft \
     --checkpoint 6683 \
-    --checkepoch 18 \
-    --img_dir /data/2011_09_26/2011_09_26_drive_0011_sync/image_02/data/ \
-    --calib_file ./000000.txt
+    --checkepoch 40 \
+    --calib_file /home/pengwu/Detection/000001.txt \
+    --img_dir /data/liangxiong/yizhuang/2019_0107_140749/keyframes/
 
-# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    # --net oft \
-    # --load_dir /data/object/liangxiong/tmp/oft \
-    # --checkpoint 6683 \
-    # --checkepoch 11
-# --calib_file ./000001.txt \
-# --img_path /home/pengwu/mono3d/seq/frames/1535193200792697000.jpg \
 # --feat_vis True
-    # --img_dir /home/pengwu/mono3d/kitti/0006 \
-
+# --img_path /home/pengwu/mono3d/seq/frames/1535193200792697000.jpg \
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --net ssd \
     # --load_dir /data/object/liangxiong/ssd \

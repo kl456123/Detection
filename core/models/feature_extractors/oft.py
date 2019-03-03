@@ -9,6 +9,7 @@ import torch
 from torchvision import models
 from core.model import Model
 from torchvision.models.resnet import Bottleneck
+import copy
 
 
 class OFTNetFeatureExtractor(Model):
@@ -25,6 +26,8 @@ class OFTNetFeatureExtractor(Model):
 
         self.use_cascade = model_config.get('use_cascade')
         self.separate_feat = model_config.get('separate_feat')
+
+        self.use_img_feat = model_config.get('use_img_feat')
 
     def init_modules(self):
         resnet = models.resnet18()
@@ -63,6 +66,13 @@ class OFTNetFeatureExtractor(Model):
         # bev feature
         # topdown_features = [resnet.layer3, resnet.layer4]
         self.bev_feature = self._make_topdown_network()
+
+        if self.use_img_feat is not None:
+            conv = nn.Conv2d(256, 64, 3, 1, 1)
+            bn = nn.BatchNorm2d(64)
+            relu = nn.ReLU()
+            layer2 = copy.deepcopy(resnet.layer2)
+            self.img_feat_extractor = nn.Sequential(* [conv, bn, relu, layer2])
 
     def _make_topdown_network(self):
         self.inplanes = 256

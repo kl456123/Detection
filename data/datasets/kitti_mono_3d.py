@@ -37,7 +37,7 @@ class Mono3DKittiDataset(DetDataset):
 
     def _read_imgs_from_dir(self, img_dir):
         imgs = []
-        for img_name in os.listdir(img_dir):
+        for img_name in sorted(os.listdir(img_dir)):
             imgs.append(os.path.join(img_dir, img_name))
         return imgs
 

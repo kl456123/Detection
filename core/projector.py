@@ -16,7 +16,7 @@ class Projector(object):
         pts_3d_homo = torch.cat([pts_3d, ones], dim=-1).transpose(1, 0)
         pts_2d_homo = p2.matmul(pts_3d_homo).transpose(2, 1)
 
-        pts_2d_homo /= pts_2d_homo[:, :, -1:]
+        pts_2d_homo = pts_2d_homo / pts_2d_homo[:, :, -1:]
         return pts_2d_homo[:, :, :-1]
 
     @classmethod

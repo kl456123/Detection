@@ -92,6 +92,8 @@
         }
     },
     "model_config": {
+        "pooling_size":7,
+        "nms_deltas":1,
         "num_bins":4,
         "common_feat_size":256,
         "sample_size":128,
@@ -103,6 +105,7 @@
         ],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
+            "use_img_feat":true,
             "pooling_size":7,
             "class_agnostic": true,
             "classes": [
@@ -110,8 +113,8 @@
                 "Car"
             ],
             "img_channels": 3,
-            "pretrained_model": "/node01/jobs/io/pretrained/resnet18-7591854d.pth",
-            "loca_pretrained_model": "./data/pretrained_model/resnet18-5c106cde.pth",
+            "job_pretrained_model": "/node01/jobs/io/pretrained/resnet18-7591854d.pth",
+            "pretrained_model": "./data/pretrained_model/resnet18-5c106cde.pth",
             "pretrained": true,
             "use_cascade": true
         },

@@ -2,6 +2,9 @@
 """
 use one stage detector as the framework to detect 3d object
 in OFT feature map
+
+CHANGE:
+early fusion in image level features
 """
 
 import torch
@@ -10,6 +13,7 @@ import torch.nn.functional as F
 from core.model import Model
 from core.models.feature_extractors.oft import OFTNetFeatureExtractor
 from core.models.multibin_loss import MultiBinLoss
+from model.roi_align.modules.roi_align import RoIAlignAvg
 from core.voxel_generator import VoxelGenerator
 from core.oft_target_assigner import TargetAssigner as OFTargetAssigner
 from core.target_assigner import TargetAssigner
@@ -22,8 +26,20 @@ from core.projector import Projector
 from core import ops
 
 
-class OFTModel(Model):
+class RefineOFTModel(Model):
+    def _pad_or_crop(self, feed_dict):
+        # import ipdb
+        # ipdb.set_trace()
+        img = feed_dict['img']
+        img_shape = img.shape[-2:]
+        target_shape = (1, 3, 384, 1280)
+        new_image = torch.zeros(target_shape).type_as(img)
+        new_image[:, :, :img_shape[0], :img_shape[1]] = img
+
+        feed_dict['img'] = new_image
+
     def forward(self, feed_dict):
+        self._pad_or_crop(feed_dict)
         # import ipdb
         # ipdb.set_trace()
 
@@ -39,6 +55,11 @@ class OFTModel(Model):
         self.profiler.start('3')
         img_feat_maps = self.feature_preprocess(img_feat_maps)
         self.profiler.end('3')
+
+        # early fusion in image level features
+        # import ipdb
+        # ipdb.set_trace()
+        img_feat_maps = self.img_feat_fusion(img_feat_maps)
 
         self.profiler.start('4')
         integral_maps = self.generate_integral_maps(img_feat_maps)
@@ -57,12 +78,71 @@ class OFTModel(Model):
         # pred output
         # shape (NCHW)
         self.profiler.start('7')
-        output_maps = self.output_head(bev_feat_maps)
+        rpn_output_maps = self.rpn_output_head(bev_feat_maps)
+
+        voxel_centers = self.voxel_generator.voxel_centers
+        D = self.voxel_generator.lattice_dims[1]
+        voxel_centers = voxel_centers.view(-1, D, 3)[:, 0, :]
+
+        rpn_output = rpn_output_maps.permute(0, 2, 3, 1).contiguous().view(
+            self.batch_size, -1, self.rpn_output_channels)
+
+        #####################################################
+        # decode output of first stage to crop image features
+        #####################################################
+
+        rpn_output = rpn_output.detach()
+        rpn_bbox_preds = rpn_output[:, :, self.n_classes:]
+        rpn_pred_scores = rpn_output[:, :, :self.n_classes]
+
+        rpn_bbox_3d = self.bbox_coder.decode_batch_bbox(voxel_centers,
+                                                        rpn_bbox_preds)
+        rpn_cls_probs = F.softmax(rpn_pred_scores, dim=-1)
+        fg_rpn_cls_probs = rpn_cls_probs[:, :, -1]
+        order = torch.sort(fg_rpn_cls_probs, descending=True)[1]
+        # topn = 2000
+        # order = order[:, :topn]
+        rpn_cls_probs = fg_rpn_cls_probs[0][order[0]].unsqueeze(0)
+        rpn_bbox_3d = rpn_bbox_3d[0][order[0]].unsqueeze(0)
+
+        fake_ry = torch.zeros_like(rpn_bbox_3d[0, :, 0])
+
+        target = {
+            'dimension': rpn_bbox_3d[0, :, :3],
+            'location': rpn_bbox_3d[0, :, 3:6],
+            'ry': fake_ry
+        }
+        boxes_2d = Projector.proj_box_3to2img(target, feed_dict['p2'])
+        rois_idx = torch.zeros_like(boxes_2d[:, -1:])
+        rois_2d = torch.cat([rois_idx, boxes_2d], dim=-1)
+
+        rcnn_img_feat_maps = self.rcnn_pooling(img_feat_maps[0], rois_2d)
+
+        # should do something for maps
+        # import ipdb
+        # ipdb.set_trace()
+        rcnn_img_feat_maps = self.feature_extractor.img_feat_extractor(
+            rcnn_img_feat_maps)
+
+        rcnn_img_feat_maps = rcnn_img_feat_maps.mean(dim=-2).mean(dim=-1)
+
         self.profiler.end('7')
+
+        ###############################
+        # second stage
+        ###############################
+
+        rcnn_img_feat_maps = rcnn_img_feat_maps.permute(
+            1, 0).unsqueeze(0).contiguous().view(self.batch_size, -1,
+                                                 *(bev_feat_maps.shape[-2:]))
+
+        rcnn_output_maps = torch.cat([rcnn_img_feat_maps, bev_feat_maps],
+                                     dim=1)
+        output_maps = self.rcnn_output_head(rcnn_output_maps)
 
         # shape(N,M,out_channels)
         pred_3d = output_maps.permute(0, 2, 3, 1).contiguous().view(
-            self.batch_size, -1, self.output_channels)
+            self.batch_size, -1, self.rcnn_output_channels)
 
         pred_boxes_3d = pred_3d[:, :, self.n_classes:]
         pred_scores_3d = pred_3d[:, :, :self.n_classes]
@@ -76,9 +156,7 @@ class OFTModel(Model):
         if not self.training:
             # import ipdb
             # ipdb.set_trace()
-            voxel_centers = self.voxel_generator.voxel_centers
-            D = self.voxel_generator.lattice_dims[1]
-            voxel_centers = voxel_centers.view(-1, D, 3)[:, 0, :]
+
             # pred_boxes_3d = self.bbox_coder.decode_batch_bbox(voxel_centers,
             # pred_boxes_3d)
             # decode angle
@@ -123,7 +201,39 @@ class OFTModel(Model):
         # prediction_dict['pred_scores_3d'] = pred_scores_3d
         prediction_dict['pred_probs_3d'] = pred_probs_3d
 
+        prediction_dict['rpn_boxes_3d'] = rpn_output[:, :, self.n_classes:]
+        prediction_dict['rpn_probs_preds'] = rpn_output[:, :, :self.n_classes]
+
         return prediction_dict
+
+    def generate_proposals(self):
+        pass
+
+    def img_feat_fusion(self, img_feat_maps):
+        # import ipdb
+        # ipdb.set_trace()
+        upconv3 = self.upconv3(img_feat_maps[2])
+        upconv3 = self.upconv3_bn(upconv3)
+        upconv3 = self.upconv3_relu(upconv3)
+
+        sum2 = torch.cat([upconv3, img_feat_maps[1]], dim=1)
+        fusion2 = self.fusion2(sum2)
+        fusion2 = self.fusion2_bn(fusion2)
+        fusion2 = self.relu2(fusion2)
+
+        upconv2 = self.upconv2(img_feat_maps[1])
+        upconv2 = self.upconv2_bn(upconv2)
+        upconv2 = self.upconv2_relu(upconv2)
+
+        sum1 = torch.cat([upconv2, img_feat_maps[0]], dim=1)
+        fusion1 = self.fusion1(sum1)
+        fusion1 = self.fusion1_bn(fusion1)
+        fusion1 = self.relu1(fusion1)
+
+        # import ipdb
+        # ipdb.set_trace()
+        # just return the finest map
+        return [fusion1]
 
     def nms_map(self, smoothed_fg_mask):
         """
@@ -190,8 +300,8 @@ class OFTModel(Model):
                                                  normalized_voxel_proj_2d))
 
         # shape(N,C,HWD)
-        fusion_feat = multiscale_img_feat[0] + multiscale_img_feat[
-            1] + multiscale_img_feat[2]
+        # only one image
+        fusion_feat = multiscale_img_feat[0]
         depth_dim = self.voxel_generator.lattice_dims[1]
         height_dim = self.voxel_generator.lattice_dims[0]
 
@@ -209,6 +319,7 @@ class OFTModel(Model):
         self.feat_size = model_config['common_feat_size']
         self.batch_size = model_config['batch_size']
         self.sample_size = model_config['sample_size']
+        self.pooling_size = model_config['pooling_size']
         self.n_classes = model_config['num_classes']
         self.use_focal_loss = model_config['use_focal_loss']
         self.feature_extractor_config = model_config['feature_extractor_config']
@@ -239,7 +350,9 @@ class OFTModel(Model):
         self.reg_channels = 3 + 3 + self.num_bins * 4
 
         # score, pos, dim, ang
-        self.output_channels = self.n_classes + self.reg_channels
+        self.rcnn_output_channels = self.n_classes + self.reg_channels
+
+        self.rpn_output_channels = 2 + 3 + 3
 
         nms_deltas = model_config.get('nms_deltas')
         if nms_deltas is None:
@@ -262,7 +375,11 @@ class OFTModel(Model):
 
         self.feat_collapse = nn.Conv2d(8, 1, 1, 1, 0)
 
-        self.output_head = nn.Conv2d(256 * 4, self.output_channels, 1, 1, 0)
+        self.rcnn_output_head = nn.Conv2d(1152, self.rcnn_output_channels, 1,
+                                          1, 0)
+
+        self.rpn_output_head = nn.Conv2d(256 * 4, self.rpn_output_channels, 1,
+                                         1, 0)
 
         # loss
         self.reg_loss = nn.L1Loss(reduce=False)
@@ -276,8 +393,65 @@ class OFTModel(Model):
 
         self.angle_loss = MultiBinLoss(num_bins=self.num_bins)
 
+        # fusion layer
+        # self.upconv1 = nn.ConvTranspose2d(self.feat_size, self.feat_size, 2, 2,
+        # 0)
+        self.fusion1 = nn.Conv2d(2 * self.feat_size, self.feat_size, 3, 1, 1)
+        self.fusion1_bn = nn.BatchNorm2d(self.feat_size)
+        self.relu1 = nn.ReLU()
+        self.upconv2 = nn.ConvTranspose2d(self.feat_size, self.feat_size, 2, 2,
+                                          0)
+        self.upconv2_bn = nn.BatchNorm2d(self.feat_size)
+        self.upconv2_relu = nn.ReLU()
+
+        self.relu2 = nn.ReLU()
+        self.fusion2 = nn.Conv2d(2 * self.feat_size, self.feat_size, 3, 1, 1)
+        self.fusion2_bn = nn.BatchNorm2d(self.feat_size)
+
+        self.upconv3 = nn.ConvTranspose2d(self.feat_size, self.feat_size, 2, 2,
+                                          0)
+        self.upconv3_bn = nn.BatchNorm2d(self.feat_size)
+        self.upconv3_relu = nn.ReLU()
+        # self.fusion3 = nn.Conv2d(self.feat_size, self.feat_size, 3, 1, 1)
+        # self.relu3 = nn.ReLU()
+
+        self.rcnn_pooling = RoIAlignAvg(self.pooling_size, self.pooling_size,
+                                        1.0 / 8.0)
+
     def init_weights(self):
         self.feature_extractor.init_weights()
+
+    def rpn_loss(self, preds, targets, weights):
+        rpn_cls_probs = preds['pred_probs_3d'][:, :, -1]
+        rpn_bbox_preds = preds['pred_boxes_3d']
+        cls_targets = targets['cls_targets']
+        cls_weights = weights['cls_weights']
+        reg_weights = weights['reg_weights']
+        reg_targets = targets['reg_targets']
+
+        # cls loss
+        rpn_cls_loss = self.conf_loss(rpn_cls_probs, cls_targets)
+        rpn_cls_loss = rpn_cls_loss.view_as(cls_weights)
+        rpn_cls_loss = rpn_cls_loss * cls_weights
+        rpn_cls_loss = rpn_cls_loss.mean(dim=-1)
+
+        # bbox loss
+        rpn_reg_loss = self.reg_loss(rpn_bbox_preds[:, :, :6],
+                                     reg_targets[:, :, :-1])
+        rpn_reg_loss = rpn_reg_loss * reg_weights.unsqueeze(-1)
+        num_reg_coeff = (reg_weights > 0).sum(dim=-1)
+        num_reg_coeff = num_reg_coeff.type_as(reg_weights)
+        rpn_reg_loss = rpn_reg_loss.sum(dim=-1).sum(dim=-1) / num_reg_coeff
+
+        # angle_loss
+        # angle_loss, angle_tp_mask = self.angle_loss(rpn_bbox_preds[:, :, 6:],
+        # reg_targets[:, :, -1:])
+        # rpn_angle_loss = angle_loss * reg_weights
+        return {
+            # 'rpn_angle_loss': rpn_angle_loss,
+            'rpn_cls_loss': rpn_cls_loss,
+            'rpn_reg_loss': rpn_reg_loss
+        }
 
     def loss(self, prediction_dict, feed_dict):
         self.profiler.start('8')
@@ -296,45 +470,11 @@ class OFTModel(Model):
             voxels_ground_2d, gt_boxes_ground_2d_rect, voxel_centers,
             gt_boxes_3d, gt_labels)
 
-        # pred_boxes_3d = prediction_dict['pred_boxes_3d']
-        ################################
-        # subsample
-        ################################
-
-        # pos_indicator = reg_weights > 0
-        # indicator = cls_weights > 0
-
-        # rpn_cls_probs = prediction_dict['pred_probs_3d'][:, :, 1]
-        # cls_criterion = rpn_cls_probs
-
-        # batch_sampled_mask = self.sampler.subsample_batch(
-        # self.sample_size,
-        # pos_indicator,
-        # criterion=cls_criterion,
-        # indicator=indicator)
-
-        # import ipdb
-        # ipdb.set_trace()
-        # batch_sampled_mask = batch_sampled_mask.type_as(cls_weights)
-        # rpn_cls_weights = cls_weights[batch_sampled_mask]
-        # rpn_reg_weights = reg_weights[batch_sampled_mask]
-        # cls_targets = cls_targets[batch_sampled_mask]
-        # reg_targets = reg_targets[batch_sampled_mask]
-
-        # num_cls_coeff = (rpn_cls_weights > 0).sum(dim=-1)
-        # import ipdb
-        # ipdb.set_trace()
         num_reg_coeff = (reg_weights > 0).sum(dim=-1)
-        # # check
-        # #  assert num_cls_coeff, 'bug happens'
-        # #  assert num_reg_coeff, 'bug happens'
-        # if num_cls_coeff == 0:
-        # num_cls_coeff = torch.ones([]).type_as(num_cls_coeff)
+
         if num_reg_coeff == 0:
             num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
 
-        # import ipdb
-        # ipdb.set_trace()
         # cls loss
         rpn_cls_probs = prediction_dict['pred_probs_3d'][:, :, -1]
         rpn_cls_loss = self.conf_loss(rpn_cls_probs, cls_targets)
@@ -365,7 +505,7 @@ class OFTModel(Model):
 
         loss_dict = {}
 
-        loss_dict['rpn_cls_loss'] = rpn_cls_loss
+        loss_dict['cls_loss'] = rpn_cls_loss
         # loss_dict['rpn_bbox_loss'] = rpn_reg_loss
         # split bbox loss instead of fusing them
         loss_dict['dim_loss'] = dim_loss
@@ -374,12 +514,21 @@ class OFTModel(Model):
 
         self.profiler.end('8')
 
-        # recall
-        # final_boxes = self.bbox_coder.decode_batch(rpn_bbox_preds, )
-        # self.target_assigner.assign(final_boxes, gt_boxes)
+        #################################
+        # First stage loss
+        #################################
+        preds = {
+            'pred_boxes_3d': prediction_dict['rpn_boxes_3d'],
+            'pred_probs_3d': prediction_dict['rpn_probs_preds']
+        }
+        targets = {'cls_targets': cls_targets, 'reg_targets': reg_targets}
+        weights = {'reg_weights': reg_weights, 'cls_weights': cls_weights}
+        loss_dict.update(self.rpn_loss(preds, targets, weights))
 
-        # import ipdb
-        # ipdb.set_trace()
+        ###################################
+        # Statistic
+        ###################################
+
         voxel_centers = self.voxel_generator.voxel_centers
         D = self.voxel_generator.lattice_dims[1]
         voxel_centers = voxel_centers.view(-1, D, 3)[:, 0, :]

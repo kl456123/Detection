@@ -51,7 +51,7 @@ def load_npy(file_name):
     pred_disp = np.load(file_name)
     pred_disp = original_width * cv2.resize(
         pred_disp, (original_width, original_height),
-        interpolation=cv2.INTER_LINEAR)
+        interpolation=cv2.INTER_LINEAR) * original_width/512
     # disp_to_img = scipy.misc.imresize(disp_pp.squeeze(),
     # [original_height, original_width])
     return pred_disp
@@ -163,7 +163,7 @@ def cam2velo(pc, calib_info):
 
 def main():
     npy_dir = '/data/object/liangxiong/disparity/data/'
-    saved_path = '/data/liangxiong/KITTI/training/velodyne'
+    saved_path = '/data/liangxiong/KITTI/training/pseudo_velodyne'
     calib_dir = '/data/object/training/calib/'
     for idx, file in enumerate(sorted(os.listdir(npy_dir))):
         sample_idx = os.path.splitext(file)[0][:6]

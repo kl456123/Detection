@@ -5,8 +5,11 @@ from utils.box_vis import mainv2 as box_3d_vis
 import time
 
 #  data_dir = '/data/object/training'
-#  data_dir = '/home/pengwu/mono3d/seq/frames'
-data_dir = '/data/2011_09_26/2011_09_26_drive_0011_sync/image_02/data/'
+# data_dir = '/home/pengwu/mono3d/seq/frames'
+#  data_dir = '/data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/'
+#  data_dir = '/data/liangxiong/yizhuang/2019_0107_090221/keyframes'
+data_dir = '/data/liangxiong/yizhuang/2019_0107_140749/keyframes/'
+# data_dir = '/data/hw/image_2'
 
 result_dir = './results/data'
 
@@ -28,9 +31,9 @@ def main():
 
         kitti_path = os.path.join(result_dir, '{}.txt'.format(sample_name))
         #  img_path = os.path.join(data_dir, 'image_2/{}.png'.format(sample_name))
-        img_path = os.path.join(data_dir, '{}.png'.format(sample_name))
+        img_path = os.path.join(data_dir, '{}.jpg'.format(sample_name))
         #  calib_path = os.path.join(data_dir, 'calib/{}.txt'.format(sample_name))
-        calib_path = './000000.txt'
+        calib_path = '/home/pengwu/Detection/000001.txt'
         save_path = '{}.png'.format(sample_name)
         #  command = 'python utils/box_vis.py --kitti {} --img {} --calib {} --save_path {}'.format(
         #  kitti_path, img_path, calib_path, save_path)

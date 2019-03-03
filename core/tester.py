@@ -54,7 +54,7 @@ def test(eval_config, data_loader, model):
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
-        thresh = 0.15
+        thresh = 0.1
         #  import ipdb
         #  ipdb.set_trace()
 
@@ -87,7 +87,12 @@ def test(eval_config, data_loader, model):
                 # ipdb.set_trace()
                 cls_dets = np.concatenate(
                     (cls_boxes, cls_scores[..., np.newaxis]), 1)
-                dets.append(np.concatenate([cls_dets, pred_boxes_3d], axis=-1))
+
+                # img filter(ignore outside of image)
+                img_filter = get_img_filter(cls_dets)
+                final_dets = np.concatenate([cls_dets, pred_boxes_3d], axis=-1)
+                final_dets = final_dets[img_filter]
+                dets.append(final_dets)
 
             else:
                 dets.append([])
@@ -97,6 +102,19 @@ def test(eval_config, data_loader, model):
         sys.stdout.write(
             '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
         sys.stdout.flush()
+
+
+def get_img_filter(cls_dets):
+    xmin = cls_dets[:, 0]
+    ymin = cls_dets[:, 1]
+    xmax = cls_dets[:, 0]
+    ymax = cls_dets[:, 1]
+    width_range = [-150, 2200]
+    height_range = [-150, 1100]
+
+    img_filter = (xmin > width_range[0]) & (xmax < width_range[1]) & (
+        ymin > height_range[0]) & (ymax < height_range[1])
+    return img_filter
 
 
 def old_test(eval_config, data_loader, model):
@@ -192,8 +210,8 @@ def old_test(eval_config, data_loader, model):
                     center = np.stack([center_x, center_y], axis=-1)
                     gt_boxes_dims = np.stack([gt_boxes_w, gt_boxes_h], axis=-1)
 
-                    point1 = encoded_side_points[:,:2] * gt_boxes_dims + center
-                    point2 = encoded_side_points[:,2:] * gt_boxes_dims + center
+                    point1 = encoded_side_points[:, :2] * gt_boxes_dims + center
+                    point2 = encoded_side_points[:, 2:] * gt_boxes_dims + center
 
                     global_angles_gt = gt_boxes_3d[:, -1:]
 
