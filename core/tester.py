@@ -23,7 +23,7 @@ def to_cuda(target):
         return target.cuda()
 
 
-def new_test(eval_config, data_loader, model):
+def test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -38,8 +38,12 @@ def new_test(eval_config, data_loader, model):
             data = to_cuda(data)
             prediction = model(data)
 
-        pred_probs_3d = prediction['pred_probs_3d']
-        pred_boxes_3d = prediction['pred_boxes_3d']
+        # import ipdb
+        # ipdb.set_trace()
+        pred_probs_3d = prediction['all_cls_softmax']
+        pred_boxes_3d = prediction['final_bboxes_3d']
+        # pred_boxes_3d = data['anchor_boxes_3d_to_use_norm']
+        # pred_probs_3d = torch.ones_like(pred_boxes_3d[:, :2])
 
         duration_time = time.time() - start_time
 
@@ -48,9 +52,9 @@ def new_test(eval_config, data_loader, model):
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
-        thresh = 0.1
-        #  import ipdb
-        #  ipdb.set_trace()
+        thresh = 0.0
+        # import ipdb
+        # ipdb.set_trace()
 
         dets = []
         # nms
@@ -72,7 +76,7 @@ def new_test(eval_config, data_loader, model):
                 # pred_boxes_3d = pred_boxes_3d[keep.view(-1).long()]
 
                 pred_boxes_3d = pred_boxes_3d.detach().cpu().numpy()
-                p2 = data['p2'][0].detach().cpu().numpy()
+                p2 = data['stereo_calib_p2'][0].detach().cpu().numpy()
                 cls_scores = cls_scores.cpu().numpy()
 
                 cls_boxes = proj_3dTo2d(pred_boxes_3d, p2)
@@ -93,7 +97,7 @@ def new_test(eval_config, data_loader, model):
         sys.stdout.flush()
 
 
-def test(eval_config, data_loader, model):
+def old_test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -186,8 +190,8 @@ def test(eval_config, data_loader, model):
                     center = np.stack([center_x, center_y], axis=-1)
                     gt_boxes_dims = np.stack([gt_boxes_w, gt_boxes_h], axis=-1)
 
-                    point1 = encoded_side_points[:,:2] * gt_boxes_dims + center
-                    point2 = encoded_side_points[:,2:] * gt_boxes_dims + center
+                    point1 = encoded_side_points[:, :2] * gt_boxes_dims + center
+                    point2 = encoded_side_points[:, 2:] * gt_boxes_dims + center
 
                     global_angles_gt = gt_boxes_3d[:, -1:]
 
@@ -349,7 +353,8 @@ def save_dets_kitti(dets, label_info, output_dir):
     kitti_template = '{} -1 -1 -10 {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.8f}'
     with open(label_path, 'w') as f:
         for det in dets:
-            xmin, ymin, xmax, ymax, cf, h, w, l, x, y, z, alpha = det
+            # xmin, ymin, xmax, ymax, cf, h, w, l, x, y, z, alpha = det
+            xmin, ymin, xmax, ymax, cf, x, y, z, l, h, w, alpha = det
             res_str.append(
                 kitti_template.format(class_name, xmin, ymin, xmax, ymax, h, w,
                                       l, x, y, z, alpha, cf))

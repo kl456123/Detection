@@ -76,8 +76,8 @@ def draw_3d(pos):
 
 
 if __name__ == '__main__':
-    #  import ipdb
-    #  ipdb.set_trace()
+    import ipdb
+    ipdb.set_trace()
     pos = data_analysis()
     draw_3d(pos)
     from utils.analysis import data_vis

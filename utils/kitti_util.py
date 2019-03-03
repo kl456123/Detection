@@ -92,8 +92,8 @@ def proj_3dTo2d(pred_boxes_3d, p2):
     for i in range(num):
         target = {}
         target['ry'] = pred_boxes_3d[i, -1]
-        target['dimension'] = pred_boxes_3d[i, :3]
-        target['location'] = pred_boxes_3d[i, 3:6]
+        target['dimension'] = pred_boxes_3d[i, 3:6]
+        target['location'] = pred_boxes_3d[i, :3]
         # corners_2d_xy = compute_box_3dv3(target, p2)
         rotation_y = target['ry']
         r = [
@@ -102,7 +102,7 @@ def proj_3dTo2d(pred_boxes_3d, p2):
         ]
         r = np.array(r).reshape(3, 3)
 
-        h, w, l = target['dimension']
+        l,h,w = target['dimension']
 
         # The points sequence is 1, 2, 3, 4, 5, 6, 7, 8.
         # Front face: 1, 2, 6, 5; left face: 2, 3, 7, 6

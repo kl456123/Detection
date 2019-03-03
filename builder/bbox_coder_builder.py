@@ -5,6 +5,7 @@ from core.bbox_coders.scale_coder import ScaleCoder
 from core.bbox_coders.delta_coder import DeltaCoder
 from core.bbox_coders.bbox_3d_coder import BBox3DCoder
 from core.bbox_coders.oft_coder import OFTBBoxCoder
+from core.bbox_coders.avod_coder import AVODBBoxCoder
 
 
 def build(coder_config):
@@ -19,5 +20,7 @@ def build(coder_config):
         return BBox3DCoder(coder_config)
     elif coder_type == 'oft':
         return OFTBBoxCoder(coder_config)
+    elif coder_type == 'avod':
+        return AVODBBoxCoder(coder_config)
     else:
         raise ValueError('unknown type of bbox coder')

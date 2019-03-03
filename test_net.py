@@ -17,7 +17,7 @@ from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
 from core.saver import Saver
 from core import tester
-from builder.dataloader_builders.kitti_mono_3d_dataloader_builder import Mono3DKittiDataLoaderBuilder
+from builder.dataloader_builders.kitti_pc_3d_dataloader_builder import PointCloudKittiDataLoaderBuilder
 from builder import model_builder
 
 
@@ -199,8 +199,8 @@ if __name__ == '__main__':
     start = time.time()
 
     vis = args.vis
-    data_loader_builder = Mono3DKittiDataLoaderBuilder(
-        data_config, training=False)
+    data_loader_builder = PointCloudKittiDataLoaderBuilder(
+        data_config, training=True)
     data_loader = data_loader_builder.build()
 
     tester.test(eval_config, data_loader, fasterRCNN)

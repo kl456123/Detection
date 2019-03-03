@@ -14,6 +14,8 @@ from ..kitti_helper import process_center_coords
 from utils.kitti_util import get_gt_boxes_2d_ground_rect, get_gt_boxes_2d_ground_rect_v2
 from utils.kitti_util import encode_side_points, encode_bottom_points
 
+from scipy.misc import imresize
+
 
 class Sample(object):
     def __init__(self):
@@ -356,6 +358,53 @@ class RandomHorizontalFlip(object):
         return sample
 
 
+class ResizeV2(object):
+    def __init__(self, size, interpolation=Image.BICUBIC):
+        self.bev_input_size = size['bev_input_size']
+        self.img_input_size = size['img_input_size']
+        self.interpolation = interpolation
+
+    def __call__(self, sample):
+        """
+        Args:
+        img (PIL.Image): Image to be scaled.
+
+        Returns:
+        PIL.Image: Rescaled image.
+        """
+        img = sample['img']
+        #  bev = sample['bev_input']
+        im_scale = self.img_input_size / np.array(img.shape[:2])
+
+        # import ipdb
+        # ipdb.set_trace()
+        img = Image.fromarray(img.astype(np.uint8))
+
+        shape = [self.img_input_size[1], self.img_input_size[0]]
+        img = img.resize(shape, self.interpolation)
+
+        sample['im_scale'] = im_scale
+        sample['img'] = np.asarray(img)
+        #  sample['bev_input'] = np.asarray(bev)
+
+        if sample.get('bbox') is not None:
+            w, h = img.shape[:2]
+            bbox = sample['bbox']
+            bbox[:, 2] /= w
+            bbox[:, 0] /= w
+            bbox[:, 1] /= h
+            bbox[:, 3] /= h
+
+            target_shape = self.img_input_size
+            bbox[:, 2] *= target_shape[0]
+            bbox[:, 0] *= target_shape[0]
+            bbox[:, 1] *= target_shape[1]
+            bbox[:, 3] *= target_shape[1]
+            sample['bbox'] = bbox
+
+        return sample
+
+
 class Resize(object):
     """random Rescale the input PIL.Image to the given size.
 
@@ -412,10 +461,6 @@ class Resize(object):
             sample['bbox'] = bbox
 
         if sample.get('p2') is not None:
-            # p2 = sample['p2']
-            # K = p2[:3, :3]
-            # KT = p2[:, 3]
-            # T = np.dot(np.linalg.inv(K), KT)
             K = sample['K']
             T = sample['T']
 
@@ -428,10 +473,6 @@ class Resize(object):
             p2[:3, :3] = K
             p2[:, 3] = KT
 
-            # p2[0, 0] *= im_scale
-            # p2[1, 1] *= im_scale
-            # p2[0, 2] *= im_scale
-            # p2[1, 2] *= im_scale
             sample['p2'] = p2
             sample['K'] = K
 

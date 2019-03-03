@@ -18,6 +18,7 @@ class CReLU(nn.Module):
 
         return x
 
+
 class ConvBnAct(nn.Module):
     def __init__(self, n_in, n_out, **kwargs):
         super(ConvBnAct, self).__init__()
@@ -35,7 +36,13 @@ class ConvBnAct(nn.Module):
 
 
 class mCReLU_base(nn.Module):
-    def __init__(self, n_in, n_out, kernelsize, stride=1, preAct=False, lastAct=True):
+    def __init__(self,
+                 n_in,
+                 n_out,
+                 kernelsize,
+                 stride=1,
+                 preAct=False,
+                 lastAct=True):
         super(mCReLU_base, self).__init__()
         # Config
         self._preAct = preAct
@@ -43,7 +50,8 @@ class mCReLU_base(nn.Module):
         self.act = F.relu
 
         # Trainable params
-        self.conv3x3 = nn.Conv2d(n_in, n_out, kernelsize, stride=stride, padding=kernelsize/2)
+        self.conv3x3 = nn.Conv2d(
+            n_in, n_out, kernelsize, stride=stride, padding=kernelsize / 2)
         self.bn = nn.BatchNorm2d(n_out * 2)
 
     def forward(self, x):
@@ -64,7 +72,16 @@ class mCReLU_base(nn.Module):
 
 
 class mCReLU_residual(nn.Module):
-    def __init__(self, n_in, n_red, n_3x3, n_out, kernelsize=3, in_stride=1, proj=False, preAct=False, lastAct=True):
+    def __init__(self,
+                 n_in,
+                 n_red,
+                 n_3x3,
+                 n_out,
+                 kernelsize=3,
+                 in_stride=1,
+                 proj=False,
+                 preAct=False,
+                 lastAct=True):
         super(mCReLU_residual, self).__init__()
         # Config
         self._preAct = preAct
@@ -74,15 +91,17 @@ class mCReLU_residual(nn.Module):
 
         # Trainable params
         self.reduce = nn.Conv2d(n_in, n_red, 1, stride=in_stride)
-        self.conv3x3 = nn.Conv2d(n_red, n_3x3, kernelsize, padding=kernelsize/2)
+        self.conv3x3 = nn.Conv2d(
+            n_red, n_3x3, kernelsize, padding=kernelsize / 2)
         self.bn = nn.BatchNorm2d(n_3x3 * 2)
         self.expand = nn.Conv2d(n_3x3 * 2, n_out, 1)
 
         if in_stride > 1:
             # TODO: remove this assertion
-            assert(proj)
+            assert (proj)
 
-        self.proj = nn.Conv2d(n_in, n_out, 1, stride=in_stride) if proj else None
+        self.proj = nn.Conv2d(
+            n_in, n_out, 1, stride=in_stride) if proj else None
 
     def forward(self, x):
         x_sc = x
@@ -118,7 +137,13 @@ class mCReLU_residual(nn.Module):
 
 
 class Inception(nn.Module):
-    def __init__(self, n_in, n_out, in_stride=1, preAct=False, lastAct=True, proj=False):
+    def __init__(self,
+                 n_in,
+                 n_out,
+                 in_stride=1,
+                 preAct=False,
+                 lastAct=True,
+                 proj=False):
         super(Inception, self).__init__()
 
         # Config
@@ -131,9 +156,10 @@ class Inception(nn.Module):
         self.in_stride = in_stride
 
         self.n_branches = 0
-        self.n_outs = []        # number of output feature for each branch
+        self.n_outs = []  # number of output feature for each branch
 
-        self.proj = nn.Conv2d(n_in, n_out, 1, stride=in_stride) if proj else None
+        self.proj = nn.Conv2d(
+            n_in, n_out, 1, stride=in_stride) if proj else None
 
     def add_branch(self, module, n_out):
         # Create branch
@@ -150,7 +176,7 @@ class Inception(nn.Module):
         return getattr(self, br_name, None)
 
     def add_convs(self, n_kernels, n_chns):
-        assert(len(n_kernels) == len(n_chns))
+        assert (len(n_kernels) == len(n_chns))
 
         n_last = self.n_in
         layers = []
@@ -163,7 +189,13 @@ class Inception(nn.Module):
                 stride = 1
 
             # Initialize params
-            conv = nn.Conv2d(n_last, n_out, kernel_size=k, bias=False, padding=int(k / 2), stride=stride)
+            conv = nn.Conv2d(
+                n_last,
+                n_out,
+                kernel_size=k,
+                bias=False,
+                padding=int(k / 2),
+                stride=stride)
             bn = nn.BatchNorm2d(n_out)
 
             # Instantiate network
@@ -179,16 +211,20 @@ class Inception(nn.Module):
 
     def add_poolconv(self, kernel, n_out, type='MAX'):
 
-        assert(type in ['AVE', 'MAX'])
+        assert (type in ['AVE', 'MAX'])
 
         n_last = self.n_in
         layers = []
 
         # Pooling
         if type == 'MAX':
-            layers.append(nn.MaxPool2d(kernel, padding=int(kernel/2), stride=self.in_stride))
+            layers.append(
+                nn.MaxPool2d(
+                    kernel, padding=int(kernel / 2), stride=self.in_stride))
         elif type == 'AVE':
-            layers.append(nn.AvgPool2d(kernel, padding=int(kernel/2), stride=self.in_stride))
+            layers.append(
+                nn.AvgPool2d(
+                    kernel, padding=int(kernel / 2), stride=self.in_stride))
 
         # Conv - BN - Act
         layers.append(nn.Conv2d(n_last, n_out, kernel_size=1))
@@ -198,7 +234,6 @@ class Inception(nn.Module):
         self.add_branch(nn.Sequential(*layers), n_out)
 
         return self
-
 
     def finalize(self):
         # Add 1x1 convolution
@@ -219,7 +254,7 @@ class Inception(nn.Module):
         h = []
         for i in range(self.n_branches):
             module = self.branch(i)
-            assert(module != None)
+            assert (module != None)
 
             h.append(module(x))
 
@@ -232,7 +267,7 @@ class Inception(nn.Module):
             x = self.act(x)
 
         if (x_sc.get_device() != x.get_device()):
-            print "Something's wrong"
+            print("Something's wrong")
 
         # Projection
         if self.proj:
@@ -251,32 +286,53 @@ class PVANetFeat(nn.Module):
         super(PVANetFeat, self).__init__()
 
         self.conv1 = nn.Sequential(
-            mCReLU_base(3, 16, kernelsize=7, stride=2, lastAct=False),
-            nn.MaxPool2d(3, padding=1, stride=2)
-        )
+            mCReLU_base(
+                3, 16, kernelsize=7, stride=2, lastAct=False),
+            nn.MaxPool2d(
+                3, padding=1, stride=2))
 
         # 1/4
         self.conv2 = nn.Sequential(
-            mCReLU_residual(32, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False, in_stride=1, proj=True),
-            mCReLU_residual(64, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False),
-            mCReLU_residual(64, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False)
-        )
+            mCReLU_residual(
+                32,
+                24,
+                24,
+                64,
+                kernelsize=3,
+                preAct=True,
+                lastAct=False,
+                in_stride=1,
+                proj=True),
+            mCReLU_residual(
+                64, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False),
+            mCReLU_residual(
+                64, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False))
 
         # 1/8
         self.conv3 = nn.Sequential(
-            mCReLU_residual(64, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False, in_stride=2, proj=True),
-            mCReLU_residual(128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False),
-            mCReLU_residual(128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False),
-            mCReLU_residual(128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False)
-        )
+            mCReLU_residual(
+                64,
+                48,
+                48,
+                128,
+                kernelsize=3,
+                preAct=True,
+                lastAct=False,
+                in_stride=2,
+                proj=True),
+            mCReLU_residual(
+                128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False),
+            mCReLU_residual(
+                128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False),
+            mCReLU_residual(
+                128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False))
 
         # 1/16
         self.conv4 = nn.Sequential(
             self.gen_InceptionA(128, 2, True),
             self.gen_InceptionA(256, 1, False),
             self.gen_InceptionA(256, 1, False),
-            self.gen_InceptionA(256, 1, False)
-        )
+            self.gen_InceptionA(256, 1, False))
 
         # 1/32
         self.conv5 = nn.Sequential(
@@ -284,16 +340,14 @@ class PVANetFeat(nn.Module):
             self.gen_InceptionB(384, 1, False),
             self.gen_InceptionB(384, 1, False),
             self.gen_InceptionB(384, 1, False),
-
-            nn.ReLU(inplace=True)
-        )
+            nn.ReLU(inplace=True))
 
     def forward(self, x):
         x0 = self.conv1(x)
-        x1 = self.conv2(x0)         # 1/4 feature
-        x2 = self.conv3(x1)         # 1/8
-        x3 = self.conv4(x2)         # 1/16
-        x4 = self.conv5(x3)         # 1/32
+        x1 = self.conv2(x0)  # 1/4 feature
+        x2 = self.conv3(x1)  # 1/8
+        x3 = self.conv4(x2)  # 1/16
+        x4 = self.conv5(x3)  # 1/32
 
         return x4
 
@@ -346,15 +400,13 @@ class PVANet(nn.Module):
             nn.BatchNorm1d(4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
-
             nn.Linear(4096, 4096),
             nn.BatchNorm1d(4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
 
             # Can I add a comment?
-            nn.Linear(4096, num_classes)
-        )
+            nn.Linear(4096, num_classes))
 
         # Initialize all vars.
         initvars(self.modules())

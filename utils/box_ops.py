@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 from core.similarity_calc.center_similarity_calc import CenterSimilarityCalc
+import math
 
 
 def clip_boxes(boxes, im_shape):
@@ -133,3 +134,33 @@ def super_nms(bboxes, nms_thresh=0.8, nms_num=2, loop_time=1):
         remain_match_inds = remain_match_inds[:, 0]
 
     return remain_match_inds
+
+
+def to_norm(boxes_3d, ortho_rotate=False):
+    # boxes_3d = np.asarray(boxes_3d).reshape(-1, 7)
+
+    anchors = torch.zeros_like(boxes_3d[:, :7])
+
+    # Set x, y, z
+    anchors[:, [0, 1, 2]] = boxes_3d[:, [0, 1, 2]]
+
+    # Dimensions along x, y, z
+    box_l = boxes_3d[:, [3]]
+    box_w = boxes_3d[:, [4]]
+    box_h = boxes_3d[:, [5]]
+    box_ry = boxes_3d[:, [6]]
+
+    # Rotate to nearest multiple of 90 degrees
+    if ortho_rotate:
+        half_pi = math.pi / 2
+        box_ry = torch.round(box_ry / half_pi) * half_pi
+
+    cos_ry = torch.abs(torch.cos(box_ry))
+    sin_ry = torch.abs(torch.sin(box_ry))
+
+    # dim_x, dim_y, dim_z
+    anchors[:, [3]] = box_l * cos_ry + box_w * sin_ry
+    anchors[:, [4]] = box_h
+    anchors[:, [5]] = box_w * cos_ry + box_l * sin_ry
+
+    return anchors
