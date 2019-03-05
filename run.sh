@@ -118,7 +118,10 @@
 CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     --net avod \
     --out_path /data/object/liangxiong/avod \
-    --config configs/avod_config.json
+    --config configs/avod_config.json \
+    --checkepoch 1 \
+    --checkpoint 3257 \
+    --r True
 
 # CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
     # --net multibin \

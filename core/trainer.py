@@ -244,7 +244,6 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             'model': model,
             'optimizer': optimizer,
         }
-        if total_step % 100 == 0:
-            saver.save(params_dict, checkpoint_name)
+        saver.save(params_dict, checkpoint_name)
         end = time.time()
         total_step += step  # epoch level

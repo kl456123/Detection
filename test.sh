@@ -149,7 +149,7 @@ CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     --net avod \
     --load_dir /data/object/liangxiong/avod \
     --checkpoint 3257 \
-    --checkepoch 1
+    --checkepoch 2
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \
