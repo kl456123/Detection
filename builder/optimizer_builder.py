@@ -31,12 +31,14 @@ class OptimizerBuilder(object):
         params = self.get_params()
 
         if cfg['type'] == "adam":
-            optimizer = torch.optim.Adam(params)
+            optimizer = torch.optim.Adam(
+                params, lr=cfg['lr'], weight_decay=cfg['weight_decay'])
 
         elif cfg['type'] == "sgd":
             optimizer = torch.optim.SGD(params,
                                         momentum=cfg['momentum'],
-                                        lr=cfg['lr'])
+                                        lr=cfg['lr'],
+                                        weight_decay=cfg['weight_decay'])
         else:
             raise ValueError(
                 'this type of optimizer is unknown, please change it!')

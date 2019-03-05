@@ -61,6 +61,8 @@ class AVODBasicFC(Model):
         num = fusion_feat.shape[0]
         fc_fusion = fusion_feat.view(num, -1)
         preds = []
+        # import ipdb
+        # ipdb.set_trace()
         for idx, output_name in enumerate(self.output_names):
             fc_drop = self.multi_branch[idx].forward(fc_fusion)
 

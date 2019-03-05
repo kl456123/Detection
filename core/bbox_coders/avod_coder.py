@@ -17,7 +17,13 @@ class AVODBBoxCoder(object):
         y_pred = (offsets[:, 1] * anchors[:, 4]) + anchors[:, 1]
         z_pred = (offsets[:, 2] * anchors[:, 5]) + anchors[:, 2]
 
-        ry = anchors[:, 6]
+        num_preds = offsets.shape[1]
+        if num_preds == 8:
+            ry = torch.atan2(offsets[:, 7], offsets[:, 6])
+        elif num_preds == 6:
+            ry = anchors[:, 6]
+        else:
+            raise ValueError('incorrect num_preds: {}'.format(num_preds))
 
         tensor_format = isinstance(anchors, torch.Tensor)
         if tensor_format:

@@ -8,12 +8,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from core.model import Model
-from core.models.feature_extractors.avod_vgg_pyramid import AVODVGGPyramidExtractor
+# from core.models.feature_extractors.avod_vgg_pyramid import AVODVGGPyramidExtractor
+from core.models.feature_extractors.vgg_fpn import VGGFPN
 from core.voxel_generator import VoxelGenerator
 from core.avod_target_assigner import TargetAssigner
 from core.models.focal_loss import FocalLoss
 from core.samplers.balanced_sampler import BalancedSampler
-from utils.integral_map import IntegralMapGenerator
 from core.profiler import Profiler
 from core.anchor_projector import AnchorProjector
 from core.models.feature_extractors.pvanet import ConvBnAct
@@ -26,6 +26,7 @@ from utils import box_ops
 from utils import pc_ops
 
 from core.similarity_calc.center_similarity_calc import CenterSimilarityCalc
+from core.filler import Filler
 
 
 class RPNModel(Model):
@@ -64,6 +65,8 @@ class RPNModel(Model):
         img_anchors_norm = feed_dict['img_norm']
         bev_anchors_norm = feed_dict['bev_bboxes_norm']
 
+        # import ipdb
+        # ipdb.set_trace()
         bev_shape = bev_proposal_input.shape[-2:]
         extents_tiled = [bev_shape[::-1], bev_shape[::-1]]
         try:
@@ -76,21 +79,26 @@ class RPNModel(Model):
         img_rois_norm = torch.cat([anchor_indexes, img_anchors_norm], dim=-1)
         bev_rois_norm = torch.cat([anchor_indexes, bev_anchors_norm], dim=-1)
 
+        # import ipdb
+        # ipdb.set_trace()
         img_proposal_rois = self.roi_pooling(img_proposal_input, img_rois_norm)
         bev_proposal_rois = self.roi_pooling(bev_proposal_input, bev_rois_norm)
 
         # fusion feat
-        if self.fusion_method == 'mean':
-            rpn_fusion_out = (
-                bev_proposal_rois + img_proposal_rois) / fusion_mean_div_factor
-        elif self.fusion_method == 'concat':
-            rpn_fusion_out = torch.cat([bev_proposal_rois, img_proposal_rois],
-                                       dim=1)
-        else:
-            raise ValueError('Invalid fusion method', self.fusion_method)
+        # if self.fusion_method == 'mean':
+        # rpn_fusion_out = (
+        # bev_proposal_rois + img_proposal_rois) / fusion_mean_div_factor
+        # elif self.fusion_method == 'concat':
+        rpn_fusion_out = torch.cat([bev_proposal_rois, img_proposal_rois],
+                                   dim=1)
+        # else:
+        # raise ValueError('Invalid fusion method', self.fusion_method)
 
-        rpn_cls_scores, rpn_bbox_preds = self.anchor_predictor.forward(
-            rpn_fusion_out)
+        # rpn_cls_scores, rpn_bbox_preds = self.anchor_predictor.forward(
+        # rpn_fusion_out)
+
+        rpn_cls_scores = self.fc_obj(rpn_fusion_out).view(-1, 2)
+        rpn_bbox_preds = self.fc_reg(rpn_fusion_out).view(-1, 6)
 
         rpn_cls_probs = F.softmax(rpn_cls_scores, dim=-1)
 
@@ -127,8 +135,6 @@ class RPNModel(Model):
         if self.img_filter_topN > 0:
             img_bbox_filter[order[self.img_filter_topN:]] = 0
 
-        if torch.nonzero(img_bbox_filter).numel() == 0:
-            img_bbox_filter[:self.img_filter_topN] = 1
         return img_bbox_filter
 
     def preprocess(self, feed_dict):
@@ -161,14 +167,75 @@ class RPNModel(Model):
         gt_boxes_3d = feed_dict['label_boxes_3d']
         gt_boxes_img = self.anchor_projector.project_to_image_space(
             gt_boxes_3d[0], feed_dict['stereo_calib_p2'])
-        img_bbox_filter = self.create_img_bbox_filter(
-            img_norm.unsqueeze(0), gt_boxes_img.unsqueeze(0))
+        # import ipdb
+        # ipdb.set_trace()
+        if self.enable_img_filter:
+            img_bbox_filter = self.create_img_bbox_filter(
+                img_norm.unsqueeze(0), gt_boxes_img.unsqueeze(0))
+        else:
+            img_bbox_filter = torch.ones_like(img_norm[:, 0]).byte()
 
-        feed_dict['bev_bboxes_norm'] = bev_bboxes_norm[img_bbox_filter]
-        feed_dict['bev_bboxes'] = bev_bboxes[img_bbox_filter]
-        feed_dict['img_norm'] = img_norm[img_bbox_filter]
+        # area filter(ignore too large bboxes in image)
+        img_norm_area = (img_norm[:, 2] - img_norm[:, 0]) * (
+            img_norm[:, 3] - img_norm[:, 1])
+        img_norm_area_filter = img_norm_area < 1280*384*0.5
+
+        final_bbox_filter = img_bbox_filter & img_norm_area_filter
+
+        # make sure no empty anchors
+        if torch.nonzero(final_bbox_filter).numel() == 0:
+            final_bbox_filter[:self.img_filter_topN] = 1
+
+        feed_dict['bev_bboxes_norm'] = bev_bboxes_norm[final_bbox_filter]
+        feed_dict['bev_bboxes'] = bev_bboxes[final_bbox_filter]
+        feed_dict['img_norm'] = img_norm[final_bbox_filter]
         feed_dict['anchor_boxes_3d_to_use_norm'] = anchor_boxes_3d_to_use[
-            img_bbox_filter]
+            final_bbox_filter]
+
+        # for debug
+        gt_boxes_3d = feed_dict['label_boxes_3d']
+        anchors = feed_dict['anchor_boxes_3d_to_use_norm'].unsqueeze(0)
+
+        # increate batch dim
+        gt_boxes_bev = self.anchor_projector.project_to_bev(
+            gt_boxes_3d[0], self.bev_extents).unsqueeze(0)
+        bev_proposal_boxes_norm = feed_dict['bev_bboxes'].unsqueeze(0)
+
+        #################################
+        # target assigner
+        ################################
+        rcnn_cls_targets, rcnn_reg_targets, \
+            rcnn_cls_weights, rcnn_reg_weights = \
+                self.target_assigner.assign(
+                    bev_proposal_boxes_norm,
+                    gt_boxes_bev,
+                    anchors,
+                    gt_boxes_3d,
+                    gt_labels=None)
+        # import ipdb
+        # ipdb.set_trace()
+        anchors = self.bbox_coder.decode_batch(rcnn_reg_targets[0],
+                                               anchors[0]).unsqueeze(0)
+
+        ################################
+        # subsample
+        ################################
+        pos_indicator = rcnn_reg_weights > 0
+        indicator = rcnn_cls_weights > 0
+
+        batch_sampled_mask = self.sampler.subsample_batch(
+            self.batch_size, pos_indicator, indicator=indicator)
+        batch_sampled_mask = batch_sampled_mask.type_as(rcnn_cls_weights)
+        rcnn_cls_weights = rcnn_cls_weights * batch_sampled_mask
+        rcnn_reg_weights = rcnn_reg_weights * batch_sampled_mask
+
+        # import ipdb
+        # ipdb.set_trace()
+        feed_dict['anchor_boxes_3d_to_use'] = anchors[rcnn_reg_weights > 0]
+        # import ipdb
+        # ipdb.set_trace()
+        feed_dict['anchor_boxes_2d_norm'] = feed_dict['img_norm'].unsqueeze(
+            0)[rcnn_reg_weights > 0]
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds):
         # TODO create a new Function
@@ -193,21 +260,25 @@ class RPNModel(Model):
         # pre nms
         # sort fg
         _, fg_probs_order = torch.sort(fg_probs, descending=True)
-        keep = fg_probs_order[:self.pre_nms_topN]
+        keep = fg_probs_order
         fg_probs = fg_probs[keep]
         proposals = proposals[keep]
 
         bev_proposals = self.anchor_projector.project_to_bev(proposals,
                                                              self.bev_extents)
+        bev_proposals = bev_proposals * 10
+        bev_proposals = torch.round(bev_proposals)
 
         # nms
-        keep_idx = nms(torch.cat((bev_proposals, fg_probs.unsqueeze(-1)),
-                                 dim=1),
-                       self.nms_thresh)
-        keep_idx = keep_idx.long().view(-1)
-        top_bev_proposals = bev_proposals[keep_idx]
-        top_bev_probs = fg_probs[keep_idx]
-        top_proposals = proposals[keep_idx]
+        # keep_idx = nms(torch.cat((bev_proposals, fg_probs.unsqueeze(-1)),
+                                 # dim=1),
+                       # self.nms_thresh)
+        # keep_idx = keep_idx.long().view(-1)
+        # top_bev_proposals = bev_proposals[keep_idx]
+        # top_bev_probs = fg_probs[keep_idx]
+        # top_proposals = proposals[keep_idx]
+        top_proposals = proposals
+        top_proposals = top_proposals[:self.pre_nms_topN]
 
         # post nms
 
@@ -217,6 +288,8 @@ class RPNModel(Model):
         return 1, 1
 
     def init_param(self, model_config):
+        self.enable_img_filter = model_config['enable_img_filter']
+        self.truncated = model_config['truncated']
         self.img_filter_topN = model_config['img_filter_topN']
         self.use_empty_filter = model_config.get('use_empty_filter')
         self.nms_thresh = model_config['nms_thresh']
@@ -278,36 +351,77 @@ class RPNModel(Model):
         some modules
         """
 
-        self.bev_feature_extractor = AVODVGGPyramidExtractor(
-            self.bev_feature_extractor_config)
+        # self.bev_feature_extractor = AVODVGGPyramidExtractor(
+        # self.bev_feature_extractor_config)
 
-        self.img_feature_extractor = AVODVGGPyramidExtractor(
-            self.img_feature_extractor_config)
+        # self.img_feature_extractor = AVODVGGPyramidExtractor(
+        # self.img_feature_extractor_config)
 
-        self.bev_bottle_neck = ConvBnAct(
-            32, 1, kernel_size=1, stride=1, padding=0)
-        self.img_bottle_neck = ConvBnAct(
-            32, 1, kernel_size=1, stride=1, padding=0)
+        # self.bev_bottle_neck = ConvBnAct(
+        # 32, 1, kernel_size=1, stride=1, padding=0)
+        # self.img_bottle_neck = ConvBnAct(
+        # 32, 1, kernel_size=1, stride=1, padding=0)
+        self.img_feature_extractor = VGGFPN(in_channels=3)
+        self.bev_feature_extractor = VGGFPN(in_channels=6)
+
+        self.bev_bottle_neck = nn.Sequential(
+            nn.Conv2d(
+                32, 1, kernel_size=1),
+            nn.BatchNorm2d(1), )
+        self.img_bottle_neck = nn.Sequential(
+            nn.Conv2d(
+                32, 1, kernel_size=1), nn.BatchNorm2d(1))
 
         self.roi_pooling = RoIAlignAvg(self.pooling_size, self.pooling_size,
-                                       1.0 / 16.0)
-        self.anchor_predictor = AnchorPredictor(self.anchor_predictor_config)
+                                       1.0)
+        # self.anchor_predictor = AnchorPredictor(self.anchor_predictor_config)
+        self.fc_obj = self.__make_fc_layer(
+            [256, 'D', 256, 'D', 2], in_channels=2)
+        self.fc_reg = self.__make_fc_layer(
+            [256, 'D', 256, 'D', 6], in_channels=2)
 
         # loss
         self.rpn_bbox_loss = nn.SmoothL1Loss(reduce=False)
         if self.use_focal_loss:
             self.rpn_cls_loss = FocalLoss(
-                self.n_classes, alpha=0.2, gamma=2, auto_alpha=False)
+                self.n_classes, alpha=0.25, gamma=2, auto_alpha=False)
         else:
             self.rpn_cls_loss = nn.CrossEntropyLoss(reduce=False)
 
+    def __make_fc_layer(self, cfg, in_channels):
+        layers = []
+        first_layer = True
+        for v in cfg:
+            if v == 'D':
+                layers += [nn.Dropout2d()]
+            else:
+                if first_layer:
+                    layers += [
+                        nn.Conv2d(
+                            in_channels,
+                            v,
+                            kernel_size=(self.pooling_size, self.pooling_size))
+                    ]
+                    in_channels = v
+                    first_layer = False
+                else:
+                    layers += [nn.Conv2d(in_channels, v, kernel_size=1)]
+                    in_channels = v
+
+        return nn.Sequential(*layers)
+
     def init_weights(self):
-        self.bev_feature_extractor.init_weights()
-        self.img_feature_extractor.init_weights()
+        # Filler.normal_init(self.bev_feature_extractor, 0, 0.001, self.truncated)
+        # Filler.normal_init(self.img_feature_extractor, 0, 0.001, self.truncated)
+        # self.bev_feature_extractor.init_weights()
+        # self.img_feature_extractor.init_weights()
+        pass
 
     def loss(self, prediction_dict, feed_dict):
 
         # loss for cls
+        # import ipdb
+        # ipdb.set_trace()
 
         loss_dict = {}
         gt_boxes_3d = feed_dict['label_boxes_3d']
@@ -336,14 +450,11 @@ class RPNModel(Model):
         pos_indicator = rcnn_reg_weights > 0
         indicator = rcnn_cls_weights > 0
 
-        rcnn_cls_probs = prediction_dict['rpn_cls_probs'][:, 1]
-        cls_criterion = rcnn_cls_probs
+        # rcnn_cls_probs = prediction_dict['rpn_cls_probs'][:, 1]
+        # cls_criterion = rcnn_cls_probs
 
         batch_sampled_mask = self.sampler.subsample_batch(
-            self.batch_size,
-            pos_indicator,
-            criterion=cls_criterion,
-            indicator=indicator)
+            self.batch_size, pos_indicator, indicator=indicator)
         batch_sampled_mask = batch_sampled_mask.type_as(rcnn_cls_weights)
         rcnn_cls_weights = rcnn_cls_weights * batch_sampled_mask
         rcnn_reg_weights = rcnn_reg_weights * batch_sampled_mask
@@ -362,7 +473,7 @@ class RPNModel(Model):
         rcnn_cls_loss = self.rpn_cls_loss(
             rcnn_cls_score.view(-1, 2), rcnn_cls_targets.view(-1))
         rcnn_cls_loss = rcnn_cls_loss.view_as(rcnn_cls_weights)
-        rcnn_cls_loss *= rcnn_cls_weights
+        rcnn_cls_loss = rcnn_cls_loss * rcnn_cls_weights
         rcnn_cls_loss = rcnn_cls_loss.sum(dim=1) / num_cls_coeff.float()
 
         # bbox loss

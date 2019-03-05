@@ -31,6 +31,11 @@ def test(eval_config, data_loader, model):
     # ipdb.set_trace()
     num_samples = len(data_loader)
     for i, data in enumerate(data_loader):
+        #  if i + 1 < 168:
+            #  continue
+        # else:
+            # import ipdb
+            # ipdb.set_trace()
         img_file = data['img_name']
         start_time = time.time()
 
@@ -38,12 +43,13 @@ def test(eval_config, data_loader, model):
             data = to_cuda(data)
             prediction = model(data)
 
-        # import ipdb
-        # ipdb.set_trace()
+        #  import ipdb
+        #  ipdb.set_trace()
         pred_probs_3d = prediction['all_cls_softmax']
         pred_boxes_3d = prediction['final_bboxes_3d']
-        # pred_boxes_3d = data['anchor_boxes_3d_to_use_norm']
-        # pred_probs_3d = torch.ones_like(pred_boxes_3d[:, :2])
+        # pred_boxes_3d = data['anchor_boxes_3d_to_use']
+        #  pred_boxes_3d = prediction['proposals_batch']
+        #  pred_probs_3d = torch.ones_like(pred_boxes_3d[:, :2])
 
         duration_time = time.time() - start_time
 
@@ -52,14 +58,22 @@ def test(eval_config, data_loader, model):
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
-        thresh = 0.0
+        # import ipdb
+        # ipdb.set_trace()
+        thresh = 0
         # import ipdb
         # ipdb.set_trace()
 
         dets = []
         # nms
+        # import ipdb
+        # ipdb.set_trace()
         for j in range(1, len(classes)):
-            inds = torch.nonzero(scores[:, j] > thresh).view(-1)
+            try:
+                inds = torch.nonzero(scores[:, j] > thresh).view(-1)
+            except:
+                import ipdb
+                ipdb.set_trace()
             # if there is det
             if inds.numel() > 0:
                 cls_scores = scores[:, j][inds]
@@ -79,7 +93,10 @@ def test(eval_config, data_loader, model):
                 p2 = data['stereo_calib_p2'][0].detach().cpu().numpy()
                 cls_scores = cls_scores.cpu().numpy()
 
+                #  import ipdb
+                #  ipdb.set_trace()
                 cls_boxes = proj_3dTo2d(pred_boxes_3d, p2)
+                #  cls_boxes = data['anchor_boxes_2d_norm'].detach().cpu().numpy()
 
                 # import ipdb
                 # ipdb.set_trace()

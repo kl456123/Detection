@@ -16,16 +16,51 @@ from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
-from core.models.avod_fc import AVODBasicFC
+from core.models.avod_basic_fc import AVODBasicFC
 from core.profiler import Profiler
 from core.anchor_projector import AnchorProjector
+from lib.model.nms.nms_wrapper import nms
 
 import functools
 from utils import box_ops
 
+# class AvodFusionModel(nn.Module):
+# def __init__(self, fusion_method='mean'):
+# super(AvodFusionModel, self).__init__()
+
+# def __mean_fusion(self, x, y):
+# return (x + y) / 2
+
+# def __fc_block(self, input, output):
+# return nn.Sequential(nn.Linear(input, output), nn.Dropout()).cuda()
+
+# def __cat_fusion(self, x, y):
+# return torch.cat((x, y), dim=0)
+
+# def forward(self, img_rois, bev_rois):
+# x = self.__mean_fusion(img_rois, bev_rois)
+# x = x.view((-1, 32 * 7 * 7))
+# img_rois = self.__fc_block(32 * 7 * 7, 2048)(x)
+# bev_rois = self.__fc_block(32 * 7 * 7, 2048)(x)
+# x = self.__mean_fusion(img_rois, bev_rois)
+# img_rois = self.__fc_block(2048, 2048)(x)
+# bev_rois = self.__fc_block(2048, 2048)(x)
+# x = self.__mean_fusion(img_rois, bev_rois)
+# img_rois = self.__fc_block(2048, 2048)(x)
+# bev_rois = self.__fc_block(2048, 2048)(x)
+# x = self.__mean_fusion(img_rois, bev_rois)
+# pred_cls = self.__fc_block(2048, 2)(x)
+# # box_4ca representation
+# pred_offsets = self.__fc_block(2048, 6)(x)
+# pred_ry = self.__fc_block(2048, 2)(x)
+
+# return pred_cls, pred_offsets, pred_ry
+
 
 class AVODFasterRCNN(Model):
     def forward(self, feed_dict):
+        # import ipdb
+        # ipdb.set_trace()
 
         prediction_dict = {}
 
@@ -55,8 +90,11 @@ class AVODFasterRCNN(Model):
 
         # avod_projection
         # bev
+
         bev_feat_maps = feed_dict['bev_feat_maps']
         img_feat_maps = feed_dict['img_feat_maps']
+        # import ipdb
+        # ipdb.set_trace()
 
         bev_proposal_boxes, bev_proposal_boxes_norm = self.anchor_projector.project_to_bev(
             avod_projection_in, self.bev_extents, ret_norm=True)
@@ -89,9 +127,11 @@ class AVODFasterRCNN(Model):
         bev_rois = self.rcnn_pooling(bev_feat_maps, bev_rois_boxes)
         img_rois = self.rcnn_pooling(img_feat_maps, img_rois_boxes)
 
+        # import ipdb
+        # ipdb.set_trace()
         # output
         all_cls_logits, all_offsets, all_angle_vectors = self.fc_output_layer(
-            [bev_rois, img_rois], [bev_mask, img_mask])
+            [img_rois, bev_rois], [bev_mask, img_mask])
 
         all_cls_softmax = F.softmax(all_cls_logits, dim=-1)
 
@@ -117,27 +157,39 @@ class AVODFasterRCNN(Model):
 
         # when inference
         if not self.training:
+            # import ipdb
+            # ipdb.set_trace()
             final_bboxes_3d = self.bbox_coder.decode_batch(all_reg_3d,
                                                            top_proposals)
+            # nms for final detection
+            final_bboxes_bev = self.anchor_projector.project_to_bev(
+                final_bboxes_3d, self.area_extents)
+            keep_idx = nms(torch.cat(
+                [final_bboxes_bev, all_cls_softmax[:, -1:]], dim=-1),
+                           self.nms_thresh)
+            keep_idx = keep_idx.long().view(-1)
+            final_bboxes_3d = final_bboxes_3d[keep_idx]
+            all_cls_softmax = all_cls_softmax[keep_idx]
             prediction_dict['final_bboxes_3d'] = final_bboxes_3d
+            prediction_dict['all_cls_softmax'] = all_cls_softmax
 
         return prediction_dict
 
     def init_weights(self):
         # submodule init weights
-        self.feature_extractor.init_weights()
+        # self.feature_extractor.init_weights()
         self.rpn_model.init_weights()
 
         Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
     def init_modules(self):
-        self.feature_extractor = ResNetFeatureExtractor(
-            self.feature_extractor_config)
+        # self.feature_extractor = ResNetFeatureExtractor(
+        # self.feature_extractor_config)
         self.rpn_model = RPNModel(self.rpn_config)
         if self.pooling_mode == 'align':
             self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
-                                            self.pooling_size, 1.0 / 16.0)
+                                            self.pooling_size, 1.0)
         elif self.pooling_mode == 'ps':
             self.rcnn_pooling = PSRoIPool(7, 7, 1.0 / 16, 7, self.n_classes)
         elif self.pooling_mode == 'psalign':
@@ -156,18 +208,21 @@ class AVODFasterRCNN(Model):
 
         # loss module
         if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(2)
+            self.rcnn_cls_loss = FocalLoss(2, alpha=0.25, gamma=2)
         else:
-            self.rcnn_cls_loss = functools.partial(
-                F.cross_entropy, reduce=False)
+            self.rcnn_cls_loss = nn.CrossEntropyLoss(reduce=False)
+            # self.rcnn_cls_loss = functools.partial(
+        # F.cross_entropy, reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
         self.anchor_projector = AnchorProjector()
 
         self.fc_output_layer = AVODBasicFC(self.fc_output_layer_config)
+        # self.fc_output_layer = AvodFusionModel()
 
     def init_param(self, model_config):
+        self.nms_thresh = model_config['nms_thresh']
         self.path_drop_probabilities = model_config['path_drop_probabilities']
         self.area_extents = model_config['area_extents']
         self.bev_extents = [self.area_extents[0], self.area_extents[2]]
@@ -204,61 +259,6 @@ class AVODFasterRCNN(Model):
         self.profiler = Profiler()
 
         self.anchor_projector = AnchorProjector()
-
-    def pre_subsample(self, prediction_dict, feed_dict):
-        rois_batch = prediction_dict['rois_batch']
-        gt_boxes = feed_dict['gt_boxes']
-        gt_labels = feed_dict['gt_labels']
-
-        ##########################
-        # assigner
-        ##########################
-        #  import ipdb
-        #  ipdb.set_trace()
-        rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights = self.target_assigner.assign(
-            rois_batch[:, :, 1:], gt_boxes, gt_labels)
-
-        ##########################
-        # subsampler
-        ##########################
-        cls_criterion = None
-        pos_indicator = rcnn_reg_weights > 0
-        indicator = rcnn_cls_weights > 0
-
-        # subsample from all
-        # shape (N,M)
-        batch_sampled_mask = self.sampler.subsample_batch(
-            self.rcnn_batch_size,
-            pos_indicator,
-            indicator=indicator,
-            criterion=cls_criterion)
-        rcnn_cls_weights = rcnn_cls_weights[batch_sampled_mask]
-        rcnn_reg_weights = rcnn_reg_weights[batch_sampled_mask]
-        num_cls_coeff = (rcnn_cls_weights > 0).sum(dim=-1)
-        num_reg_coeff = (rcnn_reg_weights > 0).sum(dim=-1)
-        # check
-        assert num_cls_coeff, 'bug happens'
-        assert num_reg_coeff, 'bug happens'
-
-        prediction_dict[
-            'rcnn_cls_weights'] = rcnn_cls_weights / num_cls_coeff.float()
-        prediction_dict[
-            'rcnn_reg_weights'] = rcnn_reg_weights / num_reg_coeff.float()
-        prediction_dict['rcnn_cls_targets'] = rcnn_cls_targets[
-            batch_sampled_mask]
-        prediction_dict['rcnn_reg_targets'] = rcnn_reg_targets[
-            batch_sampled_mask]
-
-        # update rois_batch
-        prediction_dict['rois_batch'] = rois_batch[batch_sampled_mask].view(
-            rois_batch.shape[0], -1, 5)
-
-        if not self.training:
-            # used for track
-            proposals_order = prediction_dict['proposals_order']
-
-            prediction_dict['proposals_order'] = proposals_order[
-                batch_sampled_mask]
 
     def loss(self, prediction_dict, feed_dict):
         # loss for cls
@@ -317,7 +317,7 @@ class AVODFasterRCNN(Model):
         rcnn_cls_loss = self.rcnn_cls_loss(
             rcnn_cls_score.view(-1, 2), rcnn_cls_targets.view(-1))
         rcnn_cls_loss = rcnn_cls_loss.view_as(rcnn_cls_weights)
-        rcnn_cls_loss *= rcnn_cls_weights
+        rcnn_cls_loss = rcnn_cls_loss * rcnn_cls_weights
         rcnn_cls_loss = rcnn_cls_loss.sum(dim=1) / num_cls_coeff.float()
 
         # bbox loss
@@ -330,5 +330,11 @@ class AVODFasterRCNN(Model):
         loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
         loss_dict['rcnn_bbox_loss'] = rcnn_reg_loss
 
-        prediction_dict['rcnn_reg_weights'] = rcnn_reg_weights
+        prediction_dict['rcnn_reg_weights'] = rcnn_reg_weights[
+            batch_sampled_mask.byte()]
+
+        fake_match = self.target_assigner.analyzer.match
+        num_gt = feed_dict['label_classes'].numel()
+        self.target_assigner.analyzer.analyze_ap(
+            fake_match, rcnn_cls_probs, num_gt, thresh=0.5)
         return loss_dict
