@@ -60,7 +60,7 @@ def test(eval_config, data_loader, model):
         thresh = eval_config['thresh']
         # import ipdb
         # ipdb.set_trace()
-        thresh = 0
+        # thresh = 0.0
         # import ipdb
         # ipdb.set_trace()
 

@@ -34,6 +34,7 @@ class PointCloudKittiDataLoaderBuilder(DataLoaderBuilder):
             ])
         else:
             self.transform = trans.Compose([
+                trans.ResizeV2(trans_cfg['input_size']),
                 trans.ToTensor(), trans.Normalize(trans_cfg['normal_mean'],
                                                   trans_cfg['normal_van'])
             ])

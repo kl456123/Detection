@@ -164,9 +164,8 @@ class AVODFasterRCNN(Model):
             # nms for final detection
             final_bboxes_bev = self.anchor_projector.project_to_bev(
                 final_bboxes_3d, self.area_extents)
-            keep_idx = nms(torch.cat(
-                [final_bboxes_bev, all_cls_softmax[:, -1:]], dim=-1),
-                           self.nms_thresh)
+            keep_idx, _ = box_ops.nms(final_bboxes_bev, all_cls_softmax[:, -1],
+                                      self.nms_thresh)
             keep_idx = keep_idx.long().view(-1)
             final_bboxes_3d = final_bboxes_3d[keep_idx]
             all_cls_softmax = all_cls_softmax[keep_idx]
@@ -179,9 +178,10 @@ class AVODFasterRCNN(Model):
         # submodule init weights
         # self.feature_extractor.init_weights()
         self.rpn_model.init_weights()
+        self.fc_output_layer.init_weights()
 
-        Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
-        Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
+        # Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
+        # Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
     def init_modules(self):
         # self.feature_extractor = ResNetFeatureExtractor(
@@ -196,19 +196,11 @@ class AVODFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
-        if self.reduce:
-            in_channels = 2048
-        else:
-            in_channels = 2048 * 4 * 4
-        if self.class_agnostic:
-            self.rcnn_bbox_pred = nn.Linear(in_channels, 4)
-        else:
-            self.rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
 
         # loss module
         if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(2, alpha=0.25, gamma=2)
+            self.rcnn_cls_loss = FocalLoss(
+                self.n_classes, alpha=0.25, gamma=2, auto_alpha=False)
         else:
             self.rcnn_cls_loss = nn.CrossEntropyLoss(reduce=False)
             # self.rcnn_cls_loss = functools.partial(

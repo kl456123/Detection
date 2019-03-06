@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import torch
+import random
 
 from PIL import Image
 from data.det_dataset import DetDataset
@@ -12,6 +13,7 @@ from wavedata.tools.core import calib_utils
 from wavedata.tools.obj_detection import obj_utils
 from core.bev_generator import BevGenerator
 from core.avod.bev_slices import BevSlices
+from utils import kitti_aug
 
 
 class PointCloudKittiDataset(DetDataset):
@@ -145,7 +147,7 @@ class PointCloudKittiDataset(DetDataset):
 
     def load_sample_names(self):
         set_file = os.path.join(self._root_path, self._dataset_file)
-        # set_file = './demo.txt'
+        set_file = './train.txt'
         with open(set_file) as f:
             sample_names = f.read().splitlines()
         return np.array(sample_names)
@@ -196,21 +198,6 @@ class PointCloudKittiDataset(DetDataset):
         stereo_calib_p2 = calib_utils.read_calibration(self.calib_dir,
                                                        int(sample_name)).p2
 
-        # point cloud
-        # (w,h) in wavedata
-        im_size = [image_shape[1], image_shape[0]]
-        # point_cloud = obj_utils.get_lidar_point_cloud(
-        # int(sample_name), self.calib_dir, self.velo_dir, im_size=im_size).T
-        # import ipdb
-        # ipdb.set_trace()
-        point_cloud = self.get_point_cloud(sample_name)
-
-        # import ipdb
-        # ipdb.set_trace()
-        # bev maps
-        bev_images = self.bev_generator.generate_bev(
-            point_cloud.transpose(), ground_plane, self._area_extents)
-
         # labels
         obj_labels = obj_utils.read_labels(self._label_dir, int(sample_name))
         # filter it already
@@ -222,6 +209,36 @@ class PointCloudKittiDataset(DetDataset):
             for obj_label in obj_labels
         ]
         label_classes = np.asarray(label_classes, dtype=np.int32)
+
+        # point cloud
+        # (w,h) in wavedata
+        # im_size = [image_shape[1], image_shape[0]]
+        # point_cloud = obj_utils.get_lidar_point_cloud(
+        # int(sample_name), self.calib_dir, self.velo_dir, im_size=im_size).T
+        # import ipdb
+        # ipdb.set_trace()
+        point_cloud = self.get_point_cloud(sample_name)
+
+        if random.random() < 0.5:
+            image_input = kitti_aug.flip_image(image_input)
+            point_cloud = kitti_aug.flip_point_cloud(point_cloud)
+            obj_labels = [
+                kitti_aug.flip_label_in_3d_only(obj) for obj in obj_labels
+            ]
+            ground_plane = kitti_aug.flip_ground_plane(ground_plane)
+            stereo_calib_p2 = kitti_aug.flip_stereo_calib_p2(stereo_calib_p2,
+                                                             image_shape)
+
+        if random.random() < 0.5:
+            # pca jitter
+            image_input[:, :, 0:3] = kitti_aug.apply_pca_jitter(
+                image_input[:, :, 0:3])
+
+        # import ipdb
+        # ipdb.set_trace()
+        # bev maps
+        bev_images = self.bev_generator.generate_bev(
+            point_cloud.transpose(), ground_plane, self._area_extents)
 
         # stack height maps and density map
         # height_maps = bev_images.get('height_maps')

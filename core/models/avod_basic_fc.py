@@ -4,6 +4,7 @@ from core.model import Model
 import torch
 import torch.nn as nn
 import copy
+from core.filler import Filler
 
 
 class AVODBasicFC(Model):
@@ -20,6 +21,15 @@ class AVODBasicFC(Model):
         self.ndin = model_config['ndin']
         if self.fusion_method == 'concat':
             self.ndin *= 2
+
+    def init_weights(self):
+        pass
+        # Filler.normal_init(self.cls_pred, 0, 0.0001, True)
+        # Filler.normal_init(self.cls_pred, 0, 0.0001, True)
+        # Filler.normal_init(self.cls_pred, 0, 0.0001, True)
+        # num_layers = len(self.layer_size)
+        # for i in range(num_layers):
+            # Filler.normal_init(self.multi_branch[i][0], 0, 0.0001, True)
 
     def init_modules(self):
         # branch network
