@@ -331,7 +331,8 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     # ry
     lines = dets_3d[:, 3:]
     #  lines = generate_side_points(dets_2d, dets_3d[:, 3:])
-    ry = twopoints2direction(lines)
+    # ry = twopoints2direction(lines)
+    ry = np.zeros_like(dets_3d[:, 0])
     # ry = fourpoints2direction(lines)
 
     # decode h_2ds and c_2ds

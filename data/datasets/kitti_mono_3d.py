@@ -9,13 +9,17 @@ from utils.box_vis import load_projection_matrix
 from utils.kitti_util import *
 
 color_map = [(0, 0, 142)]
-OBJ_CLASSES = ['Car']
 
 
 class Mono3DKittiDataset(DetDataset):
     def __init__(self, dataset_config, transforms=None, training=True):
         super(Mono3DKittiDataset, self).__init__(training)
         self.root_path = dataset_config['root_path']
+        classes = dataset_config.get('classes')
+        if classes is None:
+            self.classes = ['Car']
+        else:
+            self.classes = classes
         # if self.training:
         if dataset_config['dataset_file'] is None:
             print('Demo mode enabled!')
@@ -271,8 +275,8 @@ class Mono3DKittiDataset(DetDataset):
 
         return bbox
 
-    @staticmethod
-    def encode_obj_name(name):
+    def encode_obj_name(self, name):
+        OBJ_CLASSES = self.classes
         _id = -1
         for i in range(OBJ_CLASSES.__len__()):
             if name == OBJ_CLASSES[i]:
@@ -286,13 +290,12 @@ class Mono3DKittiDataset(DetDataset):
     def is_label_file(filename):
         return filename.endswith(".txt")
 
-    @staticmethod
-    def is_annotation(_name):
-        return any(category == _name for category in OBJ_CLASSES)
+    def is_annotation(self, _name):
+        return any(category == _name for category in self.classes)
 
     def make_label_list(self, dataset_file):
         train_list_path = os.path.join(self.root_path, dataset_file)
-        train_list_path = './trainval.txt'
+        #  train_list_path = './trainval.txt'
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]
@@ -335,7 +338,7 @@ class Mono3DKittiDataset(DetDataset):
         lines = [line.rstrip() for line in open(file_path)]
         objs = [Object3d(line) for line in lines]
         for obj in objs:
-            if obj.type == 'Car':
+            if obj.type in self.classes:
                 return True
         return False
 
