@@ -18,7 +18,8 @@ import torch.nn as nn
 import sys
 sys.path.append('./lib')
 
-from builder.dataloader_builders.kitti_pc_3d_dataloader_builder import PointCloudKittiDataLoaderBuilder
+from builder.dataloader_builders.kitti_pc_3d_dataloader_builder import PointCloudKittiDataLoaderBuilder as DataLoaderBuilder
+from builder.dataloader_builders.kitti_mono_3d_dataloader_builder import Mono3DKittiDataLoaderBuilder
 from builder.optimizer_builder import OptimizerBuilder
 from builder.scheduler_builder import SchedulerBuilder
 from builder import model_builder
@@ -153,7 +154,7 @@ if __name__ == '__main__':
     if args.cuda:
         fasterRCNN.cuda()
 
-    data_loader_builder = PointCloudKittiDataLoaderBuilder(
+    data_loader_builder = DataLoaderBuilder(
         data_config, training=True)
     data_loader = data_loader_builder.build()
 

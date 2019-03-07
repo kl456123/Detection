@@ -9,7 +9,7 @@ class AnchorPredictor(Model):
     def init_param(self, model_config):
         self.keep_prob = model_config['keep_prob']
         self.pooling_size = model_config['pooling_size']
-        self.ndin = 2
+        self.ndin = model_config['ndin']
         self.norm_std = 0.0001
         self.norm_mean = 0
         self.truncated = True

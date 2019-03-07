@@ -33,6 +33,7 @@ from core.models.ssd_model import SSDModel
 from core.models.oft_model import OFTModel
 from core.models.mono_3d_better import Mono3DBetterFasterRCNN
 from core.models.avod_model import AVODFasterRCNN
+from core.models.avod_mono_model import AVODMonoFasterRCNN
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -118,6 +119,8 @@ def build(model_config, training=True):
         fasterRCNN = Mono3DBetterFasterRCNN(model_config)
     elif net_arch == 'avod':
         fasterRCNN = AVODFasterRCNN(model_config)
+    elif net_arch == 'avod_mono':
+        fasterRCNN = AVODMonoFasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

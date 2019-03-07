@@ -122,6 +122,7 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['center_orient'] = center_orients
         training_sample['encoded_side_points'] = encoded_side_points
         training_sample['encoded_bottom_points'] = encoded_bottom_points
+        training_sample['ground_plane'] = transform_sample['ground_plane']
 
         # use proj instead of original box
         # training_sample['boxes_2d_proj'] = boxes_2d_proj
@@ -131,7 +132,15 @@ class Mono3DKittiDataset(DetDataset):
             training_sample['gt_boxes'] = bbox[:, :4]
 
         # note here it is not truely 3d,just their some projected points in 2d
+        h = bbox_3d[:, 0]
+        w = bbox_3d[:, 1]
+        l = bbox_3d[:, 2]
+        dims = torch.stack([l, h, w], dim=-1)
+        pos = bbox_3d[:, 3:6]
+        bbox_3d = torch.cat([pos, dims, bbox_3d[:, -1:]], dim=-1)
+
         training_sample['gt_boxes_3d'] = bbox_3d
+
         training_sample['coords'] = coords
         training_sample['p2'] = transform_sample['p2']
 
@@ -193,6 +202,8 @@ class Mono3DKittiDataset(DetDataset):
             }
         transform_sample.update({'img_orig': numpy.asarray(img).copy()})
 
+        transform_sample['ground_plane'] = numpy.asarray(
+            [0, -1, 0, 1.6]).astype(numpy.float32)
         return transform_sample
 
     def __getitem__(self, index):
@@ -280,7 +291,7 @@ class Mono3DKittiDataset(DetDataset):
 
     def make_label_list(self, dataset_file):
         train_list_path = os.path.join(self.root_path, dataset_file)
-        # train_list_path = './train.txt'
+        # train_list_path = './demo.txt'
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]

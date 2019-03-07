@@ -145,11 +145,11 @@ rm results/data/*
     # --checkepoch 12
 
 # 3d proj 2d detection
-CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     --net avod \
     --load_dir /data/object/liangxiong/avod \
-    --checkpoint 3257 \
-    --checkepoch 2
+    --checkpoint 0 \
+    --checkepoch 401
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \

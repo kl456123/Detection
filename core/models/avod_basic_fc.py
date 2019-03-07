@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import copy
 from core.filler import Filler
+import torch.nn.init as init
 
 
 class AVODBasicFC(Model):
@@ -24,12 +25,6 @@ class AVODBasicFC(Model):
 
     def init_weights(self):
         pass
-        # Filler.normal_init(self.cls_pred, 0, 0.0001, True)
-        # Filler.normal_init(self.cls_pred, 0, 0.0001, True)
-        # Filler.normal_init(self.cls_pred, 0, 0.0001, True)
-        # num_layers = len(self.layer_size)
-        # for i in range(num_layers):
-            # Filler.normal_init(self.multi_branch[i][0], 0, 0.0001, True)
 
     def init_modules(self):
         # branch network

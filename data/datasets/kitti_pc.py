@@ -42,6 +42,8 @@ class PointCloudKittiDataset(DetDataset):
 
         self.imgs = self.loaded_sample_names
 
+        self.use_pc = dataset_config.get('use_pc')
+
     def _set_up_directories(self):
         self.image_dir = self._root_path + '/image_' + str(self._cam_idx)
         self.calib_dir = self._root_path + '/calib'
@@ -147,7 +149,7 @@ class PointCloudKittiDataset(DetDataset):
 
     def load_sample_names(self):
         set_file = os.path.join(self._root_path, self._dataset_file)
-        set_file = './train.txt'
+        # set_file = './demo.txt'
         with open(set_file) as f:
             sample_names = f.read().splitlines()
         return np.array(sample_names)

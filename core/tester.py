@@ -53,8 +53,8 @@ def test(eval_config, data_loader, model):
 
         duration_time = time.time() - start_time
 
-        scores = pred_probs_3d.squeeze()
-        pred_boxes_3d = pred_boxes_3d.squeeze()
+        scores = pred_probs_3d
+        pred_boxes_3d = pred_boxes_3d
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
