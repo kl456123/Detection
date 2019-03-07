@@ -20,7 +20,7 @@ P2 = np.asarray([[
 dist_intervals = [[0, 10], [10, 20], [20, 30], [30, 40], [40, 1000]]
 
 
-def read_labels(label_dir, sample_name):
+def read_labels(label_dir, sample_name, classes=['Car']):
     label_file = os.path.join(label_dir, '{}.txt'.format(sample_name))
     with open(label_file, 'r') as f:
         lines = f.readlines()
@@ -29,7 +29,7 @@ def read_labels(label_dir, sample_name):
     box_3ds = []
     for line in lines:
         items = line.strip().split(' ')
-        if not items[0] == 'Car':
+        if not items[0] in classes:
             continue
         # 4
         box_2d = items[4:8]
