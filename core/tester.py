@@ -23,6 +23,50 @@ def to_cuda(target):
         return target.cuda()
 
 
+def get_avod_predicted_boxes_3d_and_scores(final_pred_boxes_3d,
+                                           final_pred_orientations):
+    # Calculate difference between box_3d and predicted angle
+    ang_diff = final_pred_boxes_3d[:, 6] - final_pred_orientations
+
+    # Wrap differences between -pi and pi
+    two_pi = 2 * np.pi
+    ang_diff[ang_diff < -np.pi] += two_pi
+    ang_diff[ang_diff > np.pi] -= two_pi
+
+    def swap_boxes_3d_lw(boxes_3d):
+        boxes_3d_lengths = np.copy(boxes_3d[:, 3])
+        boxes_3d[:, 3] = boxes_3d[:, 4]
+        boxes_3d[:, 4] = boxes_3d_lengths
+        return boxes_3d
+
+    pi_0_25 = 0.25 * np.pi
+    pi_0_50 = 0.50 * np.pi
+    pi_0_75 = 0.75 * np.pi
+
+    # Rotate 90 degrees if difference between pi/4 and 3/4 pi
+    rot_pos_90_indices = np.logical_and(pi_0_25 < ang_diff, ang_diff < pi_0_75)
+    final_pred_boxes_3d[rot_pos_90_indices] = \
+        swap_boxes_3d_lw(final_pred_boxes_3d[rot_pos_90_indices])
+    final_pred_boxes_3d[rot_pos_90_indices, 6] += pi_0_50
+
+    # Rotate -90 degrees if difference between -pi/4 and -3/4 pi
+    rot_neg_90_indices = np.logical_and(-pi_0_25 > ang_diff,
+                                        ang_diff > -pi_0_75)
+    final_pred_boxes_3d[rot_neg_90_indices] = \
+        swap_boxes_3d_lw(final_pred_boxes_3d[rot_neg_90_indices])
+    final_pred_boxes_3d[rot_neg_90_indices, 6] -= pi_0_50
+
+    # Flip angles if abs difference if greater than or equal to 135
+    # degrees
+    swap_indices = np.abs(ang_diff) >= pi_0_75
+    final_pred_boxes_3d[swap_indices, 6] += np.pi
+
+    # Wrap to -pi, pi
+    above_pi_indices = final_pred_boxes_3d[:, 6] > np.pi
+    final_pred_boxes_3d[above_pi_indices, 6] -= two_pi
+    return final_pred_boxes_3d
+
+
 def test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
@@ -32,10 +76,10 @@ def test(eval_config, data_loader, model):
     num_samples = len(data_loader)
     for i, data in enumerate(data_loader):
         #  if i + 1 < 168:
-            #  continue
+        #  continue
         # else:
-            # import ipdb
-            # ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
         img_file = data['img_name']
         start_time = time.time()
 
@@ -46,7 +90,14 @@ def test(eval_config, data_loader, model):
         #  import ipdb
         #  ipdb.set_trace()
         pred_probs_3d = prediction['all_cls_softmax']
-        pred_boxes_3d = prediction['final_bboxes_3d']
+        # pred_boxes_3d = prediction['final_bboxes_3d']
+        final_pred_orientations = prediction['final_pred_orientations']
+        final_pred_boxes_3d = prediction['final_pred_boxes_3d']
+        final_pred_boxes_3d = get_avod_predicted_boxes_3d_and_scores(
+            final_pred_boxes_3d.detach().cpu().numpy(),
+            final_pred_orientations.detach().cpu().numpy())
+        final_pred_boxes_3d = torch.tensor(final_pred_boxes_3d).type_as(
+            pred_probs_3d)
         # pred_boxes_3d = data['anchor_boxes_3d_to_use']
         #  pred_boxes_3d = prediction['proposals_batch']
         #  pred_probs_3d = torch.ones_like(pred_boxes_3d[:, :2])
@@ -54,7 +105,7 @@ def test(eval_config, data_loader, model):
         duration_time = time.time() - start_time
 
         scores = pred_probs_3d
-        pred_boxes_3d = pred_boxes_3d
+        pred_boxes_3d = final_pred_boxes_3d
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
@@ -371,7 +422,7 @@ def save_dets_kitti(dets, label_info, output_dir):
     with open(label_path, 'w') as f:
         for det in dets:
             # xmin, ymin, xmax, ymax, cf, h, w, l, x, y, z, alpha = det
-            xmin, ymin, xmax, ymax, cf, x, y, z, l, h, w, alpha = det
+            xmin, ymin, xmax, ymax, cf, x, y, z, l, w, h, alpha = det
             res_str.append(
                 kitti_template.format(class_name, xmin, ymin, xmax, ymax, h, w,
                                       l, x, y, z, alpha, cf))

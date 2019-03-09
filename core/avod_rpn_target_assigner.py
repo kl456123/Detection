@@ -13,9 +13,6 @@ from builder import bbox_coder_builder
 from builder import similarity_calc_builder
 
 from core.avod import anchor_encoder
-from core.avod import box_4c_encoder
-from core.avod import box_3d_encoder
-from core.avod import orientation_encoder
 
 
 class TargetAssigner(object):
@@ -45,8 +42,7 @@ class TargetAssigner(object):
                gt_boxes_3d,
                gt_labels=None,
                cls_prob=None,
-               match=None,
-               ground_plane=None):
+               match=None):
         """
         Assign each bboxes with label and bbox targets for training
 
@@ -70,8 +66,8 @@ class TargetAssigner(object):
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
 
         # assign regression targets
-        reg_targets = self._assign_regression_targets(
-            match, bboxes_3d, gt_boxes_3d, ground_plane)
+        reg_targets = self._assign_regression_targets(match, bboxes_3d,
+                                                      gt_boxes_3d)
 
         # assign classification targets
         cls_targets = self._assign_classification_targets(match, gt_labels)
@@ -117,8 +113,7 @@ class TargetAssigner(object):
         cls_weights = torch.ones_like(assigned_overlaps_batch)
         return cls_weights
 
-    def _assign_regression_targets(self, match, boxes_4c, gt_boxes,
-                                   ground_plane):
+    def _assign_regression_targets(self, match, bboxes, gt_boxes):
         """
         Args:
         match: Tensor(num_batch,num_boxes)
@@ -134,23 +129,13 @@ class TargetAssigner(object):
         assigned_gt_boxes = gt_boxes.view(-1, num_feat)[match.view(-1)].view(
             batch_size, -1, num_feat)
 
-        # import ipdb
-        # ipdb.set_trace()
-        # preprocess
-        boxes_4c_gt = box_4c_encoder.torch_box_3d_to_box_4c(
-            assigned_gt_boxes[0], ground_plane[0])
-
-        offsets_gt = box_4c_encoder.torch_box_4c_to_offsets(boxes_4c[0],
-                                                            boxes_4c_gt)
-
-        ry = assigned_gt_boxes[0][:, -1]
-        orientation_gt = orientation_encoder.torch_orientation_to_angle_vector(
-            ry)
-
-        reg_targets_batch = torch.cat([offsets_gt, orientation_gt], dim=-1)
+        # reg_targets_batch = self.bbox_coder.encode_batch(bboxes,
+        # assigned_gt_boxes)
+        reg_targets_batch = anchor_encoder.torch_anchor_to_offset(
+            bboxes[0], assigned_gt_boxes[0]).unsqueeze(0)
 
         # no need grad_fn
-        return reg_targets_batch.unsqueeze(0)
+        return reg_targets_batch
 
     def _assign_classification_targets(self, match, gt_labels):
         """

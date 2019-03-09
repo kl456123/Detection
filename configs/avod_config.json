@@ -6,6 +6,18 @@
             "shuffle": true
         },
         "dataset_config": {
+            "anchor_generator_config": {
+                "area_extents": [[-40, 40], [-5, 3], [0, 70.4]],
+                "anchor_offset": [
+                    0,
+                    0
+                ],
+                "anchor_stride": [
+                    0.5,
+                    0.5
+                ],
+                "anchor_size":[[3.4, 1.7, 1.5]]
+            },
             "cache_bev": false,
             "dataset_file": "train.txt",
             "root_path": "/data/object/training",
@@ -81,6 +93,18 @@
             "shuffle": false
         },
         "dataset_config": {
+            "anchor_generator_config": {
+                "area_extents": [[-40, 40], [-5, 3], [0, 70.4]],
+                "anchor_offset": [
+                    0,
+                    0
+                ],
+                "anchor_stride": [
+                    0.5,
+                    0.5
+                ],
+                "anchor_size":[[3.4, 1.7, 1.5]]
+            },
             "cache_bev": false,
             "dataset_file": "val.txt",
             "root_path": "/data/object/training",
@@ -125,7 +149,7 @@
             "ndin": 1568,
             "keep_prob":0.5,
             "ang_out_size":2,
-            "off_out_size":6
+            "off_out_size":10
         },
         "expand_proposals_xz":0,
         "class_agnostic": true,
@@ -151,9 +175,9 @@
         "rcnn_batch_size": 512,
         "rpn_config": {
             "truncated":true,
-            "img_filter_topN": -1,
+            "img_filter_topN": 8000,
             "use_empty_filter":true,
-            "img_filter_iou_thresh":0,
+            "img_filter_iou_thresh":0.1,
             "enable_img_filter":true,
             "voxel_size":0.1,
             "anchor_predictor_config":{
@@ -184,11 +208,11 @@
             },
             "din": 1024,
             "min_size": 16,
-            "nms_thresh": 0.7,
+            "nms_thresh": 0.8,
             "num_bbox_samples": 500,
             "num_cls_samples": 2000,
             "post_nms_topN": 1000,
-            "pre_nms_topN": 2000,
+            "pre_nms_topN": 12000,
             "rpn_batch_size": 512,
             "sampler_config": {
                 "fg_fraction": 0.5
@@ -257,16 +281,16 @@
         "mGPUs": true,
         "max_epochs": 1000,
         "optimizer_config": {
-            "lr": 0.0005,
+            "lr": 0.001,
             "momentum": 0.9,
-            "type": "adam",
-            "weight_decay":0.001
+            "type": "sgd",
+            "weight_decay":0
         },
         "rng_seed": 3,
         "scheduler_config": {
             "last_epoch": -1,
             "lr_decay_gamma": 0.8,
-            "lr_decay_step": 15,
+            "lr_decay_step": 100,
             "type": "step"
         },
         "start_epoch": 1

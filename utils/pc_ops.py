@@ -32,11 +32,6 @@ def create_sliced_voxel_grid_2d(point_cloud,
                                 ground_plane,
                                 height_lo=0.2,
                                 height_hi=2.0):
-    assert point_cloud.shape[0] == 1
-    assert ground_plane.shape[0] == 1
-    point_cloud = point_cloud.cpu().numpy()[0]
-    ground_plane = ground_plane.cpu().numpy()[0]
-
     sliced_filter = create_slice_filter(point_cloud, extents, ground_plane,
                                         height_lo, height_hi)
     filtered_points = point_cloud[sliced_filter]

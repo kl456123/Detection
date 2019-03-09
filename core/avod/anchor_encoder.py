@@ -1,5 +1,6 @@
-import torch
 import numpy as np
+import torch
+
 
 def anchor_to_offset(anchors, ground_truth):
     """Encodes the anchor regression predictions with the
@@ -18,7 +19,7 @@ def anchor_to_offset(anchors, ground_truth):
     """
 
     anchors = np.asarray(anchors).reshape(-1, 6)
-    ground_truth = np.reshape(ground_truth, (6,))
+    ground_truth = np.reshape(ground_truth, (6, ))
 
     # t_x_gt = (x_gt - x_anch)/dim_x_anch
     t_x_gt = (ground_truth[0] - anchors[:, 0]) / anchors[:, 3]
@@ -32,15 +33,55 @@ def anchor_to_offset(anchors, ground_truth):
     t_dy_gt = np.log(ground_truth[4] / anchors[:, 4])
     # t_dz_gt = log(dim_z_gt/dim_z_anch)
     t_dz_gt = np.log(ground_truth[5] / anchors[:, 5])
-    anchor_offsets = np.stack((t_x_gt,
-                               t_y_gt,
-                               t_z_gt,
-                               t_dx_gt,
-                               t_dy_gt,
-                               t_dz_gt), axis=1)
+    anchor_offsets = np.stack(
+        (t_x_gt, t_y_gt, t_z_gt, t_dx_gt, t_dy_gt, t_dz_gt), axis=1)
     return anchor_offsets
 
-def offset_to_anchor(anchors, offsets, is_tensor=False):
+
+def torch_anchor_to_offset(anchors, ground_truth):
+    """Encodes the anchor regression predictions with the
+    ground truth.
+
+    This function assumes the ground_truth tensor has been arranged
+    in a way that each corresponding row in ground_truth, is matched
+    with that anchor according to the highest IoU.
+    For instance, the ground_truth might be a matrix of shape (256, 6)
+    of repeated entries for the original ground truth of shape (x, 6),
+    where each entry has been selected as the highest IoU match with that
+    anchor. This is different from the same function in numpy format, where
+    we loop through all the ground truth anchors, and calculate IoUs for
+    each and then select the match with the highest IoU.
+
+    Args:
+        anchors: A tensor of shape (N, 6) representing
+            the generated anchors.
+        ground_truth: A tensor of shape (N, 6) containing
+            the label boxes in the anchor format. Each ground-truth entry
+            has been matched with the anchor in the same entry as having
+            the highest IoU.
+
+    Returns:
+        anchor_offsets: A tensor of shape (N, 6)
+            encoded/normalized with the ground-truth, representing the
+            offsets.
+    """
+
+    # Make sure anchors and anchor_gts have the same shape
+    # dim_cond = torch.equal(tf.shape(anchors), tf.shape(ground_truth))
+
+    t_x_gt = (ground_truth[:, 0] - anchors[:, 0]) / anchors[:, 3]
+    t_y_gt = (ground_truth[:, 1] - anchors[:, 1]) / anchors[:, 4]
+    t_z_gt = (ground_truth[:, 2] - anchors[:, 2]) / anchors[:, 5]
+    t_dx_gt = torch.log(ground_truth[:, 3] / anchors[:, 3])
+    t_dy_gt = torch.log(ground_truth[:, 4] / anchors[:, 4])
+    t_dz_gt = torch.log(ground_truth[:, 5] / anchors[:, 5])
+    anchor_offsets = torch.stack(
+        (t_x_gt, t_y_gt, t_z_gt, t_dx_gt, t_dy_gt, t_dz_gt), dim=1)
+
+    return anchor_offsets
+
+
+def offset_to_anchor(anchors, offsets):
     """Decodes the anchor regression predictions with the
     anchor.
 
@@ -63,28 +104,21 @@ def offset_to_anchor(anchors, offsets, is_tensor=False):
     # z = dz * dim_z + z_anch
     z_pred = (offsets[:, 2] * anchors[:, 5]) + anchors[:, 2]
 
-    if is_tensor:
+    tensor_format = isinstance(anchors, torch.Tensor)
+    if tensor_format:
         # dim_x = exp(log(dim_x) + dx)
         dx_pred = torch.exp(torch.log(anchors[:, 3]) + offsets[:, 3])
         # dim_y = exp(log(dim_y) + dy)
         dy_pred = torch.exp(torch.log(anchors[:, 4]) + offsets[:, 4])
         # dim_z = exp(log(dim_z) + dz)
         dz_pred = torch.exp(torch.log(anchors[:, 5]) + offsets[:, 5])
-        anchors = torch.stack((x_pred,
-                            y_pred,
-                            z_pred,
-                            dx_pred,
-                            dy_pred,
-                            dz_pred), 1)
+        anchors = torch.stack(
+            (x_pred, y_pred, z_pred, dx_pred, dy_pred, dz_pred), dim=1)
     else:
         dx_pred = np.exp(np.log(anchors[:, 3]) + offsets[:, 3])
         dy_pred = np.exp(np.log(anchors[:, 4]) + offsets[:, 4])
         dz_pred = np.exp(np.log(anchors[:, 5]) + offsets[:, 5])
-        anchors = np.stack((x_pred,
-                            y_pred,
-                            z_pred,
-                            dx_pred,
-                            dy_pred,
-                            dz_pred), axis=1)
+        anchors = np.stack(
+            (x_pred, y_pred, z_pred, dx_pred, dy_pred, dz_pred), axis=1)
 
     return anchors

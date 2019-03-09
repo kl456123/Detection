@@ -9,11 +9,11 @@ class GridAnchor3dGenerator(object):
         self.anchor_size = anchor_generator_config['anchor_size']
         self.anchor_stride = anchor_generator_config['anchor_stride']
 
-    def generate_np(self, ground_plane):
+    def generate(self, ground_plane):
 
-        ground_plane = ground_plane.cpu().numpy()
-        assert ground_plane.shape[0] == 1, 'Only one plane is supported now'
-        ground_plane = ground_plane[0]
+        # ground_plane = ground_plane.cpu().numpy()
+        # assert ground_plane.shape[0] == 1, 'Only one plane is supported now'
+        # ground_plane = ground_plane[0]
 
         area_extents = self.area_extents
         anchor_3d_sizes = self.anchor_size

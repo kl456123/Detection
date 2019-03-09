@@ -13,7 +13,13 @@ from wavedata.tools.core import calib_utils
 from wavedata.tools.obj_detection import obj_utils
 from core.bev_generator import BevGenerator
 from core.avod.bev_slices import BevSlices
+from core.anchor_generators.grid_anchor_3d_generator import GridAnchor3dGenerator
 from utils import kitti_aug
+from core.avod import box_3d_encoder
+from core.avod import anchor_filter
+from core.avod import anchor_projector
+
+from utils import pc_ops
 
 
 class PointCloudKittiDataset(DetDataset):
@@ -24,6 +30,8 @@ class PointCloudKittiDataset(DetDataset):
         self._root_path = dataset_config['root_path']
         self._dataset_file = dataset_config['dataset_file']
         self._area_extents = dataset_config['area_extents']
+        self._bev_extents = [self._area_extents[0], self._area_extents[2]]
+        self._voxel_size = 0.1
         self.transforms = transforms
 
         self._cam_idx = 2
@@ -43,6 +51,9 @@ class PointCloudKittiDataset(DetDataset):
         self.imgs = self.loaded_sample_names
 
         self.use_pc = dataset_config.get('use_pc')
+
+        self.anchor_generator = GridAnchor3dGenerator(
+            dataset_config['anchor_generator_config'])
 
     def _set_up_directories(self):
         self.image_dir = self._root_path + '/image_' + str(self._cam_idx)
@@ -137,19 +148,9 @@ class PointCloudKittiDataset(DetDataset):
 
         return self.OBJ_CLASSES.index(class_type)
 
-    def _obj_label_to_box_3d(self, obj_label):
-        """
-        box_3d format: ()
-        """
-        box_3d = np.zeros(7)
-        box_3d[3:6] = [obj_label.l, obj_label.h, obj_label.w]
-        box_3d[:3] = obj_label.t
-        box_3d[6] = obj_label.ry
-        return box_3d
-
     def load_sample_names(self):
         set_file = os.path.join(self._root_path, self._dataset_file)
-        set_file = './train.txt'
+        set_file = './demo.txt'
         with open(set_file) as f:
             sample_names = f.read().splitlines()
         return np.array(sample_names)
@@ -204,40 +205,55 @@ class PointCloudKittiDataset(DetDataset):
         obj_labels = obj_utils.read_labels(self._label_dir, int(sample_name))
         # filter it already
         obj_labels = self.filter_labels(obj_labels, self.classes)
-        label_boxes_3d = np.asarray(
-            [self._obj_label_to_box_3d(obj_label) for obj_label in obj_labels])
+        label_boxes_3d = np.asarray([
+            box_3d_encoder.object_label_to_box_3d(obj_label)
+            for obj_label in obj_labels
+        ])
         label_classes = [
             self._class_str_to_index(obj_label.type)
             for obj_label in obj_labels
         ]
         label_classes = np.asarray(label_classes, dtype=np.int32)
 
-        # point cloud
-        # (w,h) in wavedata
-        # im_size = [image_shape[1], image_shape[0]]
-        # point_cloud = obj_utils.get_lidar_point_cloud(
-        # int(sample_name), self.calib_dir, self.velo_dir, im_size=im_size).T
-        # import ipdb
-        # ipdb.set_trace()
         point_cloud = self.get_point_cloud(sample_name)
 
-        if random.random() < 0.5:
-            # pca jitter
-            image_input[:, :, 0:3] = kitti_aug.apply_pca_jitter(
-                image_input[:, :, 0:3])
-
-        # import ipdb
-        # ipdb.set_trace()
         # bev maps
         bev_images = self.bev_generator.generate_bev(
             point_cloud.transpose(), ground_plane, self._area_extents)
 
-        # stack height maps and density map
-        # height_maps = bev_images.get('height_maps')
-        # density_map = bev_images.get('density_map')
-        # bev_input = np.dstack((*height_maps, density_map))
-        # bev_input = bev_input.transpose((2, 0, 1)).astype(np.float32)
         bev_input = bev_images.astype(np.float32)
+
+        # Generate anchors
+        grid_anchor_boxes_3d = self.anchor_generator.generate(ground_plane)
+        voxel_grid_2d = pc_ops.create_sliced_voxel_grid_2d(
+            point_cloud, self._area_extents, self._voxel_size, ground_plane)
+
+        all_anchor_boxes_3d = grid_anchor_boxes_3d
+
+        anchors_to_use = box_3d_encoder.box_3d_to_anchor(all_anchor_boxes_3d)
+        empty_filter = anchor_filter.get_empty_anchor_filter_2d(
+            anchors_to_use, voxel_grid_2d, density_threshold=1)
+        anchor_boxes_3d_to_use = all_anchor_boxes_3d[empty_filter]
+
+        anchor_boxes_3d_to_use = np.asarray(anchor_boxes_3d_to_use)
+
+        anchors_to_use = box_3d_encoder.box_3d_to_anchor(
+            anchor_boxes_3d_to_use)
+        # num_anchors = len(anchors_to_use)
+
+        # Project anchors to bev and img
+        bev_anchors, bev_anchors_norm = anchor_projector.project_to_bev(
+            anchors_to_use, self._bev_extents)
+        img_anchors, img_anchors_norm = anchor_projector.project_to_image_space(
+            anchors_to_use, stereo_calib_p2, image_shape)
+
+        # generate anchor iou and offset
+        label_anchors = box_3d_encoder.box_3d_to_anchor(
+            label_boxes_3d, ortho_rotate=True)
+        img_anchors_gt, img_anchors_gt_norm = anchor_projector.project_to_image_space(
+            label_anchors, stereo_calib_p2, image_shape)
+        bev_anchors_gt, bev_anchors_gt_norm = anchor_projector.project_to_bev(
+            label_anchors, self._bev_extents)
 
         transform_sample = {}
         transform_sample['bev_input'] = bev_input.astype(np.float32)
@@ -248,9 +264,24 @@ class PointCloudKittiDataset(DetDataset):
         transform_sample['point_cloud'] = point_cloud.astype(np.float32)
         transform_sample['label_boxes_3d'] = label_boxes_3d.astype(np.float32)
         transform_sample['label_classes'] = label_classes
+        transform_sample['label_anchors'] = label_anchors.astype(np.float32)
         transform_sample['img_name'] = img_path
         transform_sample['img_orig'] = image_input.astype(np.float32)
         transform_sample['im_info'] = [1, 1, 1]
+        transform_sample['image_shape'] = image_shape
+        transform_sample['img_anchors_gt'] = img_anchors_gt.astype(np.float32)
+
+        # anchors info
+        transform_sample['bev_anchors'] = bev_anchors.astype(np.float32)
+        transform_sample['img_anchors'] = img_anchors.astype(np.float32)
+        transform_sample['bev_anchors_norm'] = bev_anchors_norm.astype(
+            np.float32)
+        transform_sample['img_anchors_norm'] = img_anchors_norm.astype(
+            np.float32)
+        transform_sample['bev_anchors_gt_norm'] = bev_anchors_gt_norm.astype(
+            np.float32)
+        transform_sample['bev_anchors_gt'] = bev_anchors_gt.astype(np.float32)
+        transform_sample['anchors'] = anchors_to_use.astype(np.float32)
 
         return transform_sample
 

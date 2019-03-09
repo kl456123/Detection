@@ -102,7 +102,7 @@ def proj_3dTo2d(pred_boxes_3d, p2):
         ]
         r = np.array(r).reshape(3, 3)
 
-        l,h,w = target['dimension']
+        l,w,h = target['dimension']
 
         # The points sequence is 1, 2, 3, 4, 5, 6, 7, 8.
         # Front face: 1, 2, 6, 5; left face: 2, 3, 7, 6

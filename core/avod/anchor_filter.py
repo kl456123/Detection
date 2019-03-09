@@ -109,8 +109,8 @@ def get_empty_anchor_filter_2d(anchors, voxel_grid_2d, density_threshold=1.):
 
     # Create the filter
     anchor_filter = point_density_score >= density_threshold
-    anchor_true = anchor_filter[anchor_filter == True]
-    print('len anchor true', len(anchor_true))
+    # anchor_true = anchor_filter[anchor_filter == True]
+    # print('len anchor true', len(anchor_true))
 
     return anchor_filter
 

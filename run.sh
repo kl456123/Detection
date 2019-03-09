@@ -116,8 +116,8 @@
     # --model /data/object/liangxiong/faster_rcnn/mono_3d/kitti/faster_rcnn_53_3257.pth
 
 CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
-    --net avod \
-    --out_path /data/object/liangxiong/avod \
+    --net avod_real \
+    --out_path /data/object/liangxiong/avod_real \
     --config configs/avod_config.json
 # --checkepoch 1 \
 # --checkpoint 3257 \

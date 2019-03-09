@@ -3,8 +3,9 @@ This module converts data to and from the 'box_3d' format
  [x, y, z, l, w, h, ry]
 """
 import numpy as np
-import torch
+import math
 
+import torch
 from wavedata.tools.obj_detection import obj_utils
 
 
@@ -100,23 +101,51 @@ def box_3d_to_anchor(boxes_3d, ortho_rotate=False):
 
     return anchors
 
-def box_3d_to_3d_iou_format(boxes_3d):
-    """ Returns a numpy array of 3d box format for iou calculation
+
+def torch_box_3d_to_anchor(boxes_3d):
+    """Converts a box_3d tensor to anchor format by ortho rotating it.
+    This is similar to 'box_3d_to_anchor' above however it takes
+    a tensor as input.
+
     Args:
-        boxes_3d: list of 3d boxes
+        boxes_3d: N x 7 tensor of box_3d in the format [x, y, z, l, w, h, ry]
+
     Returns:
-        new_anchor_list: numpy array of 3d box format for iou
+        anchors: N x 6 tensor of anchors in anchor form ->
+            [x, y, z, dim_x, dim_y, dim_z]
     """
-    boxes_3d = np.asarray(boxes_3d)
 
-    iou_3d_boxes = np.zeros([len(boxes_3d), 7])
-    iou_3d_boxes[:, 4:7] = boxes_3d[:, 0:3]
-    iou_3d_boxes[:, 1] = boxes_3d[:, 3]
-    iou_3d_boxes[:, 2] = boxes_3d[:, 4]
-    iou_3d_boxes[:, 3] = boxes_3d[:, 5]
-    iou_3d_boxes[:, 0] = boxes_3d[:, 6]
+    boxes_3d = boxes_3d.view([-1, 7])
 
-    return iou_3d_boxes
+    anchors_x = boxes_3d[:, 0]
+    anchors_y = boxes_3d[:, 1]
+    anchors_z = boxes_3d[:, 2]
+
+    # Dimensions along x, y, z
+    box_l = boxes_3d[:, 3]
+    box_w = boxes_3d[:, 4]
+    box_h = boxes_3d[:, 5]
+    box_ry = boxes_3d[:, 6]
+
+    # Ortho rotate
+    half_pi = np.pi / 2
+    box_ry = torch.round(box_ry / half_pi) * half_pi
+    cos_ry = torch.abs(torch.cos(box_ry))
+    sin_ry = torch.abs(torch.sin(box_ry))
+
+    anchors_dimx = box_l * cos_ry + box_w * sin_ry
+    anchors_dimy = box_h
+    anchors_dimz = box_w * cos_ry + box_l * sin_ry
+
+    anchors = torch.stack(
+        [
+            anchors_x, anchors_y, anchors_z, anchors_dimx, anchors_dimy,
+            anchors_dimz
+        ],
+        dim=1)
+
+    return anchors
+
 
 def anchors_to_box_3d(anchors, fix_lw=False):
     """Converts an anchor form [x, y, z, dim_x, dim_y, dim_z]
@@ -135,26 +164,91 @@ def anchors_to_box_3d(anchors, fix_lw=False):
         N x 7 ndarray of box_3d
     """
 
-    anchors = np.asarray(anchors)
-    box_3d = np.zeros((len(anchors), 7))
+    tensor_format = isinstance(anchors, torch.Tensor)
 
-    # Set x, y, z
-    box_3d[:, 0:3] = anchors[:, 0:3]
-    # Set length to dim_x
-    box_3d[:, 3] = anchors[:, 3]
-    # Set width to dim_z
-    box_3d[:, 4] = anchors[:, 5]
-    # Set height to dim_y
-    box_3d[:, 5] = anchors[:, 4]
-    box_3d[:, 6] = 0
+    if tensor_format:
+        anchors = torch.tensor(anchors).type_as(anchors)
+        num_anchors = anchors.shape[0]
+        box_3d = torch.zeros((num_anchors, 7)).type_as(anchors)
 
-    if fix_lw:
-        swapped_indices = box_3d[:, 4] > box_3d[:, 3]
-        modified_box_3d = np.copy(box_3d)
-        modified_box_3d[swapped_indices, 3] = box_3d[swapped_indices, 4]
-        modified_box_3d[swapped_indices, 4] = box_3d[swapped_indices, 3]
-        modified_box_3d[swapped_indices, 6] = -np.pi/2
-        return modified_box_3d
+        # Set x, y, z
+        box_3d[:, 0:3] = anchors[:, 0:3]
+        # Set length to dim_x
+        box_3d[:, 3] = anchors[:, 3]
+        # Set width to dim_z
+        box_3d[:, 4] = anchors[:, 5]
+        # Set height to dim_y
+        box_3d[:, 5] = anchors[:, 4]
+        box_3d[:, 6] = 0
+
+        if fix_lw:
+            swapped_indices = box_3d[:, 4] > box_3d[:, 3]
+            modified_box_3d = box_3d.clone()
+            modified_box_3d[swapped_indices, 3] = box_3d[swapped_indices, 4]
+            modified_box_3d[swapped_indices, 4] = box_3d[swapped_indices, 3]
+            modified_box_3d[swapped_indices, 6] = -math.pi / 2
+            return modified_box_3d
+
+    else:
+
+        anchors = np.asarray(anchors)
+        box_3d = np.zeros((len(anchors), 7))
+
+        # Set x, y, z
+        box_3d[:, 0:3] = anchors[:, 0:3]
+        # Set length to dim_x
+        box_3d[:, 3] = anchors[:, 3]
+        # Set width to dim_z
+        box_3d[:, 4] = anchors[:, 5]
+        # Set height to dim_y
+        box_3d[:, 5] = anchors[:, 4]
+        box_3d[:, 6] = 0
+
+        if fix_lw:
+            swapped_indices = box_3d[:, 4] > box_3d[:, 3]
+            modified_box_3d = np.copy(box_3d)
+            modified_box_3d[swapped_indices, 3] = box_3d[swapped_indices, 4]
+            modified_box_3d[swapped_indices, 4] = box_3d[swapped_indices, 3]
+            modified_box_3d[swapped_indices, 6] = -np.pi / 2
+            return modified_box_3d
 
     return box_3d
 
+
+def box_3d_to_3d_iou_format(boxes_3d):
+    """ Returns a numpy array of 3d box format for iou calculation
+    Args:
+        boxes_3d: list of 3d boxes
+    Returns:
+        new_anchor_list: numpy array of 3d box format for iou
+    """
+    boxes_3d = np.asarray(boxes_3d)
+
+    iou_3d_boxes = np.zeros([len(boxes_3d), 7])
+    iou_3d_boxes[:, 4:7] = boxes_3d[:, 0:3]
+    iou_3d_boxes[:, 1] = boxes_3d[:, 3]
+    iou_3d_boxes[:, 2] = boxes_3d[:, 4]
+    iou_3d_boxes[:, 3] = boxes_3d[:, 5]
+    iou_3d_boxes[:, 0] = boxes_3d[:, 6]
+
+    return iou_3d_boxes
+
+
+def torch_box_3d_diagonal_length(boxes_3d):
+    """Returns the diagonal length of box_3d
+
+    Args:
+        boxes_3d: An tensor of shape (N x 7) of boxes in box_3d format.
+
+    Returns:
+        Diagonal of all boxes, a tensor of (N,) shape.
+    """
+
+    lengths_sqr = torch.square(boxes_3d[:, 3])
+    width_sqr = torch.square(boxes_3d[:, 4])
+    height_sqr = torch.square(boxes_3d[:, 5])
+
+    lwh_sqr_sums = lengths_sqr + width_sqr + height_sqr
+    diagonals = torch.sqrt(lwh_sqr_sums)
+
+    return diagonals

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from data.datasets.kitti_pc import PointCloudKittiDataset
+from data.datasets.kitti_real_pc import PointCloudKittiDataset
 
 from builder.dataloader_builder import DataLoaderBuilder
 import data.transforms.kitti_transform as trans
