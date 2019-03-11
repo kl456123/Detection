@@ -50,7 +50,9 @@ class RealAVODFasterRCNN(Model):
         return img_bbox_filter
 
     def anchors_norm2_anchors(self, bev_anchors_norm, bev_shape):
-        extents_tiled = [bev_shape[::-1], bev_shape[::-1]]
+        extents_tiled = [
+            bev_shape[1], bev_shape[0], bev_shape[1], bev_shape[0]
+        ]
         bev_anchors = bev_anchors_norm * torch.tensor(extents_tiled).view(
             -1, 4).type_as(bev_anchors_norm)
         return bev_anchors
@@ -65,7 +67,8 @@ class RealAVODFasterRCNN(Model):
         # rois_batch = prediction_dict['rois_batch']
         top_proposals = prediction_dict['proposals_batch']
         ground_plane = feed_dict['ground_plane']
-        class_labels = feed_dict['label_classes']
+        # class_labels = feed_dict['label_classes']
+        print('rcnn proposals: ', top_proposals.shape[0])
 
         # expand rois
         expand_length = self.expand_proposals_xz
@@ -90,26 +93,32 @@ class RealAVODFasterRCNN(Model):
         # ipdb.set_trace()
 
         # img
-        image_shape = img_feat_maps.shape[-2:]
+        # image_shape = img_feat_maps.shape[-2:]
+        image_shape = feed_dict['image_shape'][0]
         img_proposal_boxes, img_proposal_boxes_norm = anchor_projector.torch_project_to_image_space(
             top_proposals, feed_dict['stereo_calib_p2'][0], image_shape)
 
         # use img filter again
-        label_anchors = feed_dict['label_anchors']
-        img_anchors_gt, img_anchors_gt_norm = anchor_projector.torch_project_to_image_space(
-            label_anchors[0], feed_dict['stereo_calib_p2'][0], image_shape)
+        # label_anchors = feed_dict['label_anchors']
+        # img_anchors_gt, img_anchors_gt_norm = anchor_projector.torch_project_to_image_space(
+        # label_anchors[0], feed_dict['stereo_calib_p2'][0], image_shape)
+        img_anchors_gt = feed_dict['img_anchors_gt']
         img_bbox_filter = self.create_img_bbox_filter(
-            img_proposal_boxes.unsqueeze(0), img_anchors_gt.unsqueeze(0))[0]
+            img_proposal_boxes.unsqueeze(0), img_anchors_gt)[0]
 
         top_proposals = top_proposals[img_bbox_filter]
         img_proposal_boxes = img_proposal_boxes[img_bbox_filter]
 
         bev_proposal_boxes, bev_proposal_boxes_norm = anchor_projector.project_to_bev(
             top_proposals, self.bev_extents)
-        bev_shape = bev_feat_maps.shape[-2:]
-        extents_tiled = [bev_shape[::-1], bev_shape[::-1]]
-        bev_proposal_boxes_pixel = bev_proposal_boxes_norm * torch.tensor(
-            extents_tiled).view(-1, 4).type_as(bev_proposal_boxes_norm)
+        # bev_shape = bev_feat_maps.shape[-2:]
+        bev_shape = feed_dict['bev_shape'][0]
+        # extents_tiled = [bev_shape[::-1], bev_shape[::-1]]
+        # bev_proposal_boxes_pixel = bev_proposal_boxes_norm * torch.tensor(
+        # extents_tiled).view(-1, 4).type_as(bev_proposal_boxes_norm)
+
+        bev_proposal_boxes_pixel = self.anchors_norm2_anchors(
+            bev_proposal_boxes_norm, bev_shape)
         roi_indexes = torch.zeros_like(bev_proposal_boxes_pixel[:, -1:])
         bev_rois_boxes = torch.cat([roi_indexes, bev_proposal_boxes_pixel],
                                    dim=-1)
@@ -167,6 +176,7 @@ class RealAVODFasterRCNN(Model):
                 prediction_boxes_4c, ground_plane[0])
             prediction_anchors = box_3d_encoder.torch_box_3d_to_anchor(
                 prediction_boxes_3d)
+
             # nms for final detection
             avod_bev_boxes, avod_bev_boxes_norm = anchor_projector.project_to_bev(
                 prediction_anchors, self.area_extents)
@@ -174,12 +184,13 @@ class RealAVODFasterRCNN(Model):
                 avod_bev_boxes_norm, bev_shape)
             avod_bev_boxes_pixel = torch.round(avod_bev_boxes_pixel)
 
-            # keep_idx, _ = box_ops.nms(avod_bev_boxes_pixel,
-            # all_cls_softmax[:, -1], self.nms_thresh)
-            # keep_idx = keep_idx.long().view(-1)
-            # final_bboxes_3d = prediction_boxes_3d[keep_idx]
-            # all_cls_softmax = all_cls_softmax[keep_idx]
-            # all_orientations= all_orientations[keep_idx]
+            keep_idx, _ = box_ops.nms(avod_bev_boxes_pixel,
+                                      all_cls_softmax[:, -1], self.nms_thresh)
+            keep_idx = keep_idx.long().view(-1)
+            prediction_boxes_3d = prediction_boxes_3d[keep_idx]
+            all_cls_softmax = all_cls_softmax[keep_idx]
+            all_orientations = all_orientations[keep_idx]
+            proposal_boxes_3d = proposal_boxes_3d[keep_idx]
 
             # import ipdb
             # ipdb.set_trace()
@@ -256,6 +267,8 @@ class RealAVODFasterRCNN(Model):
         self.target_assigner = TargetAssigner(
             model_config['target_assigner_config'])
 
+        self.target_assigner.analyzer.append_gt = False
+
         # coder
         self.bbox_coder = self.target_assigner.bbox_coder
 
@@ -274,21 +287,20 @@ class RealAVODFasterRCNN(Model):
         gt_boxes_3d = feed_dict['label_boxes_3d']
         top_proposals = prediction_dict['proposals_batch'].unsqueeze(0)
 
-        # import ipdb
-        # ipdb.set_trace()
         # increate batch dim
-        gt_boxes_bev, gt_boxes_bev_norm = anchor_projector.project_to_bev(
-            gt_boxes_3d[0], self.bev_extents)
+        # gt_boxes_bev, gt_boxes_bev_norm = anchor_projector.project_to_bev(
+        # gt_boxes_3d[0], self.bev_extents)
+        bev_anchors_gt_norm = feed_dict['bev_anchors_gt_norm']
         top_boxes_bev, top_boxes_bev_norm = anchor_projector.project_to_bev(
             top_proposals[0], self.bev_extents)
-        bev_shape = feed_dict['bev_feat_maps'].shape[-2:]
+        bev_shape = feed_dict['bev_shape'][0]
 
-        gt_boxes_bev_pixel = self.anchors_norm2_anchors(gt_boxes_bev_norm,
+        gt_boxes_bev_pixel = self.anchors_norm2_anchors(bev_anchors_gt_norm,
                                                         bev_shape)
         boxes_bev_pixel = self.anchors_norm2_anchors(top_boxes_bev_norm,
                                                      bev_shape)
 
-        gt_boxes_bev_pixel = torch.round(gt_boxes_bev_pixel).unsqueeze(0)
+        gt_boxes_bev_pixel = torch.round(gt_boxes_bev_pixel)
         boxes_bev_pixel = torch.round(boxes_bev_pixel).unsqueeze(0)
         proposal_boxes_4c = prediction_dict['proposal_boxes_4c'].unsqueeze(0)
 
@@ -347,7 +359,7 @@ class RealAVODFasterRCNN(Model):
         rcnn_reg_loss = rcnn_reg_loss.view(rcnn_reg_loss.shape[0], -1).sum(
             dim=1) / num_reg_coeff.float()
 
-        loss_dict['rcnn_cls_loss'] = rcnn_cls_loss * 10
+        loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
         loss_dict['rcnn_bbox_loss'] = rcnn_reg_loss
 
         prediction_dict['rcnn_reg_weights'] = rcnn_reg_weights[
@@ -355,6 +367,8 @@ class RealAVODFasterRCNN(Model):
 
         fake_match = self.target_assigner.analyzer.match
         num_gt = feed_dict['label_classes'].numel()
+        # import ipdb
+        # ipdb.set_trace()
         self.target_assigner.analyzer.analyze_ap(
             fake_match, rcnn_cls_probs.detach(), num_gt, thresh=0.5)
         return loss_dict

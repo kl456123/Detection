@@ -6,8 +6,6 @@ import core.avod.bev_utils as bev_utils
 
 
 class BevSlices(bev_generator.BevGenerator):
-
-
     def __init__(self, config):
         """BEV maps created using slices of the point cloud.
 
@@ -27,10 +25,7 @@ class BevSlices(bev_generator.BevGenerator):
         self.height_per_division = \
             (self.height_hi - self.height_lo) / self.num_slices
 
-    def generate_bev(self,
-                     point_cloud,
-                     ground_plane,
-                     area_extents):
+    def generate_bev(self, point_cloud, ground_plane, area_extents):
         """Generates the BEV maps dictionary. One height map is created for
         each slice of the point cloud. One density map is created for
         the whole point cloud.
@@ -56,11 +51,7 @@ class BevSlices(bev_generator.BevGenerator):
             height_hi = height_lo + self.height_per_division
 
             slice_filter = bev_utils.create_slice_filter(
-                point_cloud,
-                area_extents,
-                ground_plane,
-                height_lo,
-                height_hi)
+                point_cloud, area_extents, ground_plane, height_lo, height_hi)
 
             # Apply slice filter
             slice_points = all_points[slice_filter]
@@ -70,7 +61,8 @@ class BevSlices(bev_generator.BevGenerator):
                 # Create Voxel Grid 2D
                 voxel_grid_2d = VoxelGrid2D()
                 voxel_grid_2d.voxelize_2d(
-                    slice_points, self.voxel_size,
+                    slice_points,
+                    self.voxel_size,
                     extents=area_extents,
                     ground_plane=ground_plane,
                     create_leaf_layout=False)
@@ -92,14 +84,14 @@ class BevSlices(bev_generator.BevGenerator):
 
         # Rotate height maps 90 degrees
         # (transpose and flip) is faster than np.rot90
-        height_maps_out = [np.flip(height_maps[map_idx].transpose(), axis=0)
-                           for map_idx in range(len(height_maps))]
+        height_maps_out = [
+            np.flip(
+                height_maps[map_idx].transpose(), axis=0)
+            for map_idx in range(len(height_maps))
+        ]
 
         density_slice_filter = bev_utils.create_slice_filter(
-            point_cloud,
-            area_extents,
-            ground_plane,
-            self.height_lo,
+            point_cloud, area_extents, ground_plane, self.height_lo,
             self.height_hi)
 
         density_points = all_points[density_slice_filter]
@@ -123,21 +115,13 @@ class BevSlices(bev_generator.BevGenerator):
             num_pts_per_voxel=density_voxel_grid_2d.num_pts_in_voxel,
             norm_value=16)
 
-        # bev_maps = dict()
-        # bev_maps['height_maps'] = height_maps_out
-        # bev_maps['density_map'] = density_map
-        # return bev_maps
+        bev_maps = dict()
+        bev_maps['height_maps'] = height_maps_out
+        bev_maps['density_map'] = density_map
+        return bev_maps
 
-        return np.concatenate((height_maps_out, np.expand_dims(density_map, axis=0)), axis=0)
-
-
-    def generate_color_bev(self,
-                           source,
-                           point_cloud,
-                           point_colors,
-                           ground_plane,
-                           area_extents,
-                           voxel_size):
+    def generate_color_bev(self, source, point_cloud, point_colors,
+                           ground_plane, area_extents, voxel_size):
         """Generates the BEV maps dictionary. One height map is created for
         each slice of the point cloud. One density map is created for
         the whole point cloud.
@@ -159,7 +143,6 @@ class BevSlices(bev_generator.BevGenerator):
         all_points = np.transpose(point_cloud)
         all_colors = np.transpose(point_colors)
 
-
         height_maps = []
 
         for slice_idx in range(self.num_slices):
@@ -168,11 +151,7 @@ class BevSlices(bev_generator.BevGenerator):
             height_hi = height_lo + self.height_per_division
 
             slice_filter = BevSlices.create_slice_filter(
-                point_cloud,
-                area_extents,
-                ground_plane,
-                height_lo,
-                height_hi)
+                point_cloud, area_extents, ground_plane, height_lo, height_hi)
 
             # Apply slice filter
             slice_points = all_points[slice_filter]
@@ -183,7 +162,9 @@ class BevSlices(bev_generator.BevGenerator):
                 # Create Voxel Grid 2D
                 voxel_grid_2d = VoxelGrid2D()
                 voxel_grid_2d.voxelize_2d_color(
-                    slice_points, slice_colors, voxel_size,
+                    slice_points,
+                    slice_colors,
+                    voxel_size,
                     extents=area_extents,
                     ground_plane=ground_plane,
                     create_leaf_layout=False)
@@ -193,17 +174,16 @@ class BevSlices(bev_generator.BevGenerator):
 
             # Create empty BEV images
             height_map = np.zeros((voxel_grid_2d.num_divisions[0],
-                                   voxel_grid_2d.num_divisions[2],
-                                   3))
+                                   voxel_grid_2d.num_divisions[2], 3))
 
             # Only update pixels where voxels have max height values,
             # and normalize by height of slices
             voxel_grid_2d.heights = voxel_grid_2d.heights - height_lo
             # height_map[voxel_indices[:, 0], voxel_indices[:, 1]] = \
             #     np.asarray(voxel_grid_2d.heights) / self.height_per_division
-            height_map[voxel_indices[:, 0], voxel_indices[:, 1], :] = voxel_grid_2d.colors
+            height_map[voxel_indices[:, 0],
+                       voxel_indices[:, 1], :] = voxel_grid_2d.colors
             height_map = np.rot90(height_map)
-
 
             height_maps.append(height_map)
 
@@ -214,10 +194,7 @@ class BevSlices(bev_generator.BevGenerator):
         height_maps_out = height_maps
 
         density_slice_filter = self.kitti_utils.create_slice_filter(
-            point_cloud,
-            area_extents,
-            ground_plane,
-            self.height_lo,
+            point_cloud, area_extents, ground_plane, self.height_lo,
             self.height_hi)
 
         density_points = all_points[density_slice_filter]

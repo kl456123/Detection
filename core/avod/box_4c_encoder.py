@@ -137,7 +137,7 @@ def torch_box_3d_to_box_4c(boxes_3d, ground_plane):
 
     # Append the column of ones to be able to multiply
     points_stacked = torch.stack([x_corners, z_corners, ones_row], dim=1)
-    corners = torch.matmul(tr_mat, points_stacked)
+    corners = torch.matmul(tr_mat.permute(0, 2, 1), points_stacked)
 
     # Discard the last row (ones)
     corners = corners[:, 0:2]
@@ -162,7 +162,7 @@ def torch_box_3d_to_box_4c(boxes_3d, ground_plane):
     return box_4c
 
 
-def np_box_4c_to_box_3d(box_4c, ground_plane):
+def torch_box_4c_to_box_3d(box_4c, ground_plane):
     """Converts a single box_4c to box_3d. The longest midpoint-midpoint
     length is used to calculate orientation. Points are projected onto the
     orientation vector and the orthogonal vector to get the bounding box_3d.
@@ -177,13 +177,14 @@ def np_box_4c_to_box_3d(box_4c, ground_plane):
     Returns:
         box_3d (7,)
     """
-    # Extract corners
-    corners = box_4c[0:8].reshape(2, 4)
 
-    p1 = corners[:, 0]
-    p2 = corners[:, 1]
-    p3 = corners[:, 2]
-    p4 = corners[:, 3]
+    # Extract corners
+    corners = box_4c[:, 0:8].reshape(-1, 2, 4)
+
+    p1 = corners[:, :, 0]
+    p2 = corners[:, :, 1]
+    p3 = corners[:, :, 2]
+    p4 = corners[:, :, 3]
 
     # Check for longest axis
     midpoint_12 = (p1 + p2) / 2.0
@@ -192,86 +193,62 @@ def np_box_4c_to_box_3d(box_4c, ground_plane):
     midpoint_14 = (p1 + p4) / 2.0
 
     vec_34_12 = midpoint_12 - midpoint_34
-    vec_34_12_mag = np.linalg.norm(vec_34_12)
+    vec_34_12_mag = torch.norm(vec_34_12, dim=-1)
 
     vec_23_14 = midpoint_14 - midpoint_23
-    vec_23_14_mag = np.linalg.norm(vec_23_14)
+    vec_23_14_mag = torch.norm(vec_23_14, dim=-1)
 
     # Check which midpoint -> midpoint vector is longer
-    if vec_34_12_mag > vec_23_14_mag:
-        # vec_34_12_mag longer
-        vec_34_12_norm = vec_34_12 / vec_34_12_mag
+    # midpoint , vec, vec_norm
+    cond = vec_34_12_mag > vec_23_14_mag
+    midpoint = torch.zeros_like(midpoint_34).type_as(midpoint_34)
+    midpoint[cond] = midpoint_34[cond]
+    midpoint[~cond] = midpoint_23[~cond]
 
-        vec_mid_34_p1 = p1 - midpoint_34
-        vec_mid_34_p2 = p2 - midpoint_34
-        vec_mid_34_p3 = p3 - midpoint_34
-        vec_mid_34_p4 = p4 - midpoint_34
+    vec = torch.zeros_like(vec_34_12).type_as(vec_34_12)
+    vec[cond] = vec_34_12[cond]
+    vec[~cond] = vec_23_14[~cond]
 
-        l1 = np.dot(vec_mid_34_p1, vec_34_12_norm)
-        l2 = np.dot(vec_mid_34_p2, vec_34_12_norm)
-        l3 = np.dot(vec_mid_34_p3, vec_34_12_norm)
-        l4 = np.dot(vec_mid_34_p4, vec_34_12_norm)
-        all_lengths = [l1, l2, l3, l4]
+    vec_mag = torch.zeros_like(vec_34_12_mag).type_as(vec_34_12_mag)
+    vec_mag[cond] = vec_34_12_mag[cond]
+    vec_mag[~cond] = vec_23_14_mag[~cond]
 
-        min_l = np.amin(all_lengths)
-        max_l = np.amax(all_lengths)
-        length_out = max_l - min_l
+    vec_norm = vec / vec_mag.unsqueeze(-1)
 
-        ortho_norm = np.asarray([-vec_34_12_norm[1], vec_34_12_norm[0]])
-        w1 = np.dot(vec_mid_34_p1, ortho_norm)
-        w2 = np.dot(vec_mid_34_p2, ortho_norm)
-        w3 = np.dot(vec_mid_34_p3, ortho_norm)
-        w4 = np.dot(vec_mid_34_p4, ortho_norm)
-        all_widths = [w1, w2, w3, w4]
+    vec_mid_p1 = p1 - midpoint
+    vec_mid_p2 = p2 - midpoint
+    vec_mid_p3 = p3 - midpoint
+    vec_mid_p4 = p4 - midpoint
 
-        min_w = np.amin(all_widths)
-        max_w = np.amax(all_widths)
-        w_diff = max_w + min_w
-        width_out = max_w - min_w
+    l1 = (vec_mid_p1 * vec_norm).sum(dim=1)
+    l2 = (vec_mid_p2 * vec_norm).sum(dim=1)
+    l3 = (vec_mid_p3 * vec_norm).sum(dim=1)
+    l4 = (vec_mid_p4 * vec_norm).sum(dim=1)
+    all_lengths = torch.stack([l1, l2, l3, l4], dim=-1)
 
-        ry_out = -np.arctan2(vec_34_12[1], vec_34_12[0])
+    min_l, _ = torch.min(all_lengths, dim=-1, keepdim=True)
+    max_l, _ = torch.max(all_lengths, dim=-1, keepdim=True)
+    length_out = max_l - min_l
+    length_out = length_out[:, 0]
 
-        # New centroid
-        centroid = midpoint_34 + vec_34_12_norm * (min_l + max_l) / 2.0 + \
-            ortho_norm * w_diff
+    ortho_norm = torch.stack([-vec_norm[:, 1], vec_norm[:, 0]], dim=-1)
+    w1 = (vec_mid_p1 * ortho_norm).sum(dim=1)
+    w2 = (vec_mid_p2 * ortho_norm).sum(dim=1)
+    w3 = (vec_mid_p3 * ortho_norm).sum(dim=1)
+    w4 = (vec_mid_p4 * ortho_norm).sum(dim=1)
+    all_widths = torch.stack([w1, w2, w3, w4], dim=-1)
 
-    else:
-        # vec_23_14_mag longer
-        vec_23_14_norm = vec_23_14 / vec_23_14_mag
+    min_w, _ = torch.min(all_widths, dim=-1, keepdim=True)
+    max_w, _ = torch.max(all_widths, dim=-1, keepdim=True)
+    w_diff = max_w + min_w
+    width_out = max_w - min_w
+    width_out = width_out[:, 0]
 
-        vec_mid_23_p1 = p1 - midpoint_23
-        vec_mid_23_p2 = p2 - midpoint_23
-        vec_mid_23_p3 = p3 - midpoint_23
-        vec_mid_23_p4 = p4 - midpoint_23
+    ry_out = -torch.atan2(vec[:, 1], vec[:, 0])
 
-        l1 = np.dot(vec_mid_23_p1, vec_23_14_norm)
-        l2 = np.dot(vec_mid_23_p2, vec_23_14_norm)
-        l3 = np.dot(vec_mid_23_p3, vec_23_14_norm)
-        l4 = np.dot(vec_mid_23_p4, vec_23_14_norm)
-        all_lengths = [l1, l2, l3, l4]
-
-        min_l = np.amin(all_lengths)
-        max_l = np.amax(all_lengths)
-
-        length_out = max_l - min_l
-
-        ortho_norm = np.asarray([-vec_23_14_norm[1], vec_23_14_norm[0]])
-        w1 = np.dot(vec_mid_23_p1, ortho_norm)
-        w2 = np.dot(vec_mid_23_p2, ortho_norm)
-        w3 = np.dot(vec_mid_23_p3, ortho_norm)
-        w4 = np.dot(vec_mid_23_p4, ortho_norm)
-        all_widths = [w1, w2, w3, w4]
-
-        min_w = np.amin(all_widths)
-        max_w = np.amax(all_widths)
-        w_diff = max_w + min_w
-        width_out = max_w - min_w
-
-        ry_out = -np.arctan2(vec_23_14[1], vec_23_14[0])
-
-        # New centroid
-        centroid = midpoint_23 + vec_23_14_norm * (min_l + max_l) / 2.0 + \
-            ortho_norm * w_diff
+    # New centroid
+    centroid = midpoint + vec_norm * (min_l + max_l) / 2.0 + \
+        ortho_norm * w_diff
 
     # Find new centroid y
     a = ground_plane[0]
@@ -279,11 +256,11 @@ def np_box_4c_to_box_3d(box_4c, ground_plane):
     c = ground_plane[2]
     d = ground_plane[3]
 
-    h1 = box_4c[8]
-    h2 = box_4c[9]
+    h1 = box_4c[:, 8]
+    h2 = box_4c[:, 9]
 
-    centroid_x = centroid[0]
-    centroid_z = centroid[1]
+    centroid_x = centroid[:, 0]
+    centroid_z = centroid[:, 1]
 
     ground_y = -(a * centroid_x + c * centroid_z + d) / b
 
@@ -291,10 +268,12 @@ def np_box_4c_to_box_3d(box_4c, ground_plane):
     centroid_y = ground_y - h1
     height_out = h2 - h1
 
-    box_3d_out = np.stack([
-        centroid_x, centroid_y, centroid_z, length_out, width_out, height_out,
-        ry_out
-    ])
+    box_3d_out = torch.stack(
+        [
+            centroid_x, centroid_y, centroid_z, length_out, width_out,
+            height_out, ry_out
+        ],
+        dim=-1)
 
     return box_3d_out
 
@@ -361,7 +340,7 @@ def calculate_box_3d_info(vec_dir, vec_dir_mag, p1, p2, p3, p4, midpoint):
     return centroid, length_out, width_out, ry_out
 
 
-def torch_box_4c_to_box_3d(boxes_4c, ground_plane):
+def _torch_box_4c_to_box_3d(boxes_4c, ground_plane):
     """Vectorized box_4c to box_3d conversion
 
     Args:

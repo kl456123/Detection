@@ -31,7 +31,9 @@ from core.avod import anchor_projector
 
 class RPNModel(Model):
     def anchors_norm2_anchors(self, bev_anchors_norm, bev_shape):
-        extents_tiled = [bev_shape[::-1], bev_shape[::-1]]
+        extents_tiled = [
+            bev_shape[1], bev_shape[0], bev_shape[1], bev_shape[0]
+        ]
         try:
             bev_anchors = bev_anchors_norm * torch.tensor(extents_tiled).view(
                 -1, 4).type_as(bev_anchors_norm)
@@ -41,6 +43,8 @@ class RPNModel(Model):
         return bev_anchors
 
     def forward(self, feed_dict):
+        # import ipdb
+        # ipdb.set_trace()
         self.preprocess(feed_dict)
 
         img_feat_maps = self.img_feature_extractor.forward(feed_dict['img'])
@@ -57,13 +61,14 @@ class RPNModel(Model):
         bev_proposal_input = bev_bottle_neck
 
         anchors = feed_dict['anchors']
+        print('rpn anchors: ', anchors.shape[0])
 
         img_anchors = feed_dict['img_anchors']
         bev_anchors_norm = feed_dict['bev_anchors_norm']
-        self.bev_shape = bev_proposal_input.shape[-2:]
+        # self.bev_shape = bev_proposal_input.shape[-2:]
+        bev_shape = feed_dict['bev_shape'][0]
 
-        bev_anchors = self.anchors_norm2_anchors(bev_anchors_norm,
-                                                 self.bev_shape)
+        bev_anchors = self.anchors_norm2_anchors(bev_anchors_norm, bev_shape)
         anchor_indexes = torch.zeros_like(img_anchors[:, :1])
         img_rois = torch.cat([anchor_indexes, img_anchors], dim=-1)
         bev_rois = torch.cat([anchor_indexes, bev_anchors], dim=-1)
@@ -81,10 +86,10 @@ class RPNModel(Model):
 
         # 3d nms problem is reduced to 2d nms in bev
         proposals_batch = self.generate_proposal(rpn_cls_probs, anchors,
-                                                 rpn_bbox_preds)
-        if self.training:
-            label_anchors = feed_dict['label_anchors']
-            proposals_batch = self.append_gt(proposals_batch, label_anchors)
+                                                 rpn_bbox_preds, bev_shape)
+        # if self.training:
+        # label_anchors = feed_dict['label_anchors']
+        # proposals_batch = self.append_gt(proposals_batch, label_anchors)
 
         predict_dict = {
             'proposals_batch': proposals_batch,
@@ -138,7 +143,8 @@ class RPNModel(Model):
         feed_dict['bev_anchors'] = bev_anchors[final_bbox_filter]
         feed_dict['img_anchors'] = img_anchors[final_bbox_filter]
 
-    def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds):
+    def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
+                          bev_shape):
         # TODO create a new Function
         """
         Args:
@@ -172,7 +178,7 @@ class RPNModel(Model):
             bev_proposal_boxes_norm).type_as(regressed_anchors)
 
         bev_proposal_boxes = self.anchors_norm2_anchors(
-            bev_proposal_boxes_norm, self.bev_shape)
+            bev_proposal_boxes_norm, bev_shape)
         bev_proposal_boxes = torch.round(bev_proposal_boxes)
 
         # nms
@@ -319,6 +325,9 @@ class RPNModel(Model):
 
     def loss(self, prediction_dict, feed_dict):
 
+        # import ipdb
+        # ipdb.set_trace()
+
         loss_dict = {}
         label_anchors = feed_dict['label_anchors']
         anchors = feed_dict['anchors'].unsqueeze(0)
@@ -326,7 +335,8 @@ class RPNModel(Model):
         bev_anchors_gt_norm = feed_dict['bev_anchors_gt_norm']
         bev_anchors_norm = feed_dict['bev_anchors_norm']
         bev_shape = feed_dict['bev_feat_maps'].shape[-2:]
-        bev_anchors = self.anchors_norm2_anchors(bev_anchors_norm, bev_shape)
+        bev_anchors = self.anchors_norm2_anchors(bev_anchors_norm,
+                                                 bev_shape).unsqueeze(0)
         bev_anchors_gt = self.anchors_norm2_anchors(bev_anchors_gt_norm,
                                                     bev_shape)
 
@@ -373,8 +383,7 @@ class RPNModel(Model):
 
         # bbox loss
         rcnn_bbox_preds = prediction_dict['rpn_bbox_preds'].unsqueeze(0)
-        rcnn_reg_loss = self.rpn_bbox_loss(rcnn_bbox_preds,
-                                           rcnn_reg_targets)
+        rcnn_reg_loss = self.rpn_bbox_loss(rcnn_bbox_preds, rcnn_reg_targets)
         rcnn_reg_loss = rcnn_reg_loss * rcnn_reg_weights.unsqueeze(-1)
         rcnn_reg_loss = rcnn_reg_loss.view(rcnn_reg_loss.shape[0], -1).sum(
             dim=1) / num_reg_coeff.float()

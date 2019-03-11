@@ -281,16 +281,16 @@
         "mGPUs": true,
         "max_epochs": 1000,
         "optimizer_config": {
-            "lr": 0.001,
+            "lr": 0.0005,
             "momentum": 0.9,
-            "type": "sgd",
+            "type": "adam",
             "weight_decay":0
         },
         "rng_seed": 3,
         "scheduler_config": {
             "last_epoch": -1,
             "lr_decay_gamma": 0.8,
-            "lr_decay_step": 100,
+            "lr_decay_step": 15,
             "type": "step"
         },
         "start_epoch": 1

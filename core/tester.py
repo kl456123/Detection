@@ -23,8 +23,8 @@ def to_cuda(target):
         return target.cuda()
 
 
-def get_avod_predicted_boxes_3d_and_scores(final_pred_boxes_3d,
-                                           final_pred_orientations):
+def get_avod_predicted_boxes_3d_and_scores(
+        final_pred_boxes_3d, final_pred_orientations, final_pred_softmax):
     # Calculate difference between box_3d and predicted angle
     ang_diff = final_pred_boxes_3d[:, 6] - final_pred_orientations
 
@@ -64,10 +64,64 @@ def get_avod_predicted_boxes_3d_and_scores(final_pred_boxes_3d,
     # Wrap to -pi, pi
     above_pi_indices = final_pred_boxes_3d[:, 6] > np.pi
     final_pred_boxes_3d[above_pi_indices, 6] -= two_pi
-    return final_pred_boxes_3d
+
+    # Find max class score index
+    not_bkg_scores = final_pred_softmax[:, 1:]
+    final_pred_types = np.argmax(not_bkg_scores, axis=1)
+
+    # Take max class score (ignoring background)
+    final_pred_scores = np.array([])
+    for pred_idx in range(len(final_pred_boxes_3d)):
+        all_class_scores = not_bkg_scores[pred_idx]
+        max_class_score = all_class_scores[final_pred_types[pred_idx]]
+        final_pred_scores = np.append(final_pred_scores, max_class_score)
+
+    # Stack into prediction format
+    predictions_and_scores = np.column_stack(
+        [final_pred_boxes_3d, final_pred_scores])
+
+    return predictions_and_scores
 
 
 def test(eval_config, data_loader, model):
+    num_samples = len(data_loader)
+
+    for i, data in enumerate(data_loader):
+        img_file = data['img_name']
+        start_time = time.time()
+
+        with torch.no_grad():
+            data = to_cuda(data)
+            prediction = model(data)
+
+        duration_time = time.time() - start_time
+
+        # import ipdb
+        # ipdb.set_trace()
+        pred_probs_3d = prediction['all_cls_softmax'].detach().cpu().numpy()
+        final_pred_orientations = prediction['final_pred_orientations'].detach(
+        ).cpu().numpy()
+        final_pred_boxes_3d = prediction['final_pred_boxes_3d'].detach().cpu(
+        ).numpy()
+        predictions_and_scores = get_avod_predicted_boxes_3d_and_scores(
+            final_pred_boxes_3d, final_pred_orientations, pred_probs_3d)
+
+        p2 = data['stereo_calib_p2'][0].detach().cpu().numpy()
+        cls_boxes = proj_3dTo2d(predictions_and_scores, p2)
+        final_dets = np.concatenate(
+            [cls_boxes, predictions_and_scores], axis=-1)
+
+        thresh = eval_config['thresh']
+        final_dets = final_dets[final_dets[:, -1] > thresh]
+
+        save_dets(final_dets, img_file[0], 'kitti', eval_config['eval_out'])
+
+        sys.stdout.write(
+            '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
+        sys.stdout.flush()
+
+
+def _test(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -87,8 +141,8 @@ def test(eval_config, data_loader, model):
             data = to_cuda(data)
             prediction = model(data)
 
-        #  import ipdb
-        #  ipdb.set_trace()
+        import ipdb
+        ipdb.set_trace()
         pred_probs_3d = prediction['all_cls_softmax']
         # pred_boxes_3d = prediction['final_bboxes_3d']
         final_pred_orientations = prediction['final_pred_orientations']
@@ -422,7 +476,7 @@ def save_dets_kitti(dets, label_info, output_dir):
     with open(label_path, 'w') as f:
         for det in dets:
             # xmin, ymin, xmax, ymax, cf, h, w, l, x, y, z, alpha = det
-            xmin, ymin, xmax, ymax, cf, x, y, z, l, w, h, alpha = det
+            xmin, ymin, xmax, ymax, x, y, z, l, w, h, alpha, cf = det
             res_str.append(
                 kitti_template.format(class_name, xmin, ymin, xmax, ymax, h, w,
                                       l, x, y, z, alpha, cf))

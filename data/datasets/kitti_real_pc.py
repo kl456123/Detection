@@ -150,7 +150,7 @@ class PointCloudKittiDataset(DetDataset):
 
     def load_sample_names(self):
         set_file = os.path.join(self._root_path, self._dataset_file)
-        set_file = './demo.txt'
+        # set_file = './demo.txt'
         with open(set_file) as f:
             sample_names = f.read().splitlines()
         return np.array(sample_names)
@@ -167,24 +167,7 @@ class PointCloudKittiDataset(DetDataset):
 
         return loaded_sample_names
 
-    def get_point_cloud(self, sample_name):
-        """The point cloud should be projected to rect coordinates
-        """
-        pc_file_path = os.path.join(self.velo_dir,
-                                    '{}.bin'.format(sample_name))
-        points = np.fromfile(pc_file_path, dtype=np.float32).reshape((-1, 4))
-
-        # Project points to rect coordinates
-        calib_file_path = os.path.join(self.calib_dir,
-                                       '{}.txt'.format(sample_name))
-        calib = Calibration(calib_file_path)
-        points_rect = calib.project_velo_to_rect(points[:, :3])
-        points[:, :3] = points_rect
-
-        return points_rect
-
     def get_transform_sample(self, index):
-
         sample_name = self.loaded_sample_names[index]
         # image
         img_path = self.get_rgb_image_path(sample_name)
@@ -215,13 +198,21 @@ class PointCloudKittiDataset(DetDataset):
         ]
         label_classes = np.asarray(label_classes, dtype=np.int32)
 
-        point_cloud = self.get_point_cloud(sample_name)
+        # point_cloud = self.get_point_cloud(sample_name)
+        im_size = (image_shape[1], image_shape[0])
+        point_cloud = obj_utils.get_lidar_point_cloud(
+            int(sample_name), self.calib_dir, self.velo_dir, im_size=im_size)
 
         # bev maps
-        bev_images = self.bev_generator.generate_bev(
-            point_cloud.transpose(), ground_plane, self._area_extents)
+        bev_images = self.bev_generator.generate_bev(point_cloud, ground_plane,
+                                                     self._area_extents)
 
-        bev_input = bev_images.astype(np.float32)
+        height_maps = bev_images.get('height_maps')
+        density_map = bev_images.get('density_map')
+        bev_input = np.dstack((*height_maps, density_map))
+
+        bev_input = bev_input.transpose(2, 0, 1)
+        bev_shape = bev_input.shape[-2:]
 
         # Generate anchors
         grid_anchor_boxes_3d = self.anchor_generator.generate(ground_plane)
@@ -282,6 +273,11 @@ class PointCloudKittiDataset(DetDataset):
             np.float32)
         transform_sample['bev_anchors_gt'] = bev_anchors_gt.astype(np.float32)
         transform_sample['anchors'] = anchors_to_use.astype(np.float32)
+
+        transform_sample['image_shape'] = np.asarray(image_shape).astype(
+            np.float32)
+        transform_sample['bev_shape'] = np.asarray(bev_shape).astype(
+            np.float32)
 
         return transform_sample
 

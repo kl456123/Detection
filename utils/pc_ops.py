@@ -5,6 +5,7 @@ Utils for processing point cloud
 import numpy as np
 from wavedata.tools.core.integral_image_2d import IntegralImage2D
 from wavedata.tools.core.voxel_grid_2d import VoxelGrid2D
+from wavedata.tools.obj_detection import obj_utils
 
 import torch
 
@@ -14,16 +15,15 @@ def create_slice_filter(point_cloud,
                         ground_plane,
                         height_lo=0.2,
                         height_hi=2.0):
-    offset_filter = get_point_filter(point_cloud, extents, ground_plane,
-                                     height_hi)
+    offset_filter = obj_utils.get_point_filter(point_cloud, extents,
+                                               ground_plane, height_hi)
 
-    road_filter = get_point_filter(point_cloud, extents, ground_plane,
-                                   height_lo)
+    road_filter = obj_utils.get_point_filter(point_cloud, extents,
+                                             ground_plane, height_lo)
 
     sliced_filter = np.logical_xor(offset_filter, road_filter)
 
     return sliced_filter
-    # return filtered_point_cloud
 
 
 def create_sliced_voxel_grid_2d(point_cloud,
@@ -34,7 +34,9 @@ def create_sliced_voxel_grid_2d(point_cloud,
                                 height_hi=2.0):
     sliced_filter = create_slice_filter(point_cloud, extents, ground_plane,
                                         height_lo, height_hi)
+    point_cloud = np.asarray(point_cloud).T
     filtered_points = point_cloud[sliced_filter]
+
     # Create Voxel Grid
     voxel_grid_2d = VoxelGrid2D()
     voxel_grid_2d.voxelize_2d(
