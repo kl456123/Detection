@@ -218,19 +218,19 @@ def generate_side_points(dets_2d, orient):
     # ipdb.set_trace()
     cls_orient_argmax = orient[:, 0].astype(np.int32)
     # use r_2d
-    r_2ds = orient[:, 6]
-    cls_orient_argmax2 = np.zeros_like(cls_orient_argmax).astype(np.int32)
-    cls_orient_argmax2[r_2ds < 0.5] = 0
-    cls_orient_argmax2[r_2ds > 0.5] = 1
+    #  r_2ds = orient[:, 6]
+    #  cls_orient_argmax2 = np.zeros_like(cls_orient_argmax).astype(np.int32)
+    #  cls_orient_argmax2[r_2ds < 0.5] = 0
+    #  cls_orient_argmax2[r_2ds > 0.5] = 1
 
     # use cls_orient_4s
-    cls_orient_4s = orient[:, 7]
-    cls_orient_argmax3 = np.zeros_like(cls_orient_argmax).astype(np.int32)
-    cls_orient_argmax3[(cls_orient_4s == 0) | (cls_orient_4s == 2)] = 1
-    cls_orient_argmax3[(cls_orient_4s == 1) | (cls_orient_4s == 3)] = 0
+    #  cls_orient_4s = orient[:, 7]
+    #  cls_orient_argmax3 = np.zeros_like(cls_orient_argmax).astype(np.int32)
+    #  cls_orient_argmax3[(cls_orient_4s == 0) | (cls_orient_4s == 2)] = 1
+    #  cls_orient_argmax3[(cls_orient_4s == 1) | (cls_orient_4s == 3)] = 0
 
     # use center orient
-    center_orients = orient[:, 8].astype(np.int32)
+    #  center_orients = orient[:, 8].astype(np.int32)
 
     # cls_orient_argmax = center_orients
 
@@ -329,11 +329,13 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     num = dets_3d.shape[0]
 
     # ry
-    lines = dets_3d[:, 3:]
-    #  lines = generate_side_points(dets_2d, dets_3d[:, 3:])
-    # ry = twopoints2direction(lines)
-    ry = np.zeros_like(dets_3d[:, 0])
-    ry[...] = np.pi/2
+    # import ipdb
+    # ipdb.set_trace()
+    #  lines = dets_3d[:, 3:]
+    lines = generate_side_points(dets_2d, dets_3d[:, 3:])
+    ry = twopoints2direction(lines, p2)
+    #  ry = np.zeros_like(dets_3d[:, 0])
+    #  ry[...] = np.pi/2
     # ry = fourpoints2direction(lines)
 
     # decode h_2ds and c_2ds
@@ -503,9 +505,9 @@ def final_decision(errors, box_2d, corner, trans, r, p2):
     error_filter = False
 
     # filtered by real condition
-    z_filter = trans[:, -1] > 0
-    trans = trans[z_filter]
-    errors = errors[z_filter]
+    #  z_filter = trans[:, -1] > 0
+    #  trans = trans[z_filter]
+    #  errors = errors[z_filter]
 
     # import ipdb
     # ipdb.set_trace()

@@ -37,6 +37,7 @@ def visualize_bbox(img,
                    size=None,
                    save=False,
                    title='test',
+                   keypoints=None,
                    display=True):
     """
     Args:
@@ -100,6 +101,17 @@ def visualize_bbox(img,
                 img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
                 color=(255, 255, 255),
                 thickness=2)
+
+        if keypoints is not None:
+            keypoints = keypoints.reshape((-1, 2))
+            point_size = 1
+            point_color = (0, 0, 255)
+            for point in keypoints:
+                cv2.circle(
+                    img, (point[0], point[1]),
+                    point_size,
+                    point_color,
+                    thickness=2)
         if display:
             cv2.imshow(title, img)
             cv2.waitKey(0)
@@ -107,6 +119,10 @@ def visualize_bbox(img,
         if save:
             img_path = 'res_%d.jpg' % idx
             cv2.imwrite(img_path, img)
+
+
+def visualize_points(img, keypoints):
+    pass
 
 
 def vis_featmap(featmap):
@@ -118,8 +134,6 @@ def vis_featmap(featmap):
     if len(featmap.shape) == 3:
         featmap = featmap.sum(axis=-1)
 
-    import ipdb
-    ipdb.set_trace()
     assert len(featmap.shape) == 2
     sns.set()
     ax = sns.heatmap(featmap)
@@ -186,6 +200,11 @@ def read_pkl(pkl_name):
     return pkl_data
 
 
+def read_keypoints(keypoint_file):
+    keypoints = np.loadtxt(keypoint_file).astype(np.float32)
+    return keypoints
+
+
 def test():
     img_name = './img3.jpg'
     img = read_img(img_name)
@@ -223,6 +242,8 @@ def parser_args():
         help='title of display window',
         type=str,
         default='test')
+    parser.add_argument(
+        '--keypoint', dest='keypoint', help='file of keypoints')
     args = parser.parse_args()
     return args
 
@@ -253,4 +274,10 @@ if __name__ == '__main__':
     else:
         gt_boxes = []
     boxes = read_kitti(args.kitti)
-    visualize_bbox(img, boxes, gt_boxes, save=True, title=args.title)
+
+    if args.keypoint is not None:
+        keypoints = read_keypoints(args.keypoint)
+    else:
+        keypoints = None
+    visualize_bbox(
+        img, boxes, gt_boxes, save=True, title=args.title, keypoints=keypoints)

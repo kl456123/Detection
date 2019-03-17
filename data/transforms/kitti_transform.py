@@ -13,6 +13,7 @@ from utils.box_vis import draw_line
 from ..kitti_helper import process_center_coords
 from utils.kitti_util import get_gt_boxes_2d_ground_rect, get_gt_boxes_2d_ground_rect_v2
 from utils.kitti_util import encode_side_points, encode_bottom_points
+from utils.kitti_util import generate_keypoint_gt
 
 
 class Sample(object):
@@ -545,13 +546,14 @@ class Boxes3DTo2D(object):
     def __call__(self, sample):
         # h,w,l,t,ry
         boxes_3d = sample['bbox_3d']
-        boxes_2d = sample['bbox']
-        center_x = (boxes_2d[:, 2] + boxes_2d[:, 0]) / 2
-        center_y = (boxes_2d[:, 3] + boxes_2d[:, 1]) / 2
-        center = np.stack([center_x, center_y], axis=-1)
-        w = (boxes_2d[:, 2] - boxes_2d[:, 0] + 1)
-        h = (boxes_2d[:, 3] - boxes_2d[:, 1] + 1)
-        dims = np.stack([w, h], axis=-1)
+        #  boxes_2d = sample['bbox']
+        #  center_x = (boxes_2d[:, 2] + boxes_2d[:, 0]) / 2
+        #  center_y = (boxes_2d[:, 3] + boxes_2d[:, 1]) / 2
+        #  center = np.stack([center_x, center_y], axis=-1)
+        #  w = (boxes_2d[:, 2] - boxes_2d[:, 0] + 1)
+        #  h = (boxes_2d[:, 3] - boxes_2d[:, 1] + 1)
+        #  dims = np.stack([w, h], axis=-1)
+        #  img_shape = sample['img'].shape[:, -2:]
 
         p2 = sample['p2']
         coords = []
@@ -580,6 +582,8 @@ class Boxes3DTo2D(object):
         gt_boxes_2d_ground = []
         encoded_side_points = []
         encoded_bottom_points = []
+        keypoint_gt = []
+        keypoint_gt_weights = []
 
         for i in range(boxes_3d.shape[0]):
             target = {}
@@ -653,6 +657,9 @@ class Boxes3DTo2D(object):
             else:
                 visible_side = left_side_points_2d
 
+            keypoint_gt.append(corners_xy[[0, 1, 2, 3]].reshape(-1))
+            keypoint_gt_weights.append([1, 1, 1, 1])
+
             # visible side truncated with 2d box
             cls_orient, reg_orient = truncate_box(box_2d_proj, visible_side)
 
@@ -722,6 +729,12 @@ class Boxes3DTo2D(object):
         sample['p2'] = sample['p2'].astype(np.float32)
         sample['encoded_bottom_points'] = np.stack(
             encoded_bottom_points, axis=0).astype(np.float32)
+        # import ipdb
+        # ipdb.set_trace()
+        sample['keypoint_gt'] = np.stack(
+            keypoint_gt, axis=0).astype(np.float32)
+        sample['keypoint_gt_weights'] = np.stack(
+            keypoint_gt_weights, axis=0).astype(np.float32)
 
         return sample
 

@@ -19,6 +19,7 @@ from core.samplers.detection_sampler import DetectionSampler
 from utils.visualizer import FeatVisualizer
 
 import functools
+from core.profiler import Profiler
 
 
 class FasterRCNN(Model):
@@ -30,13 +31,6 @@ class FasterRCNN(Model):
         base_feat = self.feature_extractor.first_stage_feature(
             feed_dict['img'])
         feed_dict.update({'base_feat': base_feat})
-        # batch_size = base_feat.shape[0]
-        self.visualizer.visualize(
-            feed_dict['img'],
-            nn.Sequential(* [
-                self.feature_extractor.first_stage_feature, self.rpn_model.
-                rpn_conv, nn.ReLU(), self.rpn_model.rpn_cls_score
-            ]))
 
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
@@ -144,7 +138,9 @@ class FasterRCNN(Model):
         # self.reduce = model_config.get('reduce')
         self.reduce = True
 
-        self.visualizer = FeatVisualizer()
+        # self.visualizer = FeatVisualizer()
+
+        self.profiler = Profiler()
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']

@@ -62,17 +62,17 @@ rm results/data/*
     # --checkepoch 38 \
     # --load_dir /data/object/liangxiong/fpn
 
-# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
-    # --checkepoch 88 \
-    # --net semantic \
-    # --load_dir /data/object/liangxiong/semantic \
+    # --checkepoch 47 \
+    # --net mono_3d_simpler \
+    # --load_dir /data/object/liangxiong/mask_rcnn
     # --thresh 0.1
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 40 \
     # --net semantic \
-    # --load_dir /data/object/liangxiong/semantic_05
+    # --load_dir /data/object/liangxiong/semantic_test
 
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
@@ -126,21 +126,21 @@ rm results/data/*
     # --checkpoint 3257 \
     # --checkepoch 25
 
-# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    # --net refine_oft \
-    # --load_dir /data/object/liangxiong/tmp/oft \
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net oft_4c \
+    # --load_dir /data/object/liangxiong/oft_4c \
     # --checkpoint 6683 \
-    # --checkepoch 10 \
+    # --checkepoch 7
     # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
     # --calib_file ./000000.txt
 
-CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
-    --net oft \
-    --load_dir /data/object/liangxiong/tmp/oft \
-    --checkpoint 6683 \
-    --checkepoch 40 \
-    --calib_file /home/pengwu/Detection/000001.txt \
-    --img_dir /data/liangxiong/yizhuang/2019_0107_140749/keyframes/
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net oft \
+    # --load_dir /data/object/liangxiong/oft \
+    # --checkpoint 6683 \
+    # --checkepoch 155
+# --calib_file /home/pengwu/Detection/000001.txt \
+# --img_dir /data/liangxiong/yizhuang/2019_0107_140749/keyframes/
 
 # --feat_vis True
 # --img_path /home/pengwu/mono3d/seq/frames/1535193200792697000.jpg \
@@ -157,11 +157,11 @@ CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkepoch 12
 
 # 3d proj 2d detection
-# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
-    # --net mono_3d \
-    # --load_dir /data/object/liangxiong/mono_3d_angle_reg_3d \
-    # --checkpoint 3257 \
-    # --checkepoch 40
+CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    --net mono_3d_final \
+    --load_dir /data/object/liangxiong/mono_3d_final \
+    --checkpoint 3257 \
+    --checkepoch 100
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \

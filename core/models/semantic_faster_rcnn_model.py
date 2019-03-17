@@ -16,7 +16,8 @@ from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
-
+from core.profiler import Profiler
+from utils.visualizer import FeatVisualizer
 import functools
 
 
@@ -164,6 +165,8 @@ class SemanticFasterRCNN(Model):
 
         # sampler
         self.sampler = BalancedSampler(model_config['sampler_config'])
+
+        self.profiler = Profiler()
 
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']

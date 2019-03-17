@@ -30,7 +30,7 @@ def extract_pc_in_box3d(pc, box3d):
 
 def inverse_rigid_trans(Tr):
     ''' Inverse a rigid body transform matrix (3x4 as [R|t])
-        [R'|-R't; 0|1]
+    [R'|-R't; 0|1]
     '''
     inv_Tr = np.zeros_like(Tr)  # 3x4
     inv_Tr[0:3, 0:3] = np.transpose(Tr[0:3, 0:3])
@@ -49,7 +49,7 @@ def get_lidar_in_image_fov(pc_velo,
     ''' Filter lidar points, keep those in image FOV '''
     pts_2d = calib.project_velo_to_image(pc_velo)
     fov_inds = (pts_2d[:, 0] < xmax) & (pts_2d[:, 0] >= xmin) & \
-               (pts_2d[:, 1] < ymax) & (pts_2d[:, 1] >= ymin)
+        (pts_2d[:, 1] < ymax) & (pts_2d[:, 1] >= ymin)
     fov_inds = fov_inds & (pc_velo[:, 0] > clip_distance)
 
     imgfov_pc_velo = pc_velo[fov_inds, :]
@@ -63,15 +63,15 @@ def project_to_image(pts_3d, P):
     ''' Project 3d points to image plane.
 
     Usage: pts_2d = projectToImage(pts_3d, P)
-      input: pts_3d: nx3 matrix
-             P:      3x4 projection matrix
-      output: pts_2d: nx2 matrix
+    input: pts_3d: nx3 matrix
+    P:      3x4 projection matrix
+    output: pts_2d: nx2 matrix
 
-      P(3x4) dot pts_3d_extended(4xn) = projected_pts_2d(3xn)
-      => normalize projected_pts_2d(2xn)
+    P(3x4) dot pts_3d_extended(4xn) = projected_pts_2d(3xn)
+    => normalize projected_pts_2d(2xn)
 
-      <=> pts_3d_extended(nx4) dot P'(4x3) = projected_pts_2d(nx3)
-          => normalize projected_pts_2d(nx2)
+    <=> pts_3d_extended(nx4) dot P'(4x3) = projected_pts_2d(nx3)
+    => normalize projected_pts_2d(nx2)
     '''
     n = pts_3d.shape[0]
     pts_3d_extend = np.hstack((pts_3d, np.ones((n, 1))))
@@ -84,7 +84,7 @@ def project_to_image(pts_3d, P):
 def proj_3dTo2d(pred_boxes_3d, p2):
     """
     Args:
-        pred_boxes_3d: shape(N, 3,3,1) (dim,pos,ry)
+    pred_boxes_3d: shape(N, 3,3,1) (dim,pos,ry)
     """
     num = pred_boxes_3d.shape[0]
     boxes_2d_projs = []
@@ -720,3 +720,11 @@ def encode_bottom_points(corners_xy, box_2d_proj):
     bottom_points = corners_xy[[0, 1, 2, 3]]
     encoded_bottom_points = (bottom_points - center_proj) / dims_proj
     return encoded_bottom_points.reshape(-1)
+
+
+def generate_keypoint_gt(visible_side, image_shape):
+    idx = np.argmax(visible_side[:, 1])
+    keypoint = visible_side[idx]
+    #  keypoint[0] /= image_shape[1]
+    #  keypoint[1] /= image_shape[0]
+    return keypoint

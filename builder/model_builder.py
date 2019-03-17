@@ -33,6 +33,8 @@ from core.models.ssd_model import SSDModel
 from core.models.oft_model import OFTModel
 from core.models.mono_3d_better import Mono3DBetterFasterRCNN
 from core.models.refine_oft_model import RefineOFTModel
+from core.models.oft_4c_model import OFT4CModel
+from core.models.mono_3d_final import Mono3DFinalFasterRCNN
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -118,6 +120,10 @@ def build(model_config, training=True):
         fasterRCNN = Mono3DBetterFasterRCNN(model_config)
     elif net_arch == 'refine_oft':
         fasterRCNN = RefineOFTModel(model_config)
+    elif net_arch == 'oft_4c':
+        fasterRCNN = OFT4CModel(model_config)
+    elif net_arch == 'mono_3d_final':
+        fasterRCNN = Mono3DFinalFasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

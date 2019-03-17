@@ -25,9 +25,9 @@ class OrientationLoss(nn.Module):
         cls_preds = preds[:, :2]
         cls_loss = self.cls_loss(cls_preds, cls_orient)
 
-        depth_ind_targets = targets[:, 3].long()
-        depth_ind_preds = preds[:, 4:4 + 11]
-        depth_ind_loss = self.cls_loss(depth_ind_preds, depth_ind_targets)
+        # depth_ind_targets = targets[:, 3].long()
+        # depth_ind_preds = preds[:, 4:4 + 11]
+        # depth_ind_loss = self.cls_loss(depth_ind_preds, depth_ind_targets)
 
         # cls_orient_4s = targets[:, 7].long()
         # cls_orient_4s_preds = preds[:, 8:12]
@@ -41,14 +41,14 @@ class OrientationLoss(nn.Module):
         # center_orients)
 
         # reg loss
-        reg_orient = torch.cat([targets[:, 1:3], targets[:, 4:]], dim=-1)
-        reg_preds = torch.cat([preds[:, 2:4], preds[:, 15:]], dim=-1)
+        reg_orient = torch.cat([targets[:, 1:3]], dim=-1)
+        reg_preds = torch.cat([preds[:, 2:4]], dim=-1)
         reg_loss = self.reg_loss(reg_preds, reg_orient)
         if self.split_loss:
             loss_dict = {
                 'cls_orient_loss': cls_loss,
                 'reg_orient_loss': reg_loss.sum(dim=-1),
-                'depth_ind_loss': depth_ind_loss
+                # 'depth_ind_loss': depth_ind_loss
                 # 'h_2d_loss': reg_loss[:, 2],
                 # 'c_2d_loss': reg_loss[:, 3:5].sum(dim=-1),
                 # 'r_2d_loss': reg_loss[:, 5],

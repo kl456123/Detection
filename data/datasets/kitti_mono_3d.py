@@ -84,6 +84,8 @@ class Mono3DKittiDataset(DetDataset):
                 'gt_boxes_2d_ground_rect_v2']
             encoded_side_points = transform_sample['encoded_side_points']
             encoded_bottom_points = transform_sample['encoded_bottom_points']
+            keypoint_gt = transform_sample['keypoint_gt']
+            keypoint_gt_weights = transform_sample['keypoint_gt_weights']
         else:
             # fake gt
             bbox = torch.zeros((1, 5))
@@ -111,6 +113,8 @@ class Mono3DKittiDataset(DetDataset):
             gt_boxes_2d_ground_rect_v2 = torch.zeros((1, 4))
             encoded_side_points = torch.zeros((1, 4))
             encoded_bottom_points = torch.zeros((1, 8))
+            keypoint_gt = torch.zeros((1, 2))
+            keypoint_gt_weights = torch.ones((1, ))
 
         h, w = transform_sample['img'].shape[-2:]
         training_sample = {}
@@ -137,6 +141,8 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['center_orient'] = center_orients
         training_sample['encoded_side_points'] = encoded_side_points
         training_sample['encoded_bottom_points'] = encoded_bottom_points
+        training_sample['keypoint_gt'] = keypoint_gt
+        training_sample['keypoint_gt_weights'] = keypoint_gt_weights
 
         # use proj instead of original box
         # training_sample['boxes_2d_proj'] = boxes_2d_proj
@@ -296,6 +302,7 @@ class Mono3DKittiDataset(DetDataset):
     def make_label_list(self, dataset_file):
         train_list_path = os.path.join(self.root_path, dataset_file)
         #  train_list_path = './trainval.txt'
+        # train_list_path = './demo.txt'
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]
