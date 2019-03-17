@@ -159,9 +159,9 @@ rm results/data/*
 # 3d proj 2d detection
 CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     --net mono_3d_final \
-    --load_dir /data/object/liangxiong/mono_3d_final \
+    --load_dir /data/object/liangxiong/mono_3d_final_both \
     --checkpoint 3257 \
-    --checkepoch 100
+    --checkepoch 2
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \

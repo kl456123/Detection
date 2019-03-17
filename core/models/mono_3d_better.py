@@ -100,7 +100,7 @@ class Mono3DBetterFasterRCNN(Model):
         prediction_dict['rcnn_3d'] = rcnn_3d
 
         if not self.training:
-            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_dims(
+            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
                 rcnn_3d, final_rois_batch)
 
             prediction_dict['rcnn_3d'] = rcnn_3d
@@ -116,16 +116,18 @@ class Mono3DBetterFasterRCNN(Model):
         return prediction_dict
 
     def pre_forward(self):
+        pass
         # params
-        if self.train_3d and self.training and not self.train_2d:
-            self.freeze_modules()
-            for parameter in self.feature_extractor.third_stage_feature.parameters(
-            ):
-                parameter.requires_grad = True
-            for param in self.rcnn_3d_pred.parameters():
-                param.requires_grad = True
-            self.freeze_bn(self)
-            self.unfreeze_bn(self.feature_extractor.third_stage_feature)
+        #  if self.train_3d and self.training and not self.train_2d:
+
+    #  self.freeze_modules()
+    #  for parameter in self.feature_extractor.third_stage_feature.parameters(
+    #  ):
+    #  parameter.requires_grad = True
+    #  for param in self.rcnn_3d_pred.parameters():
+    #  param.requires_grad = True
+    #  self.freeze_bn(self)
+    #  self.unfreeze_bn(self.feature_extractor.third_stage_feature)
 
     def init_weights(self):
         # submodule init weights
@@ -204,16 +206,16 @@ class Mono3DBetterFasterRCNN(Model):
 
         self.num_bins = 4
 
-        self.train_3d = True
+        #  self.train_3d = True
 
-        self.train_2d = True
+        #  self.train_2d = True
 
         # more accurate bbox for 3d prediction
-        if self.train_3d:
-            fg_thresh = 0.6
-        else:
-            fg_thresh = 0.5
-        model_config['target_assigner_config']['fg_thresh'] = fg_thresh
+        #  if self.train_3d:
+        #  fg_thresh = 0.6
+        #  else:
+        #  fg_thresh = 0.5
+        #  model_config['target_assigner_config']['fg_thresh'] = fg_thresh
 
         # assigner
         self.target_assigner = TargetAssigner(
@@ -230,9 +232,15 @@ class Mono3DBetterFasterRCNN(Model):
         # shape(N,7)
         gt_boxes_3d = feed_dict['gt_boxes_3d']
 
-        encoded_side_points = feed_dict['encoded_side_points']
-        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], encoded_side_points],
-                                dim=-1)
+        #  encoded_side_points = feed_dict['encoded_side_points']
+        #  gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], encoded_side_points],
+        #  dim=-1)
+        # orient
+        cls_orient = torch.unsqueeze(feed_dict['cls_orient'], dim=-1).float()
+        reg_orient = feed_dict['reg_orient']
+        orient = torch.cat([cls_orient, reg_orient], dim=-1)
+
+        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], orient], dim=-1)
 
         ##########################
         # assigner
@@ -294,32 +302,31 @@ class Mono3DBetterFasterRCNN(Model):
         """
         loss_dict = {}
 
-        if self.train_2d:
-            # submodule loss
-            loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
-            # targets and weights
-            rcnn_cls_weights = prediction_dict['rcnn_cls_weights']
-            rcnn_reg_weights = prediction_dict['rcnn_reg_weights']
+        # submodule loss
+        loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
+        # targets and weights
+        rcnn_cls_weights = prediction_dict['rcnn_cls_weights']
+        rcnn_reg_weights = prediction_dict['rcnn_reg_weights']
 
-            rcnn_cls_targets = prediction_dict['rcnn_cls_targets']
-            rcnn_reg_targets = prediction_dict['rcnn_reg_targets']
+        rcnn_cls_targets = prediction_dict['rcnn_cls_targets']
+        rcnn_reg_targets = prediction_dict['rcnn_reg_targets']
 
-            # classification loss
-            rcnn_cls_scores = prediction_dict['rcnn_cls_scores']
-            rcnn_cls_loss = self.rcnn_cls_loss(rcnn_cls_scores,
-                                               rcnn_cls_targets)
-            rcnn_cls_loss *= rcnn_cls_weights
-            rcnn_cls_loss = rcnn_cls_loss.sum(dim=-1)
+        # classification loss
+        rcnn_cls_scores = prediction_dict['rcnn_cls_scores']
 
-            # bounding box regression L1 loss
-            rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']
-            rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
-                                                 rcnn_reg_targets).sum(dim=-1)
-            rcnn_bbox_loss *= rcnn_reg_weights
-            rcnn_bbox_loss = rcnn_bbox_loss.sum(dim=-1)
+        rcnn_cls_loss = self.rcnn_cls_loss(rcnn_cls_scores, rcnn_cls_targets)
+        rcnn_cls_loss *= rcnn_cls_weights
+        rcnn_cls_loss = rcnn_cls_loss.sum(dim=-1)
 
-            loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
-            loss_dict['rcnn_bbox_loss'] = rcnn_bbox_loss
+        # bounding box regression L1 loss
+        rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']
+        rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
+                                             rcnn_reg_targets).sum(dim=-1)
+        rcnn_bbox_loss *= rcnn_reg_weights
+        rcnn_bbox_loss = rcnn_bbox_loss.sum(dim=-1)
+
+        loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
+        loss_dict['rcnn_bbox_loss'] = rcnn_bbox_loss
 
         ######################################
         # 3d loss
@@ -328,11 +335,50 @@ class Mono3DBetterFasterRCNN(Model):
         rcnn_reg_weights_3d = prediction_dict['rcnn_reg_weights_3d']
         rcnn_reg_targets_3d = prediction_dict['rcnn_reg_targets_3d']
         rcnn_3d = prediction_dict['rcnn_3d']
-        if self.train_3d:
-            rcnn_3d_loss = self.rcnn_bbox_loss(rcnn_3d,
-                                               rcnn_reg_targets_3d).sum(dim=-1)
-            rcnn_3d_loss = rcnn_3d_loss * rcnn_reg_weights_3d
 
-            loss_dict['rcnn_3d_loss'] = rcnn_3d_loss
+        # dims
+        rcnn_3d_loss_dims = self.rcnn_bbox_loss(
+            rcnn_3d[:, :3], rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
+
+        # angles
+        res = self.rcnn_3d_loss(rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, 3:])
+        for res_loss_key in res:
+            tmp = res[res_loss_key] * rcnn_reg_weights_3d
+            res[res_loss_key] = tmp.sum(dim=-1)
+        loss_dict.update(res)
+
+        rcnn_3d_loss = rcnn_3d_loss_dims * rcnn_reg_weights_3d
+        rcnn_3d_loss = rcnn_3d_loss.sum(dim=-1)
+
+        loss_dict['rcnn_3d_loss'] = rcnn_3d_loss
+
+        # stats of orients
+        cls_orient_preds = rcnn_3d[:, 3:5]
+        cls_orient = rcnn_reg_targets_3d[:, 3]
+        _, cls_orient_preds_argmax = torch.max(cls_orient_preds, dim=-1)
+        orient_tp_mask = cls_orient.type_as(
+            cls_orient_preds_argmax) == cls_orient_preds_argmax
+        mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
+        orient_tp_mask = orient_tp_mask[mask]
+        orient_tp_num = orient_tp_mask.int().sum().item()
+        orient_all_num = orient_tp_mask.numel()
+
+        # store all stats in target assigner
+        self.target_assigner.stat.update({
+            # 'angle_num_tp': torch.tensor(0),
+            # 'angle_num_all': 1,
+
+            # stats of orient
+            'orient_tp_num': orient_tp_num,
+            # 'orient_tp_num2': orient_tp_num2,
+            # 'orient_tp_num3': orient_4s_tp_num,
+            # 'orient_all_num3': orient_all_num3,
+            # 'orient_pr': orient_pr,
+            'orient_all_num': orient_all_num,
+            # 'orient_tp_num4': orient_tp_num4,
+            # 'orient_all_num4': orient_all_num4,
+            #  'cls_orient_2s_all_num': depth_ind_all_num,
+            #  'cls_orient_2s_tp_num': depth_ind_tp_num
+        })
 
         return loss_dict

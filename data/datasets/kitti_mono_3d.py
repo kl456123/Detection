@@ -301,8 +301,8 @@ class Mono3DKittiDataset(DetDataset):
 
     def make_label_list(self, dataset_file):
         train_list_path = os.path.join(self.root_path, dataset_file)
-        #  train_list_path = './trainval.txt'
-        # train_list_path = './demo.txt'
+        # train_list_path = './train.txt'
+        #  train_list_path = './demo.txt'
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]

@@ -93,10 +93,20 @@
     # --config configs/refine_kitti_config.json \
     # --model /data/object/liangxiong/semantic_test/semantic/kitti/faster_rcnn_50_3257.pth
 
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net mono_3d_final \
+    # --out_path /data/object/liangxiong/mono_3d_final_both \
+    # --config configs/mono_3d_config.json
+
 CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
-    --net mono_3d_final \
-    --out_path /data/object/liangxiong/mono_3d_final_both \
-    --config configs/refine_kitti_config.json
+    --net mono_3d_better \
+    --out_path /data/object/liangxiong/mono_3d_better \
+    --config configs/mono_3d_config.json
+
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net semantic \
+    # --out_path /data/object/liangxiong/semantic_test2 \
+    # --config configs/mono_3d_config.json
 # --model /data/object/liangxiong/semantic/multibin/kitti/faster_rcnn_50_3257.pth
 
 # --model /data/object/liangxiong/mono_3d_angle_reg_2d/multibin_simpler/kitti/faster_rcnn_10_3257.pth
