@@ -206,7 +206,7 @@ class Mono3DBetterFasterRCNN(Model):
 
         self.num_bins = 4
 
-        #  self.train_3d = True
+        self.train_3d = False
 
         #  self.train_2d = True
 
@@ -331,54 +331,55 @@ class Mono3DBetterFasterRCNN(Model):
         ######################################
         # 3d loss
         ######################################
+        if self.train_3d:
 
-        rcnn_reg_weights_3d = prediction_dict['rcnn_reg_weights_3d']
-        rcnn_reg_targets_3d = prediction_dict['rcnn_reg_targets_3d']
-        rcnn_3d = prediction_dict['rcnn_3d']
+            rcnn_reg_weights_3d = prediction_dict['rcnn_reg_weights_3d']
+            rcnn_reg_targets_3d = prediction_dict['rcnn_reg_targets_3d']
+            rcnn_3d = prediction_dict['rcnn_3d']
 
-        # dims
-        rcnn_3d_loss_dims = self.rcnn_bbox_loss(
-            rcnn_3d[:, :3], rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
+            # dims
+            rcnn_3d_loss_dims = self.rcnn_bbox_loss(
+                rcnn_3d[:, :3], rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
 
-        # angles
-        res = self.rcnn_3d_loss(rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, 3:])
-        for res_loss_key in res:
-            tmp = res[res_loss_key] * rcnn_reg_weights_3d
-            res[res_loss_key] = tmp.sum(dim=-1)
-        loss_dict.update(res)
+            # angles
+            res = self.rcnn_3d_loss(rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, 3:])
+            for res_loss_key in res:
+                tmp = res[res_loss_key] * rcnn_reg_weights_3d
+                res[res_loss_key] = tmp.sum(dim=-1)
+            loss_dict.update(res)
 
-        rcnn_3d_loss = rcnn_3d_loss_dims * rcnn_reg_weights_3d
-        rcnn_3d_loss = rcnn_3d_loss.sum(dim=-1)
+            rcnn_3d_loss = rcnn_3d_loss_dims * rcnn_reg_weights_3d
+            rcnn_3d_loss = rcnn_3d_loss.sum(dim=-1)
 
-        loss_dict['rcnn_3d_loss'] = rcnn_3d_loss
+            loss_dict['rcnn_3d_loss'] = rcnn_3d_loss
 
-        # stats of orients
-        cls_orient_preds = rcnn_3d[:, 3:5]
-        cls_orient = rcnn_reg_targets_3d[:, 3]
-        _, cls_orient_preds_argmax = torch.max(cls_orient_preds, dim=-1)
-        orient_tp_mask = cls_orient.type_as(
-            cls_orient_preds_argmax) == cls_orient_preds_argmax
-        mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
-        orient_tp_mask = orient_tp_mask[mask]
-        orient_tp_num = orient_tp_mask.int().sum().item()
-        orient_all_num = orient_tp_mask.numel()
+            # stats of orients
+            cls_orient_preds = rcnn_3d[:, 3:5]
+            cls_orient = rcnn_reg_targets_3d[:, 3]
+            _, cls_orient_preds_argmax = torch.max(cls_orient_preds, dim=-1)
+            orient_tp_mask = cls_orient.type_as(
+                cls_orient_preds_argmax) == cls_orient_preds_argmax
+            mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
+            orient_tp_mask = orient_tp_mask[mask]
+            orient_tp_num = orient_tp_mask.int().sum().item()
+            orient_all_num = orient_tp_mask.numel()
 
-        # store all stats in target assigner
-        self.target_assigner.stat.update({
-            # 'angle_num_tp': torch.tensor(0),
-            # 'angle_num_all': 1,
+            # store all stats in target assigner
+            self.target_assigner.stat.update({
+                # 'angle_num_tp': torch.tensor(0),
+                # 'angle_num_all': 1,
 
-            # stats of orient
-            'orient_tp_num': orient_tp_num,
-            # 'orient_tp_num2': orient_tp_num2,
-            # 'orient_tp_num3': orient_4s_tp_num,
-            # 'orient_all_num3': orient_all_num3,
-            # 'orient_pr': orient_pr,
-            'orient_all_num': orient_all_num,
-            # 'orient_tp_num4': orient_tp_num4,
-            # 'orient_all_num4': orient_all_num4,
-            #  'cls_orient_2s_all_num': depth_ind_all_num,
-            #  'cls_orient_2s_tp_num': depth_ind_tp_num
-        })
+                # stats of orient
+                'orient_tp_num': orient_tp_num,
+                # 'orient_tp_num2': orient_tp_num2,
+                # 'orient_tp_num3': orient_4s_tp_num,
+                # 'orient_all_num3': orient_all_num3,
+                # 'orient_pr': orient_pr,
+                'orient_all_num': orient_all_num,
+                # 'orient_tp_num4': orient_tp_num4,
+                # 'orient_all_num4': orient_all_num4,
+                #  'cls_orient_2s_all_num': depth_ind_all_num,
+                #  'cls_orient_2s_tp_num': depth_ind_tp_num
+            })
 
         return loss_dict

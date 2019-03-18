@@ -98,7 +98,7 @@
     # --out_path /data/object/liangxiong/mono_3d_final_both \
     # --config configs/mono_3d_config.json
 
-CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     --net mono_3d_better \
     --out_path /data/object/liangxiong/mono_3d_better \
     --config configs/mono_3d_config.json

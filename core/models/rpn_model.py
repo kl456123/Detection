@@ -148,6 +148,8 @@ class RPNModel(Model):
             proposals_single = proposals_single[fg_order_single]
             fg_probs_single = fg_probs_single[fg_order_single]
 
+            import ipdb
+            ipdb.set_trace()
             # nms
             keep_idx_i = nms(
                 torch.cat((proposals_single, fg_probs_single.unsqueeze(1)), 1),

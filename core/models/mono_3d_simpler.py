@@ -84,7 +84,7 @@ class Mono3DSimplerFasterRCNN(Model):
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
 
-        if self.training and self.train_2d:
+        if self.training:
             self.pre_subsample(prediction_dict, feed_dict)
         rois_batch = prediction_dict['rois_batch']
 
@@ -151,12 +151,6 @@ class Mono3DSimplerFasterRCNN(Model):
         Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
-        # if self.train_3d and self.training:
-
-    # self.freeze_modules()
-    # for parameter in self.feature_extractor.third_stage_feature.parameters(
-    # ):
-    # parameter.requires_grad = True
 
     def modify_feature_extractor(self):
         from torchvision.models.resnet import Bottleneck
@@ -257,10 +251,6 @@ class Mono3DSimplerFasterRCNN(Model):
         self.visualizer = FeatVisualizer()
 
         self.num_bins = 4
-
-        self.train_3d = True
-
-        self.train_2d = True
 
         # assigner
         self.target_assigner = TargetAssigner(
