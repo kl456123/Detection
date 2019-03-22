@@ -3,6 +3,17 @@ import torch
 from core.similarity_calc.center_similarity_calc import CenterSimilarityCalc
 
 
+def outside_window_filter(boxes, im_shape):
+    # import ipdb
+    # ipdb.set_trace()
+
+    # find the total outside boxes
+    out_filter = (boxes[:, :, 2] < 0) | (boxes[:, :, 3] < 0) | (
+        boxes[:, :, 0] >= im_shape[0][1]) | (boxes[:, :, 1] >= im_shape[0][0])
+    in_filter = ~out_filter
+    return in_filter
+
+
 def clip_boxes(boxes, im_shape):
     """
     Clip boxes to image boundaries.
@@ -133,3 +144,15 @@ def super_nms(bboxes, nms_thresh=0.8, nms_num=2, loop_time=1):
         remain_match_inds = remain_match_inds[:, 0]
 
     return remain_match_inds
+
+
+def horizontal_flip_box(boxes, image_width):
+    xmin = boxes[:, 0]
+    xmax = boxes[:, 1]
+    new_xmin = image_width - xmax
+    new_xmax = image_width - xmin
+    boxes = boxes.copy()
+    boxes[:, 0] = new_xmin
+    boxes[:, 2] = new_xmax
+
+    return boxes

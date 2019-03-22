@@ -18,6 +18,7 @@ def test(eval_config, data_loader, model):
     #  oft_test(eval_config, data_loader, model)
     #  mono_test_keypoint(eval_config, data_loader, model)
     mono_test(eval_config, data_loader, model)
+    # test_2d(eval_config, data_loader, model)
 
 
 def to_cuda(target):
@@ -84,7 +85,7 @@ def oft_test(eval_config, data_loader, model):
                 # pred_boxes_3d = pred_boxes_3d[keep.view(-1).long()]
 
                 pred_boxes_3d = pred_boxes_3d.detach().cpu().numpy()
-                p2 = data['p2'][0].detach().cpu().numpy()
+                p2 = data['orig_p2'][0].detach().cpu().numpy()
                 cls_scores = cls_scores.cpu().numpy()
 
                 cls_boxes = proj_3dTo2d(pred_boxes_3d, p2)
@@ -123,7 +124,7 @@ def get_img_filter(cls_dets):
     return img_filter
 
 
-def mono_test(eval_config, data_loader, model):
+def test_2d(eval_config, data_loader, model):
     """
     Only one image in batch is supported
     """
@@ -131,7 +132,7 @@ def mono_test(eval_config, data_loader, model):
     for i, data in enumerate(data_loader):
         img_file = data['img_name']
         start_time = time.time()
-        pred_boxes, scores, rois, anchors, rcnn_3d = im_detect(
+        pred_boxes, scores, rois, anchors = im_detect_2d(
             model, to_cuda(data), eval_config, im_orig=data['img_orig'])
         duration_time = time.time() - start_time
 
@@ -140,11 +141,88 @@ def mono_test(eval_config, data_loader, model):
         scores = scores.squeeze()
         pred_boxes = pred_boxes.squeeze()
         rois = rois.squeeze()
+
+        classes = eval_config['classes']
+        thresh = eval_config['thresh']
+        thresh = 0.5
+
+        dets = []
+        res_rois = []
+        res_anchors = []
+        dets_3d = []
+
+        # nms
+        for j in range(1, len(classes) + 1):
+            inds = torch.nonzero(scores[:, j] > thresh).view(-1)
+            # if there is det
+            if inds.numel() > 0:
+                cls_scores = scores[:, j][inds]
+
+                cls_boxes = pred_boxes[inds, :]
+                rois_boxes = rois[inds, :]
+                anchors_boxes = anchors[inds, :]
+
+                cls_dets = torch.cat((cls_boxes, cls_scores.unsqueeze(1)), 1)
+                rois_dets = torch.cat((rois_boxes, cls_scores.unsqueeze(1)), 1)
+                anchors_dets = torch.cat(
+                    (anchors_boxes, cls_scores.unsqueeze(1)), 1)
+
+                # sort
+                _, order = torch.sort(cls_scores, 0, True)
+
+                cls_dets = cls_dets[order]
+                rois_dets = rois_dets[order]
+                anchors_dets = anchors_dets[order]
+
+                keep = nms(cls_dets, eval_config['nms'])
+
+                cls_dets = cls_dets[keep.view(-1).long()]
+                rois_dets = rois_dets[keep.view(-1).long()]
+                anchors = anchors_dets[keep.view(-1).long()]
+
+                res_rois.append(rois_dets.detach().cpu().numpy())
+                res_anchors.append(anchors.detach().cpu().numpy())
+
+                rcnn_3d = np.zeros((cls_dets.shape[0], 7))
+                dets.append(np.concatenate([cls_dets, rcnn_3d], axis=-1))
+
+            else:
+                dets.append([])
+                res_rois.append([])
+                res_anchors.append([])
+                dets_3d.append([])
+
+        save_dets(dets[0], img_file[0], 'kitti', eval_config['eval_out'])
+
+        sys.stdout.write(
+            '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
+        sys.stdout.flush()
+
+
+def mono_test(eval_config, data_loader, model):
+    """
+    Only one image in batch is supported
+    """
+    num_samples = len(data_loader)
+    for i, data in enumerate(data_loader):
+        img_file = data['img_name']
+        start_time = time.time()
+        pred_boxes, scores, rois, anchors, rcnn_3d, pred_boxes_2d_proj = im_detect(
+            model, to_cuda(data), eval_config, im_orig=data['img_orig'])
+        duration_time = time.time() - start_time
+
+        # import ipdb
+        # ipdb.set_trace()
+        scores = scores.squeeze()
+        pred_boxes = pred_boxes.squeeze()
+        pred_boxes_2d_proj = pred_boxes_2d_proj.squeeze()
+        rois = rois.squeeze()
         rcnn_3d = rcnn_3d.squeeze()
         # anchors = anchors.squeeze()
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
+        thresh = 0.1
 
         dets = []
         res_rois = []
@@ -158,22 +236,28 @@ def mono_test(eval_config, data_loader, model):
             # if there is det
             if inds.numel() > 0:
                 cls_scores = scores[:, j][inds]
-                _, order = torch.sort(cls_scores, 0, True)
-                if eval_config['class_agnostic']:
-                    cls_boxes = pred_boxes[inds, :]
-                    rois_boxes = rois[inds, :]
-                    anchors_boxes = anchors[inds, :]
-                    rcnn_3d = rcnn_3d[inds]
+
+                cls_boxes = pred_boxes[inds, :]
+                cls_boxes_2d_proj = pred_boxes_2d_proj[inds, :]
+                rois_boxes = rois[inds, :]
+                anchors_boxes = anchors[inds, :]
+                rcnn_3d = rcnn_3d[inds]
 
                 cls_dets = torch.cat((cls_boxes, cls_scores.unsqueeze(1)), 1)
+                cls_dets_2d_proj = torch.cat(
+                    [cls_boxes_2d_proj, cls_scores.unsqueeze(1)], 1)
                 rois_dets = torch.cat((rois_boxes, cls_scores.unsqueeze(1)), 1)
                 anchors_dets = torch.cat(
                     (anchors_boxes, cls_scores.unsqueeze(1)), 1)
+
+                # sort
+                _, order = torch.sort(cls_scores, 0, True)
 
                 cls_dets = cls_dets[order]
                 rois_dets = rois_dets[order]
                 anchors_dets = anchors_dets[order]
                 rcnn_3d = rcnn_3d[order]
+                cls_dets_2d_proj = cls_dets_2d_proj[order]
 
                 keep = nms(cls_dets, eval_config['nms'])
 
@@ -181,13 +265,17 @@ def mono_test(eval_config, data_loader, model):
                 rois_dets = rois_dets[keep.view(-1).long()]
                 anchors = anchors_dets[keep.view(-1).long()]
                 rcnn_3d = rcnn_3d[keep.view(-1).long()]
+                cls_dets_2d_proj = cls_dets_2d_proj[keep.view(-1).long()]
 
                 cls_dets = cls_dets.detach().cpu().numpy()
                 res_rois.append(rois_dets.detach().cpu().numpy())
                 res_anchors.append(anchors.detach().cpu().numpy())
+                cls_dets_2d_proj = cls_dets_2d_proj.detach().cpu().numpy()
 
                 coords = data['coords'][0].detach().cpu().numpy()
                 gt_boxes = data['gt_boxes'][0].detach().cpu().numpy()
+                gt_boxes_2d_proj = data['gt_boxes_proj'][0].detach().cpu(
+                ).numpy()
                 gt_boxes_3d = data['gt_boxes_3d'][0].detach().cpu().numpy()
                 points_3d = data['points_3d'][0].detach().cpu().numpy()
                 local_angles_gt = data['local_angle'][0].detach().cpu().numpy()
@@ -199,36 +287,48 @@ def mono_test(eval_config, data_loader, model):
 
                 p2 = data['p2'][0].detach().cpu().numpy()
                 rcnn_3d = rcnn_3d.detach().cpu().numpy()
+                cls_orient_gt = data['cls_orient'][0].detach().cpu().numpy()
+                reg_orient_gt = data['reg_orient'][0].detach().cpu().numpy()
                 # rcnn_3d_gt = rcnn_3d_gt.detach().cpu().numpy()
 
                 # use gt
-                use_gt = False
+                use_gt = True
 
                 if use_gt:
                     #  import ipdb
                     #  ipdb.set_trace()
 
-                    center_x = (gt_boxes[:, 0] + gt_boxes[:, 2]) / 2
-                    center_y = (gt_boxes[:, 1] + gt_boxes[:, 3]) / 2
-                    gt_boxes_w = gt_boxes[:, 2] - gt_boxes[:, 0] + 1
-                    gt_boxes_h = gt_boxes[:, 3] - gt_boxes[:, 1] + 1
-                    center = np.stack([center_x, center_y], axis=-1)
-                    gt_boxes_dims = np.stack([gt_boxes_w, gt_boxes_h], axis=-1)
+                    #  center_x = (gt_boxes[:, 0] + gt_boxes[:, 2]) / 2
+                    #  center_y = (gt_boxes[:, 1] + gt_boxes[:, 3]) / 2
+                    #  gt_boxes_w = gt_boxes[:, 2] - gt_boxes[:, 0] + 1
+                    #  gt_boxes_h = gt_boxes[:, 3] - gt_boxes[:, 1] + 1
+                    #  center = np.stack([center_x, center_y], axis=-1)
+                    #  gt_boxes_dims = np.stack([gt_boxes_w, gt_boxes_h], axis=-1)
 
-                    point1 = encoded_side_points[:, :2] * gt_boxes_dims + center
-                    point2 = encoded_side_points[:, 2:] * gt_boxes_dims + center
+                    #  point1 = encoded_side_points[:, :2] * gt_boxes_dims + center
+                    #  point2 = encoded_side_points[:, 2:] * gt_boxes_dims + center
 
-                    global_angles_gt = gt_boxes_3d[:, -1:]
+                    #  global_angles_gt = gt_boxes_3d[:, -1:]
 
                     rcnn_3d_gt = np.concatenate(
-                        [gt_boxes_3d[:, :3], point1, point2], axis=-1)
+                        [
+                            gt_boxes_3d[:, :3], cls_orient_gt[..., np.newaxis],
+                            reg_orient_gt
+                        ],
+                        axis=-1)
                     # just for debug
-                    if len(rcnn_3d_gt):
+                    if len(gt_boxes):
                         cls_dets_gt = np.concatenate(
                             [gt_boxes, np.zeros_like(gt_boxes[:, -1:])],
                             axis=-1)
+                        cls_dets_2d_proj_gt = np.concatenate(
+                            [
+                                gt_boxes_2d_proj,
+                                np.zeros_like(gt_boxes[:, -1:])
+                            ],
+                            axis=-1)
                         rcnn_3d_gt, _ = mono_3d_postprocess_bbox(
-                            rcnn_3d_gt, cls_dets_gt, p2)
+                            rcnn_3d_gt, cls_dets_2d_proj_gt, p2)
 
                         dets.append(
                             np.concatenate(
@@ -250,8 +350,10 @@ def mono_test(eval_config, data_loader, model):
                     # rcnn_3d = np.concatenate(
                     # [gt_boxes_3d[:, :3], global_angles_gt], axis=-1)
                     # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
-                    rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d,
-                                                                 cls_dets, p2)
+                    # import ipdb
+                    # ipdb.set_trace()
+                    rcnn_3d, location = mono_3d_postprocess_bbox(
+                        rcnn_3d, cls_dets_2d_proj, p2)
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
                     # rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
                     # rcnn_3d[:, 3:6] = location
@@ -483,11 +585,64 @@ def decode_3d(rcnn_3ds, boxes_2d):
     return np.concatenate([rcnn_coords.reshape((-1, 6)), y], axis=-1)
 
 
+def im_detect_2d(model, data, eval_config, im_orig=None):
+    im_info = data['im_info']
+    with torch.no_grad():
+        prediction = model(data)
+
+    if eval_config.get('feat_vis'):
+        featmaps_dict = model.get_feat()
+        from utils.visualizer import FeatVisualizer
+        feat_visualizer = FeatVisualizer()
+        feat_visualizer.visualize_maps(featmaps_dict)
+
+    cls_prob = prediction['rcnn_cls_probs']
+    rois = prediction['rois_batch']
+    bbox_pred = prediction['rcnn_bbox_preds']
+    anchors = prediction['second_rpn_anchors'][0]
+
+    scores = cls_prob
+    im_scale = im_info[0][2]
+    boxes = rois.data[:, :, 1:5]
+    if prediction.get('rois_scores') is not None:
+        rois_scores = prediction['rois_scores']
+        boxes = torch.cat([boxes, rois_scores], dim=2)
+
+    # visualize rois
+    if im_orig is not None and eval_config['rois_vis']:
+        visualize_bbox(im_orig.numpy()[0], boxes.cpu().numpy()[0], save=True)
+        # visualize_bbox(im_orig.numpy()[0], anchors[0].cpu().numpy()[:100], save=True)
+
+    if eval_config['bbox_reg']:
+        # Apply bounding-box regression deltas
+        box_deltas = bbox_pred.data
+        #  if eval_config['bbox_normalize_targets_precomputed']:
+        #  # Optionally normalize targets by a precomputed mean and stdev
+        #  if eval_config['class_agnostic']:
+        #  box_deltas = box_deltas.view(
+        #  -1, 4) * torch.FloatTensor(eval_config[
+        #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
+        #  eval_config['bbox_normalize_means']).cuda()
+        #  box_deltas = box_deltas.view(eval_config['batch_size'], -1, 4)
+        #  else:
+        #  box_deltas = box_deltas.view(
+        #  -1, 4) * torch.FloatTensor(eval_config[
+        #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
+        #  eval_config['bbox_normalize_means']).cuda()
+        #  box_deltas = box_deltas.view(eval_config['batch_size'], -1,
+        #  4 * len(eval_config['classes']))
+
+        #  pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
+        pred_boxes = model.target_assigner.bbox_coder.decode_batch(
+            box_deltas.view(eval_config['batch_size'], -1, 4), boxes)
+        pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
+
+    pred_boxes /= im_scale
+
+    return pred_boxes, scores, rois[:, :, 1:5], anchors
+
+
 def im_detect(model, data, eval_config, im_orig=None):
-    # fake label
-    # gt_boxes = torch.zeros((1, 1, 5))
-    # num_boxes = torch.Tensor(1)
-    # gt_boxes, num_boxes = __change_into_variable([gt_boxes, num_boxes])
     im_info = data['im_info']
     with torch.no_grad():
         prediction = model(data)
@@ -503,8 +658,6 @@ def im_detect(model, data, eval_config, im_orig=None):
     bbox_pred = prediction['rcnn_bbox_preds']
     anchors = prediction['second_rpn_anchors'][0]
     rcnn_3d = prediction['rcnn_3d']
-    # anchors = prediction['anchors'][0]
-    # anchors = None
 
     scores = cls_prob
     im_scale = im_info[0][2]
@@ -514,8 +667,6 @@ def im_detect(model, data, eval_config, im_orig=None):
         boxes = torch.cat([boxes, rois_scores], dim=2)
 
     # visualize rois
-    #  import ipdb
-    #  ipdb.set_trace()
     if im_orig is not None and eval_config['rois_vis']:
         visualize_bbox(im_orig.numpy()[0], boxes.cpu().numpy()[0], save=True)
         # visualize_bbox(im_orig.numpy()[0], anchors[0].cpu().numpy()[:100], save=True)
@@ -543,13 +694,18 @@ def im_detect(model, data, eval_config, im_orig=None):
         pred_boxes = model.target_assigner.bbox_coder.decode_batch(
             box_deltas.view(eval_config['batch_size'], -1, 4), boxes)
         # pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
+        pred_boxes_2d_proj = model.target_assigner.bbox_coder.decode_batch(
+            rcnn_3d[:, -4:].view(eval_config['batch_size'], -1, 4), boxes)
 
     pred_boxes /= im_scale
+    pred_boxes_2d_proj /= im_scale
 
     if prediction.get('keypoints') is not None:
         keypoints = prediction['keypoints']
         return pred_boxes, scores, rois[:, :, 1:5], anchors, rcnn_3d, keypoints
-    return pred_boxes, scores, rois[:, :, 1:5], anchors, rcnn_3d
+    return pred_boxes, scores, rois[:, :, 1:
+                                    5], anchors, rcnn_3d[:, :
+                                                         -4], pred_boxes_2d_proj
 
 
 def save_dets(dets, label_info, data_format='kitti', output_dir=''):

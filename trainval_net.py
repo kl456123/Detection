@@ -18,7 +18,7 @@ import torch.nn as nn
 import sys
 sys.path.append('./lib')
 
-from builder.dataloader_builders.kitti_mono_3d_dataloader_builder import Mono3DKittiDataLoaderBuilder
+from builder import dataloader_builder
 from builder.optimizer_builder import OptimizerBuilder
 from builder.scheduler_builder import SchedulerBuilder
 from builder import model_builder
@@ -87,7 +87,7 @@ def parse_args():
         '--out_path', default=None, type=str, help='Output directory.')
     parser.add_argument(
         '--pretrained_path',
-        default='',
+        default=None,
         type=str,
         help='Path to pretained model')
     parser.add_argument('--job_name', default='', type=str, help='name of job')
@@ -105,6 +105,8 @@ if __name__ == '__main__':
     # parse config of scripts
     args = parse_args()
     print(args.pretrained_path)
+    print(args.in_path)
+    print(args.out_path)
     with open(args.config) as f:
         config = json.load(f)
 
@@ -113,8 +115,12 @@ if __name__ == '__main__':
     train_config = config['train_config']
     if args.in_path is not None:
         # overwrite the data root path
-        data_config['dataset_config']['root_path'] = os.path.join(
-            args.in_path, 'object/training')
+        data_config['dataset_config']['root_path'] = args.in_path
+        # data_config['dataset_config']['root_path'] = os.path.join(
+    # args.in_path, 'object/training')
+    if args.pretrained_path is not None:
+        model_config['feature_extractor_config'][
+            'pretrained_path'] = args.pretrained_path
 
     if args.resume:
         model_config['pretrained'] = False
@@ -153,8 +159,8 @@ if __name__ == '__main__':
     if args.cuda:
         fasterRCNN.cuda()
 
-    data_loader_builder = Mono3DKittiDataLoaderBuilder(data_config, training=True)
-    data_loader = data_loader_builder.build()
+    #  data_loader_builder = Mono3DKittiDataLoaderBuilder(data_config, training=True)
+    data_loader = dataloader_builder.build(data_config, training=True)
 
     # optimizer
     optimizer_builder = OptimizerBuilder(fasterRCNN,
@@ -170,10 +176,11 @@ if __name__ == '__main__':
             'start_epoch': None,
             'model': fasterRCNN,
             'optimizer': optimizer,
+            'last_step': None
         }
         saver.load(params_dict, checkpoint_name)
         train_config['start_epoch'] = params_dict['start_epoch']
-        scheduler_config['last_epoch'] = params_dict['start_epoch'] - 1
+        scheduler_config['last_step'] = params_dict['last_step'] - 1
 
     if args.model is not None:
         # pretrain mode

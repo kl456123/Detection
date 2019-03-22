@@ -39,3 +39,20 @@ class DataLoaderBuilder(object, metaclass=ABCMeta):
         self.build_dataset()
         self.build_dataloader()
         return self.dataloader
+
+
+def build(dataloader_config, training):
+
+    from builder.dataloader_builders.kitti_mono_3d_dataloader_builder import Mono3DKittiDataLoaderBuilder
+    from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
+    from builder.dataloader_builders.coco_dataloader_builder import CocoDataLoaderBuilder
+    dataloader_type = dataloader_config['type']
+    if dataloader_type == 'mono_3d':
+        return Mono3DKittiDataLoaderBuilder(dataloader_config,
+                                            training).build()
+    elif dataloader_type == 'kitti':
+        return KittiDataLoaderBuilder(dataloader_config, training).build()
+    elif dataloader_type == 'coco':
+        return CocoDataLoaderBuilder(dataloader_config, training).build()
+    else:
+        raise ValueError('unknown dataloader! ')

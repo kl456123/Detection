@@ -20,7 +20,7 @@ class SchedulerBuilder(object):
                 self.optimizer,
                 lr_decay_step,
                 lr_decay_gamma,
-                last_epoch=config['last_epoch'])
+                last_epoch=config['last_step'])
         else:
             raise ValueError('this type of scheduler is unknown')
         return scheduler

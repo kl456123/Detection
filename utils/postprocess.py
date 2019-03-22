@@ -214,33 +214,9 @@ def generate_side_points(dets_2d, orient):
     Returns:
         side_points: shape(N,4)
     """
-    # import ipdb
-    # ipdb.set_trace()
     cls_orient_argmax = orient[:, 0].astype(np.int32)
-    # use r_2d
-    #  r_2ds = orient[:, 6]
-    #  cls_orient_argmax2 = np.zeros_like(cls_orient_argmax).astype(np.int32)
-    #  cls_orient_argmax2[r_2ds < 0.5] = 0
-    #  cls_orient_argmax2[r_2ds > 0.5] = 1
-
-    # use cls_orient_4s
-    #  cls_orient_4s = orient[:, 7]
-    #  cls_orient_argmax3 = np.zeros_like(cls_orient_argmax).astype(np.int32)
-    #  cls_orient_argmax3[(cls_orient_4s == 0) | (cls_orient_4s == 2)] = 1
-    #  cls_orient_argmax3[(cls_orient_4s == 1) | (cls_orient_4s == 3)] = 0
-
-    # use center orient
-    #  center_orients = orient[:, 8].astype(np.int32)
-
-    # cls_orient_argmax = center_orients
 
     reg_orient = orient[:, 1:3]
-    h = (dets_2d[:, 3] - dets_2d[:, 1] + 1)
-    w = (dets_2d[:, 2] - dets_2d[:, 0] + 1)
-
-    # reg_orient[...] = 0.5
-    reg_orient[:, 0] *= w
-    reg_orient[:, 1] *= h
 
     side_points = np.zeros((orient.shape[0], 4))
 
@@ -334,8 +310,8 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     #  lines = dets_3d[:, 3:]
     lines = generate_side_points(dets_2d, dets_3d[:, 3:])
     ry = twopoints2direction(lines, p2)
-    #  ry = np.zeros_like(dets_3d[:, 0])
-    #  ry[...] = np.pi/2
+    # ry = np.zeros_like(dets_3d[:, 0])
+    # ry[...] = np.pi/2
     # ry = fourpoints2direction(lines)
 
     # decode h_2ds and c_2ds

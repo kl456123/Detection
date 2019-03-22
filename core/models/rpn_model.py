@@ -20,6 +20,8 @@ import functools
 
 class RPNModel(Model):
     def init_param(self, model_config):
+        self.outside_window_filter = model_config.get('outside_window_filter',
+                                                      False)
         self.in_channels = model_config['din']
         self.post_nms_topN = model_config['post_nms_topN']
         self.pre_nms_topN = model_config['pre_nms_topN']
@@ -27,6 +29,7 @@ class RPNModel(Model):
         self.use_score = model_config['use_score']
         self.rpn_batch_size = model_config['rpn_batch_size']
         self.use_focal_loss = model_config['use_focal_loss']
+        self.clip_boxes = model_config.get('clip_boxes', True)
 
         # sampler
         # self.sampler = HardNegativeSampler(model_config['sampler_config'])
@@ -107,15 +110,6 @@ class RPNModel(Model):
         rpn_bbox_preds = rpn_bbox_preds.permute(0, 2, 3, 1).contiguous()
         # shape(N,H*W*num_anchors,4)
         rpn_bbox_preds = rpn_bbox_preds.view(batch_size, -1, 4)
-        # apply deltas to anchors to decode
-        # loop here due to many features maps
-        # proposals = []
-        # for rpn_bbox_preds_single_map, anchors_single_map in zip(
-        # rpn_bbox_preds, anchors):
-        # proposals.append(
-        # self.bbox_coder.decode(rpn_bbox_preds_single_map,
-        # anchors_single_map))
-        # proposals = torch.cat(proposals, dim=1)
 
         proposals = self.bbox_coder.decode_batch(rpn_bbox_preds, anchors)
 
@@ -127,7 +121,6 @@ class RPNModel(Model):
         fg_probs = rpn_cls_probs[:, self.num_anchors:, :, :]
         fg_probs = fg_probs.permute(0, 2, 3, 1).contiguous().view(batch_size,
                                                                   -1)
-
         # sort fg
         _, fg_probs_order = torch.sort(fg_probs, dim=1, descending=True)
 
@@ -148,8 +141,6 @@ class RPNModel(Model):
             proposals_single = proposals_single[fg_order_single]
             fg_probs_single = fg_probs_single[fg_order_single]
 
-            import ipdb
-            ipdb.set_trace()
             # nms
             keep_idx_i = nms(
                 torch.cat((proposals_single, fg_probs_single.unsqueeze(1)), 1),
@@ -209,7 +200,8 @@ class RPNModel(Model):
 
         # generate anchors
         feature_map_list = [base_feat.size()[-2:]]
-        anchors = self.anchor_generator.generate(feature_map_list)
+        im_shape = im_info[0][:-1]
+        anchors = self.anchor_generator.generate(feature_map_list, im_shape)
 
         ###############################
         # Proposal

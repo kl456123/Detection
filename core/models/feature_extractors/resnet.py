@@ -6,6 +6,7 @@ import torch
 from torchvision import models
 from core.model import Model
 import copy
+import os
 
 
 class ResNetFeatureExtractor(Model):
@@ -14,7 +15,7 @@ class ResNetFeatureExtractor(Model):
 
     def init_param(self, model_config):
         #  self.model_path = 'data/pretrained_model/resnet50-19c8e357.pth'
-        self.model_path = model_config['pretrained_model']
+        self.model_path = os.path.join(model_config['pretrained_path'], 'resnet50-19c8e357.pth')
         self.dout_base_model = 1024
         self.pretrained = model_config['pretrained']
         self.class_agnostic = model_config['class_agnostic']

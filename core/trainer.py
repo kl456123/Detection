@@ -45,7 +45,6 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
         total_step = (epoch - 1) * len(data_loader)
         # setting to train mode
         start = time.time()
-        scheduler.step()
 
         matched = 0
         num_gt = 0
@@ -72,6 +71,7 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
 
             # with profiler.profile(use_cuda=True) as prof:
             # with profiler.emit_nvtx(use_cuda=True):
+            # model.profiler.enable()
             profiler = model.profiler
             profiler.start('9')
             prediction = model(data)
@@ -109,6 +109,7 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             optimizer.step()
             profiler.end('11')
 
+            scheduler.step()
             # statistics
             stat = model.target_assigner.stat
             matched += stat['matched']
@@ -238,12 +239,14 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
                         name, loop_nums[name], time_stats[name]))
                 model.profiler.clear()
 
-        checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(epoch, step)
-        params_dict = {
-            'start_epoch': epoch + 1,
-            'model': model,
-            'optimizer': optimizer,
-        }
-        saver.save(params_dict, checkpoint_name)
+            checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(epoch, step + 1)
+            params_dict = {
+                'start_epoch': epoch,
+                'model': model,
+                'optimizer': optimizer,
+                'last_step': total_step + step + 1
+            }
+            if (total_step + step + 1
+                ) % train_config['checkpoint_interval'] == 0:
+                saver.save(params_dict, checkpoint_name)
         end = time.time()
-        total_step += step  # epoch level

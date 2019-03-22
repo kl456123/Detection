@@ -71,8 +71,10 @@ rm results/data/*
 # CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 40 \
-    # --net semantic \
-    # --load_dir /data/object/liangxiong/semantic_test
+    # --net mono_3d_final \
+    # --load_dir /data/object/liangxiong/semantic_test2 \
+    # --img_dir  /home/pengwu/mono3d/seq/frames \
+    # --calib_file ./000001.txt
 
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
@@ -161,12 +163,30 @@ rm results/data/*
     # --net mono_3d_better \
     # --load_dir /data/object/liangxiong/tmp \
     # --checkpoint 3257 \
-    # --checkepoch 10
-CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
-    --net mono_3d_final \
-    --load_dir /data/object/liangxiong/mono_3d_final_both \
-    --checkpoint 3257 \
-    --checkepoch 80
+    # --checkepoch 65
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net mono_3d_final \
+    # --load_dir /data/object/liangxiong/mono_3d_final_both_noclip \
+    # --checkpoint 3257 \
+    # --checkepoch 70 \
+    # --img_dir  /home/pengwu/mono3d/seq/frames \
+    # --calib_file ./000001.txt
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net semantic \
+    # --load_dir /data/object/liangxiong/semantic_coco \
+    # --checkpoint 1749 \
+    # --checkepoch 2
+
+CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    --net mono_3d_final_plus \
+    --load_dir /data/object/liangxiong/mono_3d_final_plus \
+    --checkpoint 1 \
+    --checkepoch 200
+    # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
+    # --calib_file ./000000.txt
+
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
     # --checkepoch 42 \

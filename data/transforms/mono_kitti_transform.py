@@ -13,12 +13,8 @@ from utils.box_vis import draw_line
 from ..kitti_helper import process_center_coords
 from utils.kitti_util import get_gt_boxes_2d_ground_rect, get_gt_boxes_2d_ground_rect_v2
 from utils.kitti_util import encode_side_points, encode_bottom_points
-from utils.kitti_util import generate_keypoint_gt, get_center_side
-
-
-class Sample(object):
-    def __init__(self):
-        pass
+from utils.kitti_util import generate_keypoint_gt
+from utils import box_ops
 
 
 def intersect(box_a, box_b):
@@ -235,26 +231,6 @@ class RandomSampleCrop(object):
                     current_boxes_3d = sample['bbox_3d'][mask, :]
                     sample['bbox_3d'] = current_boxes_3d
 
-                # modify the project matrix
-                if sample.get('p2') is not None:
-                    # p2 = sample['p2']
-                    # K = p2[:3, :3]
-                    # KT = p2[:, 3]
-                    # T = np.dot(np.linalg.inv(K), KT)
-                    K = sample['K']
-                    T = sample['T']
-
-                    K[0, 2] -= rect[0]
-                    K[1, 2] -= rect[1]
-                    KT = np.dot(K, T)
-
-                    p2 = np.zeros((3, 4))
-                    p2[:3, :3] = K
-                    p2[:, 3] = KT
-
-                    sample['p2'] = p2
-                    sample['K'] = K
-
                 return sample
 
 
@@ -328,32 +304,19 @@ class RandomHorizontalFlip(object):
         Returns:
         PIL.Image: Randomly flipped image.
         """
-        img = sample['img']
-        bbox = sample['bbox']
+        image = sample['image']
+        gt_boxes = sample['gt_boxes']
+        gt_boxes_2d_proj = sample['gt_boxes_2d_proj']
+
         if random.random() < 0.5:
-            w, h = img.size
-            xmin = w - bbox[:, 2]
-            xmax = w - bbox[:, 0]
-            bbox[:, 0] = xmin
-            bbox[:, 2] = xmax
-            sample['img'] = img.transpose(Image.FLIP_LEFT_RIGHT)
-            sample['bbox'] = bbox
+            w, h = image.size
+            sample['image'] = image.transpose(Image.FLIP_LEFT_RIGHT)
+            sample['gt_boxes'] = box_ops.horizontal_flip_box(gt_boxes, w)
+            sample['gt_boxes_2d_proj'] = box_ops.horizontal_flip_box(
+                gt_boxes_2d_proj, w)
+            # swap
+            sample['cls_orient'] = 1 - sample['cls_orient']
 
-            if sample.get('p2') is not None:
-                K = sample['K']
-                T = sample['T']
-                K[0, 0] = -K[0, 0]
-                # K[1, 1] = -K[1, 1]
-                # import ipdb
-                # ipdb.set_trace()
-                K[0, 2] = img.size[0] - K[0, 2]
-                KT = np.dot(K, T)
-
-                p2 = np.zeros((3, 4))
-                p2[:3, :3] = K
-                p2[:, 3] = KT
-                sample['p2'] = p2
-                sample['K'] = K
         return sample
 
 
@@ -384,8 +347,8 @@ class Resize(object):
         Returns:
         PIL.Image: Rescaled image.
         """
-        img = sample['img']
-        w, h = img.size
+        image = sample['image']
+        w, h = image.size
 
         if w > h:
             im_scale = float(self.target_size) / h
@@ -396,7 +359,7 @@ class Resize(object):
 
         target_shape = (int(target_shape[0]), int(target_shape[1]))
 
-        sample['img'] = img.resize(target_shape, self.interpolation)
+        sample['image'] = image.resize(target_shape, self.interpolation)
         sample['im_scale'] = im_scale
 
         if sample.get('bbox') is not None:
@@ -411,21 +374,6 @@ class Resize(object):
             bbox[:, 1] *= target_shape[1]
             bbox[:, 3] *= target_shape[1]
             sample['bbox'] = bbox
-
-        if sample.get('p2') is not None:
-            K = sample['K']
-            T = sample['T']
-
-            K *= im_scale
-            K[2, 2] = 1
-            KT = np.dot(K, T)
-
-            p2 = np.zeros((3, 4))
-            # assign back
-            p2[:3, :3] = K
-            p2[:, 3] = KT
-            sample['p2'] = p2
-            sample['K'] = K
 
         return sample
 
@@ -661,8 +609,7 @@ class Boxes3DTo2D(object):
             keypoint_gt_weights.append([1, 1, 1, 1])
 
             # visible side truncated with 2d box
-            center_side = get_center_side(corners_xy)
-            cls_orient, reg_orient = truncate_box(box_2d_proj, center_side)
+            cls_orient, reg_orient = truncate_box(box_2d_proj, visible_side)
 
             cls_orients.append(cls_orient)
             reg_orients.append(reg_orient)

@@ -112,7 +112,7 @@ class BBox3DCoder(object):
             dim=-1)
         return targets
 
-    def encode_batch_bbox(self, dims, rois_batch, num_intervals=28):
+    def encode_batch_bbox(self, dims, proposal_bboxes):
         """
         encoding dims may be better,here just encode dims_2d
         Args:
@@ -134,7 +134,14 @@ class BBox3DCoder(object):
 
         #  keypoint_gt = self.encode_batch_keypoint(dims[:, 3:], num_intervals,
         #  rois_batch)
-        targets = torch.cat([targets, dims[:, 3:]], dim=-1)
+        reg_orient = dims[:, 4:6]
+        # normalize it using rois_batch
+        w = proposal_bboxes[:, 2] - proposal_bboxes[:, 0] + 1
+        h = proposal_bboxes[:, 3] - proposal_bboxes[:, 1] + 1
+        reg_orient[:, 0] = reg_orient[:, 0] / w
+        reg_orient[:, 1] = reg_orient[:, 1] / h
+
+        targets = torch.cat([targets, dims[:, 3:4], reg_orient], dim=-1)
         return targets
 
     def encode_batch_keypoint(self, keypoint, num_intervals, rois_batch):
@@ -244,7 +251,7 @@ class BBox3DCoder(object):
         # dim=-1)
         return torch.cat([bbox, orient, targets[:, 7:]], dim=-1)
 
-    def decode_batch_bbox(self, targets, rois_batch):
+    def decode_batch_bbox(self, targets, rois):
 
         # dims
         h_3d_mean = 1.67
@@ -260,11 +267,8 @@ class BBox3DCoder(object):
         l_3d = targets[:, 2] * l_3d_std + l_3d_mean
 
         # rois w and h
-        # rois = rois_batch[0, :, 1:]
-        # w = rois[:, 2] - rois[:, 0] + 1
-        # h = rois[:, 3] - rois[:, 1] + 1
-        # x = (rois[:, 2] + rois[:, 0]) / 2
-        # y = (rois[:, 3] + rois[:, 1]) / 2
+        w = rois[:, 2] - rois[:, 0] + 1
+        h = rois[:, 3] - rois[:, 1] + 1
 
         # cls orient
         cls_orient = targets[:, 3:5]
@@ -273,12 +277,8 @@ class BBox3DCoder(object):
 
         reg_orient = targets[:, 5:7]
 
-        # decode h_2d
-        # h_2d = torch.exp(targets[:, 7]) * h
-
-        # decode c_2d
-        # c_2d_x = targets[:, 8] * w + x
-        # c_2d_y = targets[:, 9] * h + y
+        reg_orient[:, 0] = reg_orient[:, 0] * w
+        reg_orient[:, 1] = reg_orient[:, 1] * h
 
         bbox = torch.stack([h_3d, w_3d, l_3d], dim=-1)
         orient = torch.stack(
@@ -287,24 +287,8 @@ class BBox3DCoder(object):
                 reg_orient[:, 1]
             ],
             dim=-1)
-        # info_2d = torch.stack([h_2d, c_2d_x, c_2d_y], dim=-1)
-        # info_2d = targets[:, 7:10]
 
-        # # import ipdb
-        # # ipdb.set_trace()
-        # r_2ds = targets[:, 10:11] * math.pi
-
-        # cls_orient_4s = targets[:, 11:15]
-        # cls_orient_4s = F.softmax(cls_orient_4s, dim=-1)
-        # cls_orient_4s, cls_orient_4s_argmax = torch.max(cls_orient_4s, dim=-1)
-        # cls_orient_4s_idx = cls_orient_4s_argmax.unsqueeze(-1).type_as(r_2ds)
-
-        # center_orients = targets[:, 15:17]
-        # center_orients = F.softmax(center_orients, dim=-1)
-        # _, center_orient_argmax = torch.max(center_orients, dim=-1)
-        # center_orients_inds = center_orient_argmax.unsqueeze(-1).type_as(r_2ds)
-
-        return torch.cat([bbox, orient], dim=-1)
+        return torch.cat([bbox, orient, targets[:, 7:]], dim=-1)
 
     def decode_batch_angle(self, targets, bin_centers=None):
         """

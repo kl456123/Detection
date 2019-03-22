@@ -1,5 +1,6 @@
 {
     "data_config": {
+        "type":"mono_3d",
         "dataloader_config": {
             "batch_size": 1,
             "num_workers": 1,
@@ -8,7 +9,7 @@
         "dataset_config": {
             "cache_bev": false,
             "dataset_file": "train.txt",
-            "root_path": "/data/object/training",
+            "root_path": "/data",
             "use_proj_2d":true,
             "use_rect_v2":false
         },
@@ -66,6 +67,7 @@
         "thresh": 0.5
     },
     "eval_data_config": {
+        "type":"mono_3d",
         "dataloader_config": {
             "batch_size": 1,
             "num_workers": 1,
@@ -73,7 +75,7 @@
         },
         "dataset_config": {
             "dataset_file": "val.txt",
-            "root_path": "/data/object/training",
+            "root_path": "/data",
             "use_proj_2d":true,
             "use_rect_v2":false
         },
@@ -107,8 +109,7 @@
                 "Car"
             ],
             "img_channels": 3,
-            "pretrained_model": "data/pretrained_model/resnet50-19c8e357.pth",
-            "job_pretrained_model": "/node01/jobs/io/pretrained/resnet50-19c8e357.pth",
+            "pretrained_path":"data/pretrained_model",
             "pretrained": true,
             "use_cascade": true
         },
@@ -117,10 +118,11 @@
         "pooling_size": 7,
         "rcnn_batch_size": 512,
         "rpn_config": {
+            "clip_boxes":false,
+            "outside_window_filter":true,
             "use_iou":false,
             "use_focal_loss":true,
             "anchor_generator_config": {
-                "input_size":[384,1280],
                 "anchor_offset": [
                     0,
                     0
@@ -169,7 +171,7 @@
             "use_score": false
         },
         "sampler_config": {
-            "fg_fraction": 1
+            "fg_fraction": 0.5
         },
         "subsample_twice": false,
         "target_assigner_config": {
@@ -208,7 +210,7 @@
         "use_focal_loss": true
     },
     "train_config": {
-        "checkpoint_interval": 10000,
+        "checkpoint_interval": 4000,
         "clip_gradient": 10,
         "device_ids": [
             0
@@ -223,9 +225,9 @@
         },
         "rng_seed": 3,
         "scheduler_config": {
-            "last_epoch": -1,
+            "last_step": -1,
             "lr_decay_gamma": 0.1,
-            "lr_decay_step": 20,
+            "lr_decay_step": 4000,
             "type": "step"
         },
         "start_epoch": 1

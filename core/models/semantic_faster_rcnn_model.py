@@ -23,17 +23,22 @@ import functools
 
 class SemanticFasterRCNN(Model):
     def forward(self, feed_dict):
-
+        #  import ipdb
+        #  ipdb.set_trace()
         prediction_dict = {}
 
+        self.profiler.start('base_model')
         # base model
         base_feat = self.feature_extractor.first_stage_feature(
             feed_dict['img'])
         feed_dict.update({'base_feat': base_feat})
+        self.profiler.end('base_model')
         # batch_size = base_feat.shape[0]
 
+        self.profiler.start('rpn')
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
+        self.profiler.end('rpn')
 
         # proposals = prediction_dict['proposals_batch']
         # shape(N,num_proposals,5)
@@ -42,11 +47,15 @@ class SemanticFasterRCNN(Model):
             self.pre_subsample(prediction_dict, feed_dict)
         rois_batch = prediction_dict['rois_batch']
 
+        self.profiler.start('roipooling')
         # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
         pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
+        self.profiler.end('roipooling')
 
+        self.profiler.start('second_stage')
         # shape(N,C,1,1)
         pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
+        self.profiler.end('second_stage')
 
         # semantic map
         # if self.use_self_attention:
@@ -63,20 +72,23 @@ class SemanticFasterRCNN(Model):
 
         # rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat_reg)
         # else:
-        rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
-        rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
-        saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
-        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+        # rcnn_cls_scores_map = self.rcnn_cls_pred(pooled_feat)
+        # rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
+        # saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
+        pooled_feat = pooled_feat.mean(3).mean(2)
+
         # rcnn_cls_probs = rcnn_cls_probs_map.mean(3).mean(2)
         # shape(N,C)
-        rcnn_bbox_feat = pooled_feat * saliency_map[:, 1:, :, :]
+        # rcnn_bbox_feat = pooled_feat * saliency_map[:, 1:, :, :]
         # rcnn_bbox_feat = torch.cat([rcnn_bbox_feat, pooled_feat], dim=1)
-        rcnn_bbox_feat = rcnn_bbox_feat.mean(3).mean(2)
+        # rcnn_bbox_feat = rcnn_bbox_feat.mean(3).mean(2)
 
         # if self.use_score:
         # pooled_feat =
 
-        rcnn_bbox_preds = self.rcnn_bbox_pred(rcnn_bbox_feat)
+        rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
+        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
+        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
         prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
         prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
@@ -116,10 +128,10 @@ class SemanticFasterRCNN(Model):
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
-        if self.use_self_attention:
-            self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
-        else:
-            self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
+        # if self.use_self_attention:
+        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        # else:
+            # self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
         if self.class_agnostic:
             self.rcnn_bbox_pred = nn.Linear(2048, 4)
             # self.rcnn_bbox_pred = nn.Conv2d(2048,4,3,1,1)
@@ -128,7 +140,7 @@ class SemanticFasterRCNN(Model):
 
         # loss module
         if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(2)
+            self.rcnn_cls_loss = FocalLoss(self.n_classes)
         else:
             self.rcnn_cls_loss = functools.partial(
                 F.cross_entropy, reduce=False)
@@ -142,7 +154,8 @@ class SemanticFasterRCNN(Model):
     def init_param(self, model_config):
         classes = model_config['classes']
         self.classes = classes
-        self.n_classes = len(classes)
+        # including bg
+        self.n_classes = len(classes) + 1
         self.class_agnostic = model_config['class_agnostic']
         self.pooling_size = model_config['pooling_size']
         self.pooling_mode = model_config['pooling_mode']
@@ -268,6 +281,6 @@ class SemanticFasterRCNN(Model):
         num_gt = feed_dict['gt_labels'].numel()
         fake_match = prediction_dict['fake_match']
         self.target_assigner.analyzer.analyze_ap(
-            fake_match, rcnn_cls_probs[:, 1], num_gt, thresh=0.5)
+            fake_match, rcnn_cls_probs[:, 1], num_gt, thresh=0.1)
 
         return loss_dict

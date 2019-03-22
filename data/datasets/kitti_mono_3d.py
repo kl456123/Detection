@@ -14,7 +14,8 @@ color_map = [(0, 0, 142)]
 class Mono3DKittiDataset(DetDataset):
     def __init__(self, dataset_config, transforms=None, training=True):
         super(Mono3DKittiDataset, self).__init__(training)
-        self.root_path = dataset_config['root_path']
+        self.root_path = os.path.join(dataset_config['root_path'],
+                                      'object/training')
         classes = dataset_config.get('classes')
         if classes is None:
             self.classes = ['Car']
@@ -36,7 +37,6 @@ class Mono3DKittiDataset(DetDataset):
 
         self.transforms = transforms
         self.max_num_gt_boxes = 40
-        self.use_proj_2d = dataset_config['use_proj_2d']
         self.use_rect_v2 = dataset_config['use_rect_v2']
 
     def _read_imgs_from_dir(self, img_dir):
@@ -146,10 +146,8 @@ class Mono3DKittiDataset(DetDataset):
 
         # use proj instead of original box
         # training_sample['boxes_2d_proj'] = boxes_2d_proj
-        if self.use_proj_2d:
-            training_sample['gt_boxes'] = boxes_2d_proj
-        else:
-            training_sample['gt_boxes'] = bbox[:, :4]
+        training_sample['gt_boxes_proj'] = boxes_2d_proj
+        training_sample['gt_boxes'] = bbox[:, :4]
 
         # note here it is not truely 3d,just their some projected points in 2d
         training_sample['gt_boxes_3d'] = bbox_3d
@@ -200,6 +198,7 @@ class Mono3DKittiDataset(DetDataset):
                 'img_name': img_file,
                 'bbox_3d': bbox_3d,
                 'p2': p2,
+                'orig_p2': p2,
                 'K': K,
                 'T': T
             }
@@ -210,6 +209,7 @@ class Mono3DKittiDataset(DetDataset):
                 'im_scale': 1.0,
                 'img_name': img_file,
                 'p2': p2,
+                'orig_p2': p2,
                 'K': K,
                 'T': T
             }
@@ -300,7 +300,7 @@ class Mono3DKittiDataset(DetDataset):
         return any(category == _name for category in self.classes)
 
     def make_label_list(self, dataset_file):
-        train_list_path = os.path.join(self.root_path, dataset_file)
+        train_list_path = os.path.join(dataset_file)
         # train_list_path = './train.txt'
         #  train_list_path = './demo.txt'
         with open(train_list_path, 'r') as f:

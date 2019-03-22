@@ -141,15 +141,19 @@ class TargetAssigner(object):
             batch_size, -1, 4)
 
         num_cols = gt_boxes_3d.shape[-1]
-        assigned_gt_boxes_3d = gt_boxes_3d.view(-1, num_cols)[match.view(-1)].view(
-            batch_size, -1, num_cols)
+        assigned_gt_boxes_3d = gt_boxes_3d.view(
+            -1, num_cols)[match.view(-1)].view(batch_size, -1, num_cols)
         reg_targets_batch = self.bbox_coder.encode_batch(bboxes,
                                                          assigned_gt_boxes)
         reg_targets_batch_3d = self.bbox_coder_3d.encode_batch_bbox(
-            assigned_gt_boxes_3d[0], assigned_gt_boxes[0])
+            assigned_gt_boxes_3d[0], bboxes[0]).unsqueeze(0)
+        encoded_bboxes_2d_proj = self.bbox_coder.encode_batch(
+            bboxes, assigned_gt_boxes_3d[:, :, 6:])
+        reg_targets_batch_3d = torch.cat(
+            [reg_targets_batch_3d, encoded_bboxes_2d_proj], dim=-1)
 
         # no need grad_fn
-        return reg_targets_batch, reg_targets_batch_3d.unsqueeze(0)
+        return reg_targets_batch, reg_targets_batch_3d
 
     def _assign_classification_targets(self, match, gt_labels):
         """

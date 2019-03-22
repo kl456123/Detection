@@ -554,13 +554,27 @@ def truncate_box(box_2d, line):
 
     # normalize
     # w, h = dims_2d
-    h = box_2d[3] - box_2d[1] + 1
-    w = box_2d[2] - box_2d[0] + 1
+    #  h = box_2d[3] - box_2d[1] + 1
+    #  w = box_2d[2] - box_2d[0] + 1
 
-    reg_orient[0] /= w
-    reg_orient[1] /= h
+    #  reg_orient[0] /= w
+    #  reg_orient[1] /= h
     # reg_orient = np.log(reg_orient)
     return cls_orient, reg_orient
+
+
+def get_center_side(corners_xy):
+    """
+    Args:
+        location: (3,)
+    """
+    point0 = corners_xy[0]
+    point1 = corners_xy[1]
+    point2 = corners_xy[2]
+    point3 = corners_xy[3]
+    mid0 = (point0 + point1) / 2
+    mid1 = (point2 + point3) / 2
+    return np.stack([mid0, mid1], axis=0)
 
 
 def get_center_orient(location, p2, ry):
