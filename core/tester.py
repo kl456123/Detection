@@ -20,6 +20,8 @@ def to_cuda(target):
         return {key: to_cuda(target[key]) for key in target}
     elif isinstance(target, torch.Tensor):
         return target.cuda()
+    else:
+        return target
 
 
 def _test(eval_config, data_loader, model):
