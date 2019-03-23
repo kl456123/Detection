@@ -20,8 +20,10 @@ from core.samplers.detection_sampler import DetectionSampler
 from builder import feature_extractors_builder
 
 import functools
+from registry import DETECTORS
 
 
+@DETECTORS.register('semantic')
 class SemanticFasterRCNN(Model):
     def forward(self, feed_dict):
         self.clean_stats()

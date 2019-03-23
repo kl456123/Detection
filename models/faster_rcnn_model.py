@@ -16,11 +16,12 @@ from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
 from core.samplers.detection_sampler import DetectionSampler
-#  from utils.visualizer import FeatVisualizer
+from registry import DETECTORS
 
 import functools
 
 
+@DETECTORS.register('faster_rcnn')
 class FasterRCNN(Model):
     def forward(self, feed_dict):
 
@@ -35,9 +36,6 @@ class FasterRCNN(Model):
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
 
-        # proposals = prediction_dict['proposals_batch']
-        # shape(N,num_proposals,5)
-        # pre subsample for reduce consume of memory
         if self.training:
             self.pre_subsample(prediction_dict, feed_dict)
         rois_batch = prediction_dict['rois_batch']
