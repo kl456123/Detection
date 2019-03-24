@@ -2,7 +2,8 @@
 
 
 class Registry(dict):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, name, *args, **kwargs):
+        self.name = name
         super().__init__(*args, **kwargs)
 
     def register(self, module_name, module):

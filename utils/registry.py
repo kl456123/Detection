@@ -14,10 +14,23 @@ LOSSES = Registry('losses')
 DETECTORS = Registry('detectors')
 
 # bbox coder(transform bbox format)
-BBOX_CODER = Registry('bbox_coder')
+BBOX_CODERS = Registry('bbox_coder')
 
 # similarity_calc
-SIMILARITY_CALC = Registry('similarity_calc')
+SIMILARITY_CALCS = Registry('similarity_calcs')
 
 # matcher
-MATCHER = Registry('matcher')
+MATCHERS = Registry('matchers')
+
+# anchor_generators
+ANCHOR_GENERATORS = Registry('anchor_generators')
+
+# dataset and dataloaders
+DATASETS = Registry('datasets')
+DATALOADERS = Registry('dataloaders')
+
+# samplers
+SAMPLERS  = Registry('samplers')
+
+# transforms
+TRANSFORMS = Registry('transforms')

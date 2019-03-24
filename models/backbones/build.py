@@ -3,6 +3,7 @@
 Utils for generating backbone
 """
 from torchvision import models
+from utils.registry import BACKBONES
 
 _net_arch_model_map = {
     'res18': models.resnet18,
@@ -19,6 +20,11 @@ _net_arch_fn_map = {
     'res101': 'resnet101-5d3b4d8f.pth',
     'res152': 'resnet152-b121ed2d.pth',
 }
+
+
+def register_all_backbones():
+    for backbone_name in _net_arch_model_map:
+        BACKBONES.register(backbone_name, _net_arch_model_map[backbone_name])
 
 
 def build_backbone(net_arch):
