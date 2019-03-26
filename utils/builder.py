@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import torch
 
 # import models
 from models.feature_extractors import *
@@ -30,8 +31,8 @@ def build(config, registry, *args, **kwargs):
         raise ValueError('config has no type, it can not be builded')
     class_type = config['type']
     if class_type not in registry:
-        raise TypeError("unknown {} type {}!".format(
-            registry.name, class_type))
+        raise TypeError(
+            "unknown {} type {}!".format(registry.name, class_type))
     registered_class = registry[class_type]
     # use config to build it
     return registered_class(config, *args, **kwargs)
@@ -62,7 +63,7 @@ def build_dataloader(config):
     dataset_config = config['dataset_config']
     dataset = build_dataset(dataset_config)
 
-    dataloader = DataLoader(
+    dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
@@ -93,9 +94,9 @@ def build_transform(config):
     return trans.Compose(transforms)
 
 
-def build_optimizer(optimizer_config, model):
-    build(optimizer_config, registry.OPTIMIZERS, model)
+def build_optimizer(optimizer_config, model, logger=None):
+    return build(optimizer_config, registry.OPTIMIZERS, model, logger)
 
 
-def build_scheduler(scheduler_config):
-    pass
+def build_scheduler(scheduler_config, optimizer):
+    return build_scheduler(scheduler_config, optimizer)

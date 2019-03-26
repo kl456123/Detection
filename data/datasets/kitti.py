@@ -1,270 +1,188 @@
+# -*- coding: utf-8 -*-
+
 import os
 import cv2
-import numpy
-import torch
-
-from PIL import Image
+import numpy as np
 from data.det_dataset import DetDataset
 
-from utils.kitti_util import *
+# wavedata for kitti
+from wavedata.tools.core import calib_utils
+from wavedata.tools.obj_detection import obj_utils
 
-color_map = [(0, 0, 142)]
-OBJ_CLASSES = ['Car']
 
+class KITTIDataset(DetDataset):
+    def __init__(self, config, transform=None, training=True):
+        # root path of dataset
+        self.root_path = config['root_path']
+        # path to data(images)
+        self.data_path = config['data_path']
+        # path to annotation(labels)
+        self.label_path = config['label_path']
 
-class KittiDataset(DetDataset):
-    def __init__(self, dataset_config, transforms=None, training=True):
-        super(KittiDataset, self).__init__(training)
-        self.root_path = dataset_config['root_path']
-        self.use_gt = dataset_config.get('use_gt')
-        if self.use_gt is None:
-            self.use_gt = False
-        # import ipdb
-        # ipdb.set_trace()
+        # set up dirs
+        self._set_up_directories()
 
-        # if self.training:
-        if dataset_config['dataset_file'] is None:
-            print('Demo mode enabled!')
-            self.imgs = [dataset_config['demo_file']]
-            if self.use_gt:
-                sample_name = os.path.splitext(
-                    os.path.basename(self.imgs[0]))[0]
-                self.labels = [self.make_label(sample_name)]
-        else:
-            self.labels = self.make_label_list(dataset_config['dataset_file'])
-            self.imgs = self.make_image_list()
-        #  self.cache_bev = dataset_config['cache_bev']
-        self.transforms = transforms
-        self.max_num_gt_boxes = 40
+        # classes to be trained
+        self.classes = config['classes']
 
-    def get_training_sample(self, transform_sample):
-        # bbox and num
-        img = transform_sample['img']
-        im_scale = transform_sample['im_scale']
-        w = img.size()[2]
-        h = img.size()[1]
-        img_info = torch.FloatTensor([h, w, im_scale])
+        sample_names = self.load_sample_names()
+        self.sample_names = self.filter_sample_names(sample_names)
 
-        if self.training or self.use_gt:
-            bbox = transform_sample['bbox']
-            bbox[:, 2] *= w
-            bbox[:, 0] *= w
-            bbox[:, 1] *= h
-            bbox[:, 3] *= h
-            # For car, the label is one
-            bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
-            num = torch.LongTensor([bbox.size()[0]])
-        else:
-            # fake gt
-            bbox = torch.zeros((1, 5))
-            num = torch.Tensor(1)
+        self.use_pc = config.get('use_pc')
 
-        # im_info
-        # num_boxes = bbox.shape[0]
-        # if num_boxes < 40:
-        # bbox = torch.cat(
-        # (bbox, torch.ones(self.max_num_gt_boxes - num_boxes, 5)),
-        # dim=0)
-        h, w = transform_sample['img'].shape[-2:]
-        training_sample = {}
-        training_sample['img'] = transform_sample['img']
-        training_sample['im_info'] = img_info
-        training_sample['input_size'] = torch.FloatTensor([h, w])
-        training_sample['img_name'] = transform_sample['img_name']
-        training_sample['im_scale'] = im_scale
-        training_sample['gt_boxes'] = bbox[:, :4]
-        training_sample['gt_labels'] = bbox[:, -1].long()
-        training_sample['num'] = num
-        training_sample['img_orig'] = transform_sample['img_orig']
+    def _check_difficulty(self, obj, difficulty):
+        """This filters an object by difficulty.
+        Args:
+        obj: An instance of ground-truth Object Label
+        difficulty: An int defining the KITTI difficulty rate
+        Returns: True or False depending on whether the object
+        matches the difficulty criteria.
+        """
 
-        return training_sample
+        return ((obj.occlusion <= self.OCCLUSION[difficulty]) and
+                (obj.truncation <= self.TRUNCATION[difficulty]) and
+                (obj.y2 - obj.y1) >= self.HEIGHT[difficulty])
 
-    def get_transform_sample(self, index):
-        img_file = self.imgs[index]
-        img = Image.open(img_file)
+    def filter_sample_names(self, sample_names):
+        loaded_sample_names = []
+        for sample_name in sample_names:
+            obj_labels = obj_utils.read_labels(self._label_dir,
+                                               int(sample_name))
+            obj_labels = self.filter_labels(obj_labels, self.classes)
+            if len(obj_labels):
+                loaded_sample_names.append(sample_name)
 
-        if self.training or self.use_gt:
-            lbl_file = self.labels[index]
-            bbox, lbl = self.read_annotation(lbl_file)
-            if len(bbox) == 0:
-                bbox = numpy.zeros((1, 4))
-                lbl = numpy.zeros(1)
+        return loaded_sample_names
 
-            # make sample
-            transform_sample = {
-                'img': img,
-                'bbox': bbox,
-                'label': lbl,
-                'im_scale': 1.0,
-                'img_name': img_file,
-            }
-        else:
-            # make sample
-            transform_sample = {
-                'img': img,
-                'im_scale': 1.0,
-                'img_name': img_file,
-            }
-        transform_sample.update({'img_orig': numpy.asarray(img).copy()})
+    def get_rgb_image_path(self, sample_idx):
+        return os.path.join(self.image_dir, '{}.png'.format(sample_idx))
+
+    def get_depth_map_path(self, sample_idx):
+        return os.path.join(self.depth_dir, '{}.png'.format(sample_idx))
+
+    def get_velodyne_path(self, sample_idx):
+        return os.path.join(self.velo_dir, '{}.bin'.format(sample_idx))
+
+    def filter_labels(self,
+                      objects,
+                      classes=None,
+                      difficulty=None,
+                      max_occlusion=None):
+        """Filters ground truth labels based on class, difficulty, and
+        maximum occlusion
+
+        Args:
+        objects: A list of ground truth instances of Object Label
+        classes: (optional) classes to filter by, if None
+        all classes are used
+        difficulty: (optional) KITTI difficulty rating as integer
+        max_occlusion: (optional) maximum occlusion to filter objects
+
+        Returns:
+        filtered object label list
+        """
+        if classes is None:
+            classes = self.dataset.classes
+
+        objects = np.asanyarray(objects)
+        filter_mask = np.ones(len(objects), dtype=np.bool)
+
+        for obj_idx in range(len(objects)):
+            obj = objects[obj_idx]
+
+            if filter_mask[obj_idx]:
+                if not self._check_class(obj, classes):
+                    filter_mask[obj_idx] = False
+                    continue
+
+            # Filter by difficulty (occlusion, truncation, and height)
+            if difficulty is not None and \
+                    not self._check_difficulty(obj, difficulty):
+                filter_mask[obj_idx] = False
+
+                continue
+
+            if max_occlusion and \
+                    obj.occlusion > max_occlusion:
+                filter_mask[obj_idx] = False
+                continue
+
+        return objects[filter_mask]
+
+    def _class_str_to_index(self, class_type):
+        return self.classes.index(class_type)
+
+    def _obj_label_to_box_3d(self, obj_label):
+        """
+        box_3d format: ()
+        """
+        box_3d = np.zeros(7)
+        box_3d[3:6] = [obj_label.l, obj_label.h, obj_label.w]
+        box_3d[:3] = obj_label.t
+        box_3d[6] = obj_label.ry
+        return box_3d
+
+    def get_sample(self, index):
+        sample_name = self.sample_names[index]
+
+        # image
+        image_path = self.get_rgb_image_path(sample_name)
+        cv_bgr_image = cv2.imread(image_path)
+        image_input = cv_bgr_image[..., ::-1]
+        image_shape = image_input.shape[0:2]
+        # no scale now
+        image_scale = 1.0
+        image_info = image_shape + (image_scale, )
+
+        # calib
+        stereo_calib_p2 = calib_utils.read_calibration(self.calib_dir,
+                                                       int(sample_name)).p2
+
+        # labels
+        obj_labels = obj_utils.read_labels(self._label_dir, int(sample_name))
+        # filter it already
+        obj_labels = self.filter_labels(obj_labels, self.classes)
+        label_boxes_3d = np.asarray(
+            [self._obj_label_to_box_3d(obj_label) for obj_label in obj_labels])
+        label_classes = [
+            self._class_str_to_index(obj_label.type)
+            for obj_label in obj_labels
+        ]
+        label_classes = np.asarray(label_classes, dtype=np.int32)
+
+        transform_sample = {}
+        transform_sample['image'] = image_input.astype(np.float32)
+        transform_sample['stereo_calib_p2'] = stereo_calib_p2.astype(
+            np.float32)
+        transform_sample['label_boxes_3d'] = label_boxes_3d.astype(np.float32)
+        transform_sample['label_classes'] = label_classes
+        transform_sample['image_path'] = image_path
+
+        # (h,w,scale)
+        transform_sample['image_info'] = image_info
 
         return transform_sample
 
     def __getitem__(self, index):
-
-        transform_sample = self.get_transform_sample(index)
-
+        sample = self.get_sample(index)
         if self.transforms is not None:
-            transform_sample = self.transforms(transform_sample)
+            sample = self.transforms(sample)
 
-        return self.get_training_sample(transform_sample)
+        return sample
 
-    # return img, img_info, bbox, torch.LongTensor(
+    def _set_up_directories(self):
+        self.image_dir = self._root_path + '/image_' + str(self._cam_idx)
+        self.calib_dir = self._root_path + '/calib'
+        self.disp_dir = self._root_path + 'disparity'
+        self.planes_dir = self._root_path + '/planes'
+        self.velo_dir = self._root_path + '/velodyne'
+        self.depth_dir = self._root_path + '/depth_' + str(self._cam_idx)
 
-    # [bbox.size()[0]]), img_file
+        self._label_dir = self._root_path + '/label_' + str(self._cam_idx)
 
-    def read_annotation(self, file_name):
-        """
-        read annotation from file
-        :param file_name:
-        :return:boxes, labels
-        boxes: [[xmin, ymin, xmax, ymax], ...]
-        """
-        boxes = []
-        labels = []
-        annos = self.load_annotation(file_name)
-        for obj in annos:
-            obj = obj.split(' ')
-            obj[-1] = obj[-1][:-1]
-            obj_name = obj[0]
 
-            if not self.is_annotation(obj_name):
-                # print obj_name
-                continue
-
-            # occluded = int(float(obj[2]))
-            # if occluded > 2:
-            #     continue
-            #
-            # truncated = float(obj[1])
-            # if truncated > 0.8:
-            #     continue
-
-            obj_id = self.encode_obj_name(obj_name)
-            xmin = int(float(obj[4]))
-            ymin = int(float(obj[5]))
-            xmax = int(float(obj[6]))
-            ymax = int(float(obj[7]))
-            boxes.append([xmin, ymin, xmax, ymax])
-            labels.append(obj_id)
-
-        boxes = numpy.array(boxes, dtype=float)
-        labels = numpy.array(labels, dtype=int)
-
-        return boxes, labels
-
-    @staticmethod
-    def load_annotation(file_name):
-        with open(file_name) as f:
-            bbox = f.readlines()
-
-        return bbox
-
-    @staticmethod
-    def encode_obj_name(name):
-        _id = -1
-        for i in range(OBJ_CLASSES.__len__()):
-            if name == OBJ_CLASSES[i]:
-                _id = i
-                break
-        if _id == -1:
-            print("wrong label !")
-        return _id
-
-    @staticmethod
-    def is_label_file(filename):
-        return filename.endswith(".txt")
-
-    @staticmethod
-    def is_annotation(_name):
-        return any(category == _name for category in OBJ_CLASSES)
-
-    def make_label(self, label):
-        label_path = os.path.join(self.root_path,
-                                  'label_2/{}.txt'.format(label))
-        return label_path
-
-    def make_label_list(self, dataset_file):
-        train_list_path = os.path.join(self.root_path, dataset_file)
-        # train_list_path = './train.txt'
-        with open(train_list_path, 'r') as f:
-            lines = f.readlines()
-            labels = [line.strip() for line in lines]
-            labels = [
-                os.path.join(self.root_path, 'label_2/{}.txt'.format(label))
-                for label in labels
-            ]
-            if self.training:
-                # when testing,do not filter out labels for increase fp
-                labels = [
-                    label for label in labels if self.__check_has_car(label)
-                ]
-        return labels
-
-    def make_image_list(self):
-        images = []
-        for lab in self.labels:
-            lab = lab.split('/')[-1]
-            lab = lab[:-4]
-            img_name = lab + '.png'
-
-            read_path = os.path.join(self.root_path,
-                                     'image_2/{}'.format(img_name))
-            images.append(read_path)
-        return images
-
-    def __check_has_car(self, file_path):
-        lines = [line.rstrip() for line in open(file_path)]
-        objs = [Object3d(line) for line in lines]
-        for obj in objs:
-            if obj.type == 'Car':
-                return True
-        return False
-
-    def __test_load_annotation(self, annos):
-        is_trusted = True
-        obj_count = 0
-        for obj in annos:
-            obj = obj.split(' ')
-            obj_name = obj[0]
-
-            # occluded = int(float(obj[2]))
-            # if occluded > 2:
-            #     continue
-            #
-            # truncated = float(obj[1])
-            # if truncated > 0.8:
-            #     continue
-
-            if self.is_annotation(obj_name):
-                obj_count += 1
-
-        if obj_count < 1:
-            is_trusted = False
-
-        return is_trusted
-
-    @staticmethod
-    def visualize_bbox(img, bbox, lbl):
-        img = numpy.array(img, dtype=float)
-        img = numpy.around(img)
-        img = numpy.clip(img, a_min=0, a_max=255)
-        img = img.astype(numpy.uint8)
-        for i, box in enumerate(bbox):
-            img = cv2.rectangle(
-                img, (int(box[0] * 1024), int(box[1] * 512)),
-                (int(box[2] * 1024), int(box[3] * 512)),
-                color=color_map[lbl[i]],
-                thickness=2)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        cv2.imshow("test", img)
-        cv2.waitKey(0)
+if __name__ == '__main__':
+    dataset_config = {}
+    dataset = KITTIDataset(dataset_config)
+    sample = dataset[0]
+    print(sample.keys())
