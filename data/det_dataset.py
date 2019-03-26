@@ -17,12 +17,12 @@ class DetDataset(Dataset, metaclass=ABCMeta):
     def __len__(self):
         return len(self.sample_names)
 
-    @abstractmethod
-    def __getitem__(self, item_idx):
-        """
-        return data and label directly
-        """
-        pass
+    def __getitem__(self, index):
+        sample = self.get_sample(index)
+        if self.transforms is not None:
+            sample = self.transforms(sample)
+
+        return sample
 
     @abstractmethod
     def get_sample(self, idx):
