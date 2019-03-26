@@ -34,3 +34,13 @@ SAMPLERS  = Registry('samplers')
 
 # transforms
 TRANSFORMS = Registry('transforms')
+
+############################
+########## TRAIN ###########
+############################
+
+# optimizers
+OPTIMIZERS = Registry('optimizers')
+
+# schedulers
+SCHEDULERS = Registry('schedulers')

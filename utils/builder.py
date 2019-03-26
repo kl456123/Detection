@@ -18,6 +18,9 @@ from anchor_generators import *
 from data.datasets import *
 from data.transforms import *
 
+# import some components about training
+from solvers import *
+
 # at last import registry
 from utils import registry
 
@@ -88,3 +91,11 @@ def build_transform(config):
     for trans_config in config:
         transforms.append(build(trans_config, registry.TRANSFORMS))
     return trans.Compose(transforms)
+
+
+def build_optimizer(optimizer_config, model):
+    build(optimizer_config, registry.OPTIMIZERS, model)
+
+
+def build_scheduler(scheduler_config):
+    pass
