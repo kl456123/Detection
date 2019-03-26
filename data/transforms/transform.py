@@ -1,39 +1,16 @@
 import torch
 import random
 import numpy as np
-
 import matplotlib
 from PIL import Image, ImageFilter
+from torchvision.transforms import functional as F
+
+from core import constants
+from core.utils import format_checker
+from utils.registry import TRANSFORMS
 
 
-class Sample(object):
-    def __init__(self):
-        pass
-
-
-def intersect(box_a, box_b):
-    max_xy = np.minimum(box_a[:, 2:], box_b[2:])
-    min_xy = np.maximum(box_a[:, :2], box_b[:2])
-    inter = np.clip((max_xy - min_xy), a_min=0, a_max=np.inf)
-    return inter[:, 0] * inter[:, 1]
-
-
-def jaccard_numpy(box_a, box_b):
-    """Compute the jaccard overlap of two sets of boxes.
-    Args:
-    box_a: Multiple bounding boxes, Shape: [num_boxes,4]
-    box_b: Single bounding box, Shape: [4]
-    Return:
-    jaccard overlap: Shape: [box_a.shape[0], box_a.shape[1]]
-    """
-    inter = intersect(box_a, box_b)
-    area_a = (
-        (box_a[:, 2] - box_a[:, 0]) * (box_a[:, 3] - box_a[:, 1]))  # [A,B]
-    area_b = ((box_b[2] - box_b[0]) * (box_b[3] - box_b[1]))  # [A,B]
-    union = area_a + area_b - inter
-    return inter / union  # [A,B]
-
-
+@TRANSFORMS.register('random_hsv')
 class RandomHSV(object):
     """
     Args:
@@ -58,7 +35,8 @@ class RandomHSV(object):
         self.ratio = ratio
 
     def __call__(self, sample):
-        img = sample['img']
+        img = sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(img)
         rand_value = random.randint(1, 100)
         if rand_value > 100 * self.ratio:
             return sample
@@ -75,11 +53,51 @@ class RandomHSV(object):
         img_v = np.clip(img_v * v_random, 0, 255)
         img_hsv = np.stack([img_h, img_s, img_v], axis=2)
         img_new = matplotlib.colors.hsv_to_rgb(img_hsv)
-        sample['img'] = img_new
+        sample[constants.KEY_IMAGE] = img_new
 
         return sample
 
 
+@TRANSFORMS.register('random_zoomout')
+class RandomZoomOut(object):
+    def __init__(self, scale=1.5):
+        pass
+
+    def __call__(self, sample):
+        image = sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(image)
+
+        width, height, = image.size
+        boxes = sample[constants.KEY_LABEL_BOXES_2D]
+        labels = sample[constants.KEY_LABEL_CLASSES]
+        # place the image on a 1.5X mean pic
+        # 0.485, 0.456, 0.406
+        remain = scale-1
+        assert remain > 1, 'scale must be greater than 1.0'
+        mean_img = np.zeros((int(scale * height), int(scale * width), 3))
+        mean_img[:, :, 0] = np.uint8(0.485 * 255)
+        mean_img[:, :, 1] = np.uint8(0.456 * 255)
+        mean_img[:, :, 2] = np.uint8(0.406 * 255)
+        left = np.random.uniform(0, remain) * width
+        top = np.random.uniform(0, remain) * height
+        rect = np.array([
+            int(left), int(top), int(left + width), int(top + height)
+        ])
+        mean_img[rect[1]:rect[3], rect[0]:rect[2], :] = np.array(image)
+
+        current_boxes = boxes.copy()
+        current_labels = labels.copy()
+        # adjust to crop (by substracting crop's left,top)
+        current_boxes[:, :2] += rect[:2]
+        current_boxes[:, 2:] += rect[:2]
+        sample[constants.KEY_IMAGE] = Image.fromarray(
+            mean_img.astype(np.uint8))
+        sample[constants.KEY_LABEL_BOXES_2D] = current_boxes
+        sample[constants.KEY_LABEL_CLASSES] = current_labels
+        return sample
+
+
+@TRANSFORMS.register('random_sample_crop')
 class RandomSampleCrop(object):
     """
     Args:
@@ -107,122 +125,94 @@ class RandomSampleCrop(object):
             (0.5, None),
             (0.7, None),
             (0.9, None),
-            # Randomly sample a patch.
-            # (None, None),
-            'zoom_out', )
 
     def __call__(self, sample):
-        image = sample['img']
-        width, height, = image.size
-        boxes = sample['bbox']
-        labels = sample['label']
+        image=sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(image)
+
+        width, height,= image.size
+        boxes=sample[constants.KEY_LABEL_BOXES_2D]
+        labels=sample[constants.KEY_LABEL_CLASSES]
         while True:
             # Randomly choose a mode.
-            mode = random.choice(self.sample_options)
+            mode=random.choice(self.sample_options)
             if mode is None:
                 return sample
 
-            if mode is 'zoom_out':
-                # place the image on a 1.5X mean pic
-                # 0.485, 0.456, 0.406
-                mean_img = np.zeros((int(1.5 * height), int(1.5 * width), 3))
-                mean_img[:, :, 0] = np.uint8(0.485 * 255)
-                mean_img[:, :, 1] = np.uint8(0.456 * 255)
-                mean_img[:, :, 2] = np.uint8(0.406 * 255)
-
-                left = np.random.uniform(0, 0.5) * width
-                top = np.random.uniform(0, 0.5) * height
-                rect = np.array([
-                    int(left), int(top), int(left + width), int(top + height)
-                ])
-                mean_img[rect[1]:rect[3], rect[0]:rect[2], :] = np.array(image)
-                # mask = boxes[:, 3] > (boxes[:, 1] + 30)
-                # current_labels = labels[mask].copy()
-
-                current_boxes = boxes.copy()
-                current_labels = labels.copy()
-                # adjust to crop (by substracting crop's left,top)
-                current_boxes[:, :2] += rect[:2]
-                current_boxes[:, 2:] += rect[:2]
-                sample['img'] = Image.fromarray(mean_img.astype(np.uint8))
-                sample['bbox'] = current_boxes
-                sample['label'] = current_labels
-                return sample
-
-            min_iou, max_iou = mode
+            min_iou, max_iou=mode
             if min_iou is None:
-                min_iou = float('-inf')
+                min_iou=float('-inf')
             if max_iou is None:
-                max_iou = float('inf')
+                max_iou=float('inf')
 
             # Max trails (50), or change mode.
             for _ in range(50):
-                current_image = np.array(image)
+                current_image=np.array(image)
 
                 if self.keep_aspect:
-                    current_image = np.array(image)
-                    w = np.random.uniform(0.8 * width, width)
-                    h = w * height / float(width)
+                    current_image=np.array(image)
+                    w=np.random.uniform(0.8 * width, width)
+                    h=w * height / float(width)
 
                     # Convert to integer rect x1,y1,x2,y2.
-                    left = np.random.uniform(width - w)
-                    top = left / width * height
+                    left=np.random.uniform(width - w)
+                    top=left / width * height
                 else:
-                    w = np.random.uniform(0.7 * width, width)
-                    h = np.random.uniform(0.7 * height, height)
+                    w=np.random.uniform(0.7 * width, width)
+                    h=np.random.uniform(0.7 * height, height)
                     # Aspect ratio constraint b/t .5 & 2.
                     if h / w < self.min_aspect or h / w > self.max_aspect:
                         continue
 
                     # Convert to integer rect x1,y1,x2,y2.
-                    left = np.random.uniform(width - w)
-                    top = np.random.uniform(height - h)
+                    left=np.random.uniform(width - w)
+                    top=np.random.uniform(height - h)
 
-                rect = np.array(
+                rect=np.array(
                     [int(left), int(top), int(left + w), int(top + h)])
                 # Calculate IoU (jaccard overlap) b/t the cropped and gt boxes.
-                overlap = jaccard_numpy(boxes, rect)
+                overlap=jaccard_numpy(boxes, rect)
                 # Is min and max overlap constraint satisfied? if not try again.
                 if overlap.min() < min_iou and max_iou < overlap.max():
                     continue
 
                 # Cut the crop from the image.
-                current_image = current_image[rect[1]:rect[3], rect[0]:rect[
+                current_image=current_image[rect[1]:rect[3], rect[0]:rect[
                     2], :]
                 # Keep overlap with gt box IF center in sampled patch.
-                centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
+                centers=(boxes[:, :2] + boxes[:, 2:]) / 2.0
                 # Mask in all gt boxes that above and to the left of centers.
-                m1 = (rect[0] < centers[:, 0]) * (rect[1] < centers[:, 1])
+                m1=(rect[0] < centers[:, 0]) * (rect[1] < centers[:, 1])
                 # Mask in all gt boxes that under and to the right of centers.
-                m2 = (rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
+                m2=(rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
                 # mask in that both m1 and m2 are true
-                mask = m1 * m2
+                mask=m1 * m2
                 # have any valid boxes? try again if not
                 if not mask.any():
                     continue
 
-                current_boxes = boxes[mask, :].copy(
+                current_boxes=boxes[mask, :].copy(
                 )  # take only matching gt boxes
-                current_labels = labels[mask]  # take only matching gt labels
+                current_labels=labels[mask]  # take only matching gt labels
 
                 # should we use the box left and top corner or the crop's
-                current_boxes[:, :2] = np.maximum(current_boxes[:, :2],
+                current_boxes[:, :2]=np.maximum(current_boxes[:, :2],
                                                   rect[:2])
                 # adjust to crop (by substracting crop's left,top)
                 current_boxes[:, :2] -= rect[:2]
-                current_boxes[:, 2:] = np.minimum(current_boxes[:, 2:],
+                current_boxes[:, 2:]=np.minimum(current_boxes[:, 2:],
                                                   rect[2:])
                 # adjust to crop (by substracting crop's left,top)
                 current_boxes[:, 2:] -= rect[:2]
                 # print('before croped shape: ',image.size)
                 # print('after croped shape: ',current_image.shape)
 
-                sample['img'] = Image.fromarray(current_image)
-                sample['bbox'] = current_boxes
-                sample['label'] = current_labels
+                sample[constants.KEY_IMAGE]=Image.fromarray(current_image)
+                sample[constants.KEY_LABEL_BOXES_2D]=current_boxes
+                sample[constants.KEY_LABEL_CLASSES]=current_labels
                 return sample
 
-
+@TRANSFORMS.register('normalize')
 class Normalize(object):
     """Normalize an tensor image with mean and standard deviation.
     Given mean: (R, G, B) and std: (R, G, B),
@@ -234,8 +224,8 @@ class Normalize(object):
     """
 
     def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
+        self.mean=mean
+        self.std=std
 
     def __call__(self, sample):
         """
@@ -244,43 +234,45 @@ class Normalize(object):
         Returns:
         Tensor: Normalized image.
         """
-        tensor = sample['img']
+        tensor=sample['img']
         # TODO: make efficient
         for t, m, s in zip(tensor, self.mean, self.std):
             t.sub_(m).div_(s)
-        sample['img'] = tensor
+        sample[constants.KEY_IMAGE]=tensor
         return sample
 
-
+@TRANSFORMS.register('random_brightness')
 class RandomBrightness(object):
     def __init__(self, shift_value=30):
-        self.shift_value = shift_value
+        self.shift_value=shift_value
 
     def __call__(self, sample):
-        img = sample['img']
-        shift = np.random.uniform(-self.shift_value, self.shift_value, size=1)
-        image = np.array(img, dtype=float)
+        img=sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(img)
+        shift=np.random.uniform(-self.shift_value, self.shift_value, size=1)
+        image=np.array(img, dtype=float)
         image[:, :, :] += shift
-        image = np.around(image)
-        image = np.clip(image, 0, 255)
-        image = image.astype(np.uint8)
-        image = Image.fromarray(image)
-        sample['img'] = image
+        image=np.around(image)
+        image=np.clip(image, 0, 255)
+        image=image.astype(np.uint8)
+        image=Image.fromarray(image)
+        sample[constants.KEY_IMAGE]=image
         return sample
 
-
+@TRANSFORMS.register('random_gaussian_blur')
 class RandomGaussBlur(object):
     def __init__(self, max_blur=4):
-        self.max_blur = max_blur
+        self.max_blur=max_blur
 
     def __call__(self, sample):
-        img = sample['img']
-        blur_value = np.random.uniform(0, self.max_blur)
-        img = img.filter(ImageFilter.GaussianBlur(radius=blur_value))
-        sample['img'] = img
+        img=sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(img)
+        blur_value=np.random.uniform(0, self.max_blur)
+        img=img.filter(ImageFilter.GaussianBlur(radius=blur_value))
+        sample[constants.KEY_IMAGE]=img
         return sample
 
-
+@TRANSFORMS.register('random_horizontal_flip')
 class RandomHorizontalFlip(object):
     """Horizontally flip the given PIL.Image randomly with a probability of 0.5."""
 
@@ -293,72 +285,66 @@ class RandomHorizontalFlip(object):
         Returns:
         PIL.Image: Randomly flipped image.
         """
-        img = sample['img']
-        bbox = sample['bbox']
+        img=sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(img)
+        bbox=sample[constants.KEY_LABEL_BOXES_2D]
         if random.random() < 0.5:
-            w, h = img.size
-            xmin = w - bbox[:, 2]
-            xmax = w - bbox[:, 0]
-            bbox[:, 0] = xmin
-            bbox[:, 2] = xmax
-            sample['img'] = img.transpose(Image.FLIP_LEFT_RIGHT)
-            sample['bbox'] = bbox
+            w, h=img.size
+            xmin=w - bbox[:, 2]
+            xmax=w - bbox[:, 0]
+            bbox[:, 0]=xmin
+            bbox[:, 2]=xmax
+            sample[constants.KEY_IMAGE]=img.transpose(Image.FLIP_LEFT_RIGHT)
+            sample[constants.KEY_LABEL_BOXES_2D]=bbox
             return sample
         else:
             return sample
 
-
+@TRANSFORMS.register('resize')
 class Resize(object):
-    """random Rescale the input PIL.Image to the given size.
+    def __init__(self, min_size, max_size):
+        if not isinstance(min_size, (list, tuple)):
+            min_size=(min_size,)
+        self.min_size=min_size
+        self.max_size=max_size
 
-    Args:
-    size (sequence or int): Desired output size. If size is a sequence like
-    (w, h), output size will be matched to this. If size is an int,
-    smaller edge of the image will be matched to this number.
-    i.e, if height > width, then image will be rescaled to
-    (size * height / width, size)
-    interpolation (int, optional): Desired interpolation. Default is
-    ``PIL.Image.BILINEAR``
-    """
+    # modified from torchvision to add support for max size
+    def get_size(self, image_size):
+        w, h=image_size
+        size=random.choice(self.min_size)
+        max_size=self.max_size
+        if max_size is not None:
+            min_original_size=float(min((w, h)))
+            max_original_size=float(max((w, h)))
+            if max_original_size / min_original_size * size > max_size:
+                size=int(round(max_size * min_original_size / max_original_size))
 
-    def __init__(self, _size, interpolation=Image.BICUBIC):
-        # assert isinstance(_size, int)
-        self.target_size = _size[0]
-        self.max_size = _size[1]
-        self.interpolation = interpolation
+        if (w <= h and w == size) or (h <= w and h == size):
+            return (h, w)
+
+        if w < h:
+            ow=size
+            oh=int(size * h / w)
+        else:
+            oh=size
+            ow=int(size * w / h)
+
+        return (oh, ow)
 
     def __call__(self, sample):
-        """
-        Args:
-        img (PIL.Image): Image to be scaled.
+        image=sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(image)
+        target=sample[constants.KEY_LABEL_BOXES_2D]
+        size=self.get_size(image.size)
+        image=F.resize(image, size)
+        target=target.resize(image.size)
 
-        Returns:
-        PIL.Image: Rescaled image.
-        """
-        img = sample['img']
-        w, h = img.size
-        if sample.get('bbox') is not None:
-            bbox = sample['bbox']
-            bbox[:, 2] /= w
-            bbox[:, 0] /= w
-            bbox[:, 1] /= h
-            bbox[:, 3] /= h
-            sample['bbox'] = bbox
-        if w > h:
-            im_scale = float(self.target_size) / h
-            target_shape = (im_scale * w, self.target_size)
-        else:
-            im_scale = float(self.target_size) / w
-            target_shape = (self.target_size, im_scale * h)
-
-        target_shape = (int(target_shape[0]), int(target_shape[1]))
-
-        sample['img'] = img.resize(target_shape, self.interpolation)
-        sample['im_scale'] = im_scale
-
+        sample[constants.KEY_IMAGE]=image
+        sample[constants.KEY_LABEL_BOXES_2D]=target
         return sample
 
 
+@TRANSFORMS.register('to_tensor')
 class ToTensor(object):
     """Convert a ``PIL.Image`` to tensor.
     Converts a PIL.Image in the range [0, 255] to a torch.FloatTensor
@@ -372,93 +358,9 @@ class ToTensor(object):
         Returns:
         Tensor: Converted image.
         """
-        pic = sample['img']
-        label = sample.get('label')
-        bbox = sample.get('bbox')
-        pic = np.array(pic)
-        img = torch.from_numpy(pic.transpose((2, 0, 1)))
-        if label is not None:
-            sample['label'] = torch.from_numpy(label).long()
-
-        if bbox is not None:
-            sample['bbox'] = torch.from_numpy(bbox).float()
-
-        sample['img'] = img.float().div(255)
-        return sample
-
-
-class BEVRandomHorizontalFlip(object):
-    """Horizontally flip the given PIL.Image randomly with a probability of 0.5."""
-
-    def __call__(self, sample):
-        """
-        Args:
-            img[np.array]:
-            bbox[np.array]: bbox to be flipped
-
-        Returns:
-            PIL.Image: Randomly flipped image.
-        """
-        ry = sample['ry']
-        img = sample['img']
-        bbox = sample['bbox']
-        h, w = img.shape[:2]
-        if random.random() < 0.5:
-            xmin = w - bbox[:, 2]
-            xmax = w - bbox[:, 0]
-            bbox[:, 0] = xmin
-            bbox[:, 2] = xmax
-
-            ry[ry >= 0] = np.pi - ry[ry >= 0]
-            ry[ry < 0] = -np.pi - ry[ry < 0]
-
-            sample['ry'] = ry
-            sample['bbox'] = bbox
-            sample['img'] = np.flip(img, axis=1).copy()
-            return sample
-        else:
-            return sample
-
-
-class BEVToTensor(object):
-    """Convert a ``PIL.Image`` to tensor.
-    Converts a PIL.Image in the range [0, 255] to a torch.FloatTensor
-    of shape (C x H x W) in the range [0.0, 1.0].
-    """
-
-    def __call__(self, sample):
-        """
-        Args:
-            img(numpy.array):
-        Returns:
-            Tensor: Converted image.
-        """
-        img = sample['img']
-        bbox = sample['bbox']
-        label = sample['label']
-        h, w = img.shape[:2]
-        img = torch.from_numpy(img)
-        img = img.permute(2, 0, 1)
-        lbl = torch.from_numpy(label).long()
-        bbox = torch.from_numpy(bbox).float()
-        sample['img'] = img.float()
-        sample['bbox'] = bbox
-        sample['label'] = lbl
+        image=sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(image)
+        image=F.to_tensor(image)
+        sample[constants.KEY_IMAGE]=image
 
         return sample
-
-
-class Compose(object):
-    """Composes several transforms together.
-    Args:
-    transforms (list of ``Transform`` objects): list of transforms to compose.
-    """
-
-    def __init__(self, transforms):
-        self.transforms = transforms
-
-    def __call__(self, sample):
-        for t in self.transforms:
-            sample = t(sample)
-        return sample
-

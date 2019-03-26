@@ -152,3 +152,15 @@ def check_anchor_3d_format(anchors_3d):
 
 def check_tensor_normalized(tensor):
     assert check_if_in_interval(tensor, [0, 1])
+
+
+def check_pil_image(image):
+    try:
+        import accimage
+    except ImportError:
+        accimage = None
+
+    if accimage is not None:
+        return isinstance(image, (Image.Image, accimage.Image))
+    else:
+        return isinstance(image, Image.Image)
