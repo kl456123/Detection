@@ -8,3 +8,9 @@ KEY_IMAGE_PATH = 'image_path'
 KEY_IMAGE_INFO = 'image_info'
 
 KEY_STEREO_CALIB_P2 = 'stereo_calib_p2'
+
+
+# logger config key
+KEY_LOGGER_NAME = 'logger_name'
+KEY_LOGGER_LEVEL = 'logger_level'
+KEY_LOGGER_PATH = 'logger_path'
