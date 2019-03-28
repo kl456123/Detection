@@ -8,6 +8,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+from utils.registry import LOSSES
+
 
 def one_hot_embeding(labels, num_classes):
     """Embeding labels to one-hot form.
@@ -24,6 +26,7 @@ def one_hot_embeding(labels, num_classes):
     return y[labels]  # [N, D]
 
 
+@LOSSES.register('focal_loss')
 class FocalLoss(nn.Module):
     def __init__(self,
                  num_classes,

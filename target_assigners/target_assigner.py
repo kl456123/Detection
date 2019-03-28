@@ -5,12 +5,7 @@ import torch
 
 # core classes
 
-from core.analyzer import Analyzer
-
-# builder
-from builder import matcher_builder
-from builder import bbox_coder_builder
-from builder import similarity_calc_builder
+from core.utils.analyzer import Analyzer
 
 
 class TargetAssigner(object):

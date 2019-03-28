@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 import torch
 
+from utils.registry import BBOX_CODERS
 
+
+@BBOX_CODERS.register('center')
 class CenterCoder(object):
     def __init__(self, coder_config):
         self.bbox_normalize_targets_precomputed = torch.tensor(

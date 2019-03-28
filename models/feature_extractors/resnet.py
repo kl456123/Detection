@@ -5,11 +5,11 @@ import torch.nn as nn
 from core.model import Model
 import copy
 import os
-from models import registry
+from utils.registry import FEATURE_EXTRACTORS
 from models.backbones import build_backbone
 
 
-@registry.FEATURE_EXTRACTORS.register('resnet')
+@FEATURE_EXTRACTORS.register('resnet')
 class ResNetFeatureExtractor(Model):
     def init_weights(self):
         pass

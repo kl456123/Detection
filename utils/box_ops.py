@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 import torch
-from core.similarity_calc.center_similarity_calc import CenterSimilarityCalc
+from similarity_calcs.center_similarity_calc import CenterSimilarityCalc
+
+def box2rois(bboxes):
+    """
+    Add img dim to each bbox
+    Args:
+        bboxes: shape(N, M, 5)
+    """
 
 
 def clip_boxes(boxes, im_shape):

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from .optimizer_builder import *
-from .scheduler_builder import *
+from .optimizers_builder import *
+from .schedulers_builder import *
 
 

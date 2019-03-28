@@ -1,15 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import sys
 
-from core import constants
 
-
-def setup_logger(logger_config):
-    # init default opts
-    logger_name = logger_config[constants.KEY_LOGGER_NAME]
-    logger_level = logger_config.get(constants.KEY_LOGGER_LEVEL, logging.INFO)
-    logger_path = logger_config.get(constants.KEY_LOGGER_PATH, 'log.txt')
+def setup_logger(logger_name, logger_level=logging.INFO,
+                 logger_path='log.txt'):
 
     # set level
     logger = logging.getLogger(logger_name)

@@ -1,8 +1,9 @@
 import os
 
 from core.utils.summary_writer import SummaryWriter
-from core.utils.saver import Saver
+from core.saver import Saver
 from core.utils.logger import setup_logger
+from core.utils.config import Config
 
 from core import trainer
 from utils import builder
@@ -73,8 +74,8 @@ def parse_args():
         '--in_path', default=None, type=str, help='Input directory.')
     parser.add_argument(
         '--out_path', default=None, type=str, help='Output directory.')
-    parser.add_argument('--logger_level', default='INFO',
-                        type=str, help='logger level')
+    parser.add_argument(
+        '--logger_level', default='INFO', type=str, help='logger level')
     args = parser.parse_args()
     return args
 
@@ -99,26 +100,74 @@ def train(config, logger):
     # build optimizer and scheduler
     optimizer = builder.build_optimizer(train_config['optimizer_config'])
 
-    scheduler = builder.build_scheduler(
-        train_config['scheduler_config'])
+    scheduler = builder.build_scheduler(train_config['scheduler_config'])
 
     # some components for logging and saving(saver and summaryer)
-    output_dir = os.path.join(train_config['save_dir'], model_config[
-        'net'],  data_config['name'])
+    output_dir = os.path.join(train_config['save_dir'], model_config['net'],
+                              data_config['name'])
     saver = Saver(output_dir)
 
     summary_path = os.path.join(output_dir, './summary')
     summary_writer = SummaryWriter(summary_path)
 
-    trainer.train(dataloader, model, optimizer,
-                  scheduler, saver, summary_writer)
+    trainer.train(dataloader, model, optimizer, scheduler, saver,
+                  summary_writer)
 
 
 def generate_config(args, logger):
-    pass
+    # read config from file
+    config = Config.fromjson(args.config)
+
+    train_config = config['train_config']
+    model_config = config['model_config']
+    data_config = config['data_config']
+
+    np.random.seed(train_config['rng_seed'])
+
+    train_config['output_path'] = args.out_path
+
+    torch.backends.cudnn.benchmark = True
+
+    assert args.net is not None, 'please select a base model'
+    model_config['net'] = args.net
+
+    # output dir
+    output_dir = os.path.join(train_config['output_path'], model_config['net'],
+                              data_config['name'])
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        logger.info('create new directory {}'.format(output_dir))
+    else:
+        logger.info('output_dir is already exist')
+
+    # copy config to output dir
+    shutil.copy2(args.config, output_dir)
+
+    # data input path
+    if args.in_path is not None:
+        # overwrite the data root path
+        data_config['dataset_config']['root_path'] = args.in_path
+
+    logger.info('checkpoint will be saved to {}'.format(output_dir))
+
+    # use multi gpus to parallel
+    train_config['mGPUs'] = args.mGPUs
+    train_config['cuda'] = args.cuda
+
+    # resume from checkpoint
+    train_config['resume'] = args.resume
+
+    # use pretrained model to initialize
+    train_config['model'] = args.model
+
+    # reset lr(modify the initial_lr of lr_scheduler)
+    train_config['lr'] = args.lr
+
+    return config
 
 
 if __name__ == '__main__':
+    args = parse_args()
     # first setup logger
     logger = setup_logger('detection', args.logger_level)
 

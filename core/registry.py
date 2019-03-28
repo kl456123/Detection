@@ -6,7 +6,7 @@ class Registry(dict):
         self.name = name
         super().__init__(*args, **kwargs)
 
-    def register(self, module_name, module):
+    def register(self, module_name, module=None):
         # used as fn
         if module is not None:
             Registry._register_generic(self, module_name, module)

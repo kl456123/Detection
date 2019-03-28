@@ -35,8 +35,6 @@ class PVANetFeatureExtractor(Model):
         self.separate_feat = model_config.get('separate_feat')
 
     def init_modules(self):
-        import ipdb
-        ipdb.set_trace()
         resnet = pvanet()
         if self.training and self.pretrained:
             print(("Loading pretrained weights from %s" % (self.model_path)))

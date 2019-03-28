@@ -1,24 +1,21 @@
 # -*- coding: utf-8 -*-
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from lib.model.roi_align.modules.roi_align import RoIAlignAvg
+
 from core.model import Model
-from core.models.rpn_model import RPNModel
-from core.models.focal_loss import FocalLoss
-from model.roi_align.modules.roi_align import RoIAlignAvg
-from model.psroi_pooling.modules.psroi_pool import PSRoIPool
-
 from core.filler import Filler
-from core.target_assigner import TargetAssigner
-from core.samplers.hard_negative_sampler import HardNegativeSampler
-from core.samplers.balanced_sampler import BalancedSampler
-from core.models.feature_extractors.resnet import ResNetFeatureExtractor
-from core.samplers.detection_sampler import DetectionSampler
-from registry import DETECTORS
+from core import constants
 
-import functools
+from models.losses import common_loss
+from models.losses.focal_loss import FocalLoss
+
+from utils.registry import DETECTORS
+from utils import box_ops
+
+from target_generators.target_generator import TargetGenerator
 
 
 @DETECTORS.register('faster_rcnn')
@@ -29,41 +26,37 @@ class FasterRCNN(Model):
 
         # base model
         base_feat = self.feature_extractor.first_stage_feature(
-            feed_dict['img'])
+            feed_dict[constants.KEY_IMAGE])
         feed_dict.update({'base_feat': base_feat})
         self.add_feat('base_feat', base_feat)
 
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
+        proposals = prediction_dict['proposals']
+        multi_stage_targets = []
+        for i in range(self.num_stages):
+            proposals, targets = self.target_generators[i].generate_targets(
+                proposals, feed_dict)
 
-        if self.training:
-            self.pre_subsample(prediction_dict, feed_dict)
-        rois_batch = prediction_dict['rois_batch']
+            # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
+            rois = box_ops.box2rois(proposals)
+            pooled_feat = self.rcnn_pooling(base_feat, rois.view(-1, 5))
 
-        # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
-        pooled_feat = self.rcnn_pooling(base_feat, rois_batch.view(-1, 5))
-
-        # shape(N,C,1,1)
-        pooled_feat = self.feature_extractor.second_stage_feature(pooled_feat)
-        # shape(N,C)
-        if self.reduce:
+            # shape(N,C,1,1)
+            pooled_feat = self.feature_extractor.second_stage_feature(
+                pooled_feat)
             pooled_feat = pooled_feat.mean(3).mean(2)
-        else:
-            pooled_feat = pooled_feat.view(self.rcnn_batch_size, -1)
 
-        rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
-        rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
+            rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
+            rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
 
-        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+            rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
-        prediction_dict['rcnn_cls_probs'] = rcnn_cls_probs
-        prediction_dict['rcnn_bbox_preds'] = rcnn_bbox_preds
-        prediction_dict['rcnn_cls_scores'] = rcnn_cls_scores
+            targets[0]['pred'] = rcnn_cls_probs
+            targets[1]['pred'] = rcnn_bbox_preds
+            multi_stage_targets.extend(targets)
 
-        # used for track
-        proposals_order = prediction_dict['proposals_order']
-        prediction_dict['second_rpn_anchors'] = prediction_dict['anchors'][
-            proposals_order]
+        prediction_dict[constants.KEY_TARGETS] = targets
 
         return prediction_dict
 
@@ -82,8 +75,6 @@ class FasterRCNN(Model):
         if self.pooling_mode == 'align':
             self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
                                             self.pooling_size, 1.0 / 16.0)
-        elif self.pooling_mode == 'ps':
-            self.rcnn_pooling = PSRoIPool(7, 7, 1.0 / 16, 7, self.n_classes)
         elif self.pooling_mode == 'psalign':
             raise NotImplementedError('have not implemented yet!')
         elif self.pooling_mode == 'deformable_psalign':
@@ -100,14 +91,14 @@ class FasterRCNN(Model):
 
         # loss module
         if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(2)
+            self.rcnn_cls_loss = FocalLoss(self.num_classes)
         else:
-            self.rcnn_cls_loss = functools.partial(
-                F.cross_entropy, reduce=False)
+            self.rcnn_cls_loss = common_loss.CrossEntropyLoss(reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
     def init_param(self, model_config):
+        self.num_stages = model_config['num_stages']
         classes = model_config['classes']
         self.classes = classes
         self.n_classes = len(classes)
@@ -119,79 +110,16 @@ class FasterRCNN(Model):
         self.truncated = model_config['truncated']
 
         self.use_focal_loss = model_config['use_focal_loss']
-        self.subsample_twice = model_config['subsample_twice']
         self.rcnn_batch_size = model_config['rcnn_batch_size']
 
         # some submodule config
         self.feature_extractor_config = model_config['feature_extractor_config']
         self.rpn_config = model_config['rpn_config']
 
-        # assigner
-        self.target_assigner = TargetAssigner(
-            model_config['target_assigner_config'])
-
-        # sampler
-        self.sampler = BalancedSampler(model_config['sampler_config'])
-
-        # self.reduce = model_config.get('reduce')
-        self.reduce = True
-
-        #  self.visualizer = FeatVisualizer()
-
-    def pre_subsample(self, prediction_dict, feed_dict):
-        rois_batch = prediction_dict['rois_batch']
-        gt_boxes = feed_dict['gt_boxes']
-        gt_labels = feed_dict['gt_labels']
-
-        ##########################
-        # assigner
-        ##########################
-        #  import ipdb
-        #  ipdb.set_trace()
-        rcnn_cls_targets, rcnn_reg_targets, rcnn_cls_weights, rcnn_reg_weights = self.target_assigner.assign(
-            rois_batch[:, :, 1:], gt_boxes, gt_labels)
-
-        ##########################
-        # subsampler
-        ##########################
-        cls_criterion = None
-        pos_indicator = rcnn_reg_weights > 0
-        indicator = rcnn_cls_weights > 0
-
-        # subsample from all
-        # shape (N,M)
-        batch_sampled_mask = self.sampler.subsample_batch(
-            self.rcnn_batch_size,
-            pos_indicator,
-            indicator=indicator,
-            criterion=cls_criterion)
-        rcnn_cls_weights = rcnn_cls_weights[batch_sampled_mask]
-        rcnn_reg_weights = rcnn_reg_weights[batch_sampled_mask]
-        num_cls_coeff = (rcnn_cls_weights > 0).sum(dim=-1)
-        num_reg_coeff = (rcnn_reg_weights > 0).sum(dim=-1)
-        # check
-        assert num_cls_coeff, 'bug happens'
-        assert num_reg_coeff, 'bug happens'
-
-        prediction_dict[
-            'rcnn_cls_weights'] = rcnn_cls_weights / num_cls_coeff.float()
-        prediction_dict[
-            'rcnn_reg_weights'] = rcnn_reg_weights / num_reg_coeff.float()
-        prediction_dict['rcnn_cls_targets'] = rcnn_cls_targets[
-            batch_sampled_mask]
-        prediction_dict['rcnn_reg_targets'] = rcnn_reg_targets[
-            batch_sampled_mask]
-
-        # update rois_batch
-        prediction_dict['rois_batch'] = rois_batch[batch_sampled_mask].view(
-            rois_batch.shape[0], -1, 5)
-
-        if not self.training:
-            # used for track
-            proposals_order = prediction_dict['proposals_order']
-
-            prediction_dict['proposals_order'] = proposals_order[
-                batch_sampled_mask]
+        self.target_generators = [
+            TargetGenerator(model_config['target_generator_config'][i])
+            for i in range(self.num_stages)
+        ]
 
     def loss(self, prediction_dict, feed_dict):
         """
@@ -203,32 +131,16 @@ class FasterRCNN(Model):
         # submodule loss
         loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
 
-        # targets and weights
-        rcnn_cls_weights = prediction_dict['rcnn_cls_weights']
-        rcnn_reg_weights = prediction_dict['rcnn_reg_weights']
+        targets = prediction_dict[constants.KEY_TARGETS]
 
-        rcnn_cls_targets = prediction_dict['rcnn_cls_targets']
-        rcnn_reg_targets = prediction_dict['rcnn_reg_targets']
+        cls_target = targets[0]
+        reg_target = targets[1]
 
-        # classification loss
-        rcnn_cls_scores = prediction_dict['rcnn_cls_scores']
-        rcnn_cls_loss = self.rcnn_cls_loss(rcnn_cls_scores, rcnn_cls_targets)
-        rcnn_cls_loss *= rcnn_cls_weights
-        rcnn_cls_loss = rcnn_cls_loss.sum(dim=-1)
-
-        # bounding box regression L1 loss
-        rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']
-        rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
-                                             rcnn_reg_targets).sum(dim=-1)
-        rcnn_bbox_loss *= rcnn_reg_weights
-        # rcnn_bbox_loss *= rcnn_reg_weights
-        rcnn_bbox_loss = rcnn_bbox_loss.sum(dim=-1)
-
-        # loss weights has no gradients
-        loss_dict['rcnn_cls_loss'] = rcnn_cls_loss
-        loss_dict['rcnn_bbox_loss'] = rcnn_bbox_loss
-
-        # add rcnn_cls_targets to get the statics of rpn
-        # loss_dict['rcnn_cls_targets'] = rcnn_cls_targets
+        rcnn_cls_loss = self.rcnn_cls_loss(*cls_target)
+        rcnn_reg_loss = self.rcnn_bbox_loss(*reg_target)
+        loss_dict.update({
+            'rcnn_cls_loss': rcnn_cls_loss,
+            'rcnn_reg_loss': rcnn_reg_loss
+        })
 
         return loss_dict

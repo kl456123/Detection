@@ -8,10 +8,20 @@ from torchvision.transforms import functional as F
 from core import constants
 from core.utils import format_checker
 from utils.registry import TRANSFORMS
+from abc import ABC, abstractmethod
+
+
+class Transform(object):
+    def __init__(self, config):
+        pass
+
+    @abstractmethod
+    def __call__(self, sample):
+        raise NotImplementedError
 
 
 @TRANSFORMS.register('random_hsv')
-class RandomHSV(object):
+class RandomHSV(Transform):
     """
     Args:
     img (Image): the image being input during training
@@ -59,7 +69,7 @@ class RandomHSV(object):
 
 
 @TRANSFORMS.register('random_zoomout')
-class RandomZoomOut(object):
+class RandomZoomOut(Transform):
     def __init__(self, scale=1.5):
         pass
 
@@ -72,7 +82,7 @@ class RandomZoomOut(object):
         labels = sample[constants.KEY_LABEL_CLASSES]
         # place the image on a 1.5X mean pic
         # 0.485, 0.456, 0.406
-        remain = scale-1
+        remain = scale - 1
         assert remain > 1, 'scale must be greater than 1.0'
         mean_img = np.zeros((int(scale * height), int(scale * width), 3))
         mean_img[:, :, 0] = np.uint8(0.485 * 255)
@@ -80,9 +90,8 @@ class RandomZoomOut(object):
         mean_img[:, :, 2] = np.uint8(0.406 * 255)
         left = np.random.uniform(0, remain) * width
         top = np.random.uniform(0, remain) * height
-        rect = np.array([
-            int(left), int(top), int(left + width), int(top + height)
-        ])
+        rect = np.array(
+            [int(left), int(top), int(left + width), int(top + height)])
         mean_img[rect[1]:rect[3], rect[0]:rect[2], :] = np.array(image)
 
         current_boxes = boxes.copy()
@@ -98,7 +107,7 @@ class RandomZoomOut(object):
 
 
 @TRANSFORMS.register('random_sample_crop')
-class RandomSampleCrop(object):
+class RandomSampleCrop(Transform):
     """
     Args:
     img (Image): the image being input during training
@@ -124,96 +133,97 @@ class RandomSampleCrop(object):
             #  (0.3, None),
             (0.5, None),
             (0.7, None),
-            (0.9, None),
+            (0.9, None))
 
     def __call__(self, sample):
-        image=sample[constants.KEY_IMAGE]
+        image = sample[constants.KEY_IMAGE]
         format_checker.check_pil_image(image)
 
-        width, height,= image.size
-        boxes=sample[constants.KEY_LABEL_BOXES_2D]
-        labels=sample[constants.KEY_LABEL_CLASSES]
+        width, height, = image.size
+        boxes = sample[constants.KEY_LABEL_BOXES_2D]
+        labels = sample[constants.KEY_LABEL_CLASSES]
         while True:
             # Randomly choose a mode.
-            mode=random.choice(self.sample_options)
+            mode = random.choice(self.sample_options)
             if mode is None:
                 return sample
 
-            min_iou, max_iou=mode
+            min_iou, max_iou = mode
             if min_iou is None:
-                min_iou=float('-inf')
+                min_iou = float('-inf')
             if max_iou is None:
-                max_iou=float('inf')
+                max_iou = float('inf')
 
             # Max trails (50), or change mode.
             for _ in range(50):
-                current_image=np.array(image)
+                current_image = np.array(image)
 
                 if self.keep_aspect:
-                    current_image=np.array(image)
-                    w=np.random.uniform(0.8 * width, width)
-                    h=w * height / float(width)
+                    current_image = np.array(image)
+                    w = np.random.uniform(0.8 * width, width)
+                    h = w * height / float(width)
 
                     # Convert to integer rect x1,y1,x2,y2.
-                    left=np.random.uniform(width - w)
-                    top=left / width * height
+                    left = np.random.uniform(width - w)
+                    top = left / width * height
                 else:
-                    w=np.random.uniform(0.7 * width, width)
-                    h=np.random.uniform(0.7 * height, height)
+                    w = np.random.uniform(0.7 * width, width)
+                    h = np.random.uniform(0.7 * height, height)
                     # Aspect ratio constraint b/t .5 & 2.
                     if h / w < self.min_aspect or h / w > self.max_aspect:
                         continue
 
                     # Convert to integer rect x1,y1,x2,y2.
-                    left=np.random.uniform(width - w)
-                    top=np.random.uniform(height - h)
+                    left = np.random.uniform(width - w)
+                    top = np.random.uniform(height - h)
 
-                rect=np.array(
+                rect = np.array(
                     [int(left), int(top), int(left + w), int(top + h)])
                 # Calculate IoU (jaccard overlap) b/t the cropped and gt boxes.
-                overlap=jaccard_numpy(boxes, rect)
+                overlap = jaccard_numpy(boxes, rect)
                 # Is min and max overlap constraint satisfied? if not try again.
                 if overlap.min() < min_iou and max_iou < overlap.max():
                     continue
 
                 # Cut the crop from the image.
-                current_image=current_image[rect[1]:rect[3], rect[0]:rect[
+                current_image = current_image[rect[1]:rect[3], rect[0]:rect[
                     2], :]
                 # Keep overlap with gt box IF center in sampled patch.
-                centers=(boxes[:, :2] + boxes[:, 2:]) / 2.0
+                centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
                 # Mask in all gt boxes that above and to the left of centers.
-                m1=(rect[0] < centers[:, 0]) * (rect[1] < centers[:, 1])
+                m1 = (rect[0] < centers[:, 0]) * (rect[1] < centers[:, 1])
                 # Mask in all gt boxes that under and to the right of centers.
-                m2=(rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
+                m2 = (rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
                 # mask in that both m1 and m2 are true
-                mask=m1 * m2
+                mask = m1 * m2
                 # have any valid boxes? try again if not
                 if not mask.any():
                     continue
 
-                current_boxes=boxes[mask, :].copy(
+                current_boxes = boxes[mask, :].copy(
                 )  # take only matching gt boxes
-                current_labels=labels[mask]  # take only matching gt labels
+                current_labels = labels[mask]  # take only matching gt labels
 
                 # should we use the box left and top corner or the crop's
-                current_boxes[:, :2]=np.maximum(current_boxes[:, :2],
+                current_boxes[:, :2] = np.maximum(current_boxes[:, :2],
                                                   rect[:2])
                 # adjust to crop (by substracting crop's left,top)
                 current_boxes[:, :2] -= rect[:2]
-                current_boxes[:, 2:]=np.minimum(current_boxes[:, 2:],
+                current_boxes[:, 2:] = np.minimum(current_boxes[:, 2:],
                                                   rect[2:])
                 # adjust to crop (by substracting crop's left,top)
                 current_boxes[:, 2:] -= rect[:2]
                 # print('before croped shape: ',image.size)
                 # print('after croped shape: ',current_image.shape)
 
-                sample[constants.KEY_IMAGE]=Image.fromarray(current_image)
-                sample[constants.KEY_LABEL_BOXES_2D]=current_boxes
-                sample[constants.KEY_LABEL_CLASSES]=current_labels
+                sample[constants.KEY_IMAGE] = Image.fromarray(current_image)
+                sample[constants.KEY_LABEL_BOXES_2D] = current_boxes
+                sample[constants.KEY_LABEL_CLASSES] = current_labels
                 return sample
 
+
 @TRANSFORMS.register('normalize')
-class Normalize(object):
+class Normalize(Transform):
     """Normalize an tensor image with mean and standard deviation.
     Given mean: (R, G, B) and std: (R, G, B),
     will normalize each channel of the torch.*Tensor, i.e.
@@ -223,9 +233,9 @@ class Normalize(object):
     std (sequence): Sequence of standard deviations for R, G, B channels.
     """
 
-    def __init__(self, mean, std):
-        self.mean=mean
-        self.std=std
+    def __init__(self, config):
+        self.mean = config['normal_mean']
+        self.std = config['normal_std']
 
     def __call__(self, sample):
         """
@@ -234,46 +244,49 @@ class Normalize(object):
         Returns:
         Tensor: Normalized image.
         """
-        tensor=sample['img']
+        tensor = sample['img']
         # TODO: make efficient
         for t, m, s in zip(tensor, self.mean, self.std):
             t.sub_(m).div_(s)
-        sample[constants.KEY_IMAGE]=tensor
+        sample[constants.KEY_IMAGE] = tensor
         return sample
+
 
 @TRANSFORMS.register('random_brightness')
-class RandomBrightness(object):
+class RandomBrightness(Transform):
     def __init__(self, shift_value=30):
-        self.shift_value=shift_value
+        self.shift_value = shift_value
 
     def __call__(self, sample):
-        img=sample[constants.KEY_IMAGE]
+        img = sample[constants.KEY_IMAGE]
         format_checker.check_pil_image(img)
-        shift=np.random.uniform(-self.shift_value, self.shift_value, size=1)
-        image=np.array(img, dtype=float)
+        shift = np.random.uniform(-self.shift_value, self.shift_value, size=1)
+        image = np.array(img, dtype=float)
         image[:, :, :] += shift
-        image=np.around(image)
-        image=np.clip(image, 0, 255)
-        image=image.astype(np.uint8)
-        image=Image.fromarray(image)
-        sample[constants.KEY_IMAGE]=image
+        image = np.around(image)
+        image = np.clip(image, 0, 255)
+        image = image.astype(np.uint8)
+        image = Image.fromarray(image)
+        sample[constants.KEY_IMAGE] = image
         return sample
+
 
 @TRANSFORMS.register('random_gaussian_blur')
-class RandomGaussBlur(object):
+class RandomGaussBlur(Transform):
     def __init__(self, max_blur=4):
-        self.max_blur=max_blur
+        self.max_blur = max_blur
 
     def __call__(self, sample):
-        img=sample[constants.KEY_IMAGE]
+        img = sample[constants.KEY_IMAGE]
         format_checker.check_pil_image(img)
-        blur_value=np.random.uniform(0, self.max_blur)
-        img=img.filter(ImageFilter.GaussianBlur(radius=blur_value))
-        sample[constants.KEY_IMAGE]=img
+        blur_value = np.random.uniform(0, self.max_blur)
+        img = img.filter(ImageFilter.GaussianBlur(radius=blur_value))
+        sample[constants.KEY_IMAGE] = img
         return sample
 
+
 @TRANSFORMS.register('random_horizontal_flip')
-class RandomHorizontalFlip(object):
+class RandomHorizontalFlip(Transform):
     """Horizontally flip the given PIL.Image randomly with a probability of 0.5."""
 
     def __call__(self, sample):
@@ -285,67 +298,69 @@ class RandomHorizontalFlip(object):
         Returns:
         PIL.Image: Randomly flipped image.
         """
-        img=sample[constants.KEY_IMAGE]
+        img = sample[constants.KEY_IMAGE]
         format_checker.check_pil_image(img)
-        bbox=sample[constants.KEY_LABEL_BOXES_2D]
+        bbox = sample[constants.KEY_LABEL_BOXES_2D]
         if random.random() < 0.5:
-            w, h=img.size
-            xmin=w - bbox[:, 2]
-            xmax=w - bbox[:, 0]
-            bbox[:, 0]=xmin
-            bbox[:, 2]=xmax
-            sample[constants.KEY_IMAGE]=img.transpose(Image.FLIP_LEFT_RIGHT)
-            sample[constants.KEY_LABEL_BOXES_2D]=bbox
+            w, h = img.size
+            xmin = w - bbox[:, 2]
+            xmax = w - bbox[:, 0]
+            bbox[:, 0] = xmin
+            bbox[:, 2] = xmax
+            sample[constants.KEY_IMAGE] = img.transpose(Image.FLIP_LEFT_RIGHT)
+            sample[constants.KEY_LABEL_BOXES_2D] = bbox
             return sample
         else:
             return sample
 
+
 @TRANSFORMS.register('resize')
-class Resize(object):
+class Resize(Transform):
     def __init__(self, min_size, max_size):
         if not isinstance(min_size, (list, tuple)):
-            min_size=(min_size,)
-        self.min_size=min_size
-        self.max_size=max_size
+            min_size = (min_size, )
+        self.min_size = min_size
+        self.max_size = max_size
 
     # modified from torchvision to add support for max size
     def get_size(self, image_size):
-        w, h=image_size
-        size=random.choice(self.min_size)
-        max_size=self.max_size
+        w, h = image_size
+        size = random.choice(self.min_size)
+        max_size = self.max_size
         if max_size is not None:
-            min_original_size=float(min((w, h)))
-            max_original_size=float(max((w, h)))
+            min_original_size = float(min((w, h)))
+            max_original_size = float(max((w, h)))
             if max_original_size / min_original_size * size > max_size:
-                size=int(round(max_size * min_original_size / max_original_size))
+                size = int(
+                    round(max_size * min_original_size / max_original_size))
 
         if (w <= h and w == size) or (h <= w and h == size):
             return (h, w)
 
         if w < h:
-            ow=size
-            oh=int(size * h / w)
+            ow = size
+            oh = int(size * h / w)
         else:
-            oh=size
-            ow=int(size * w / h)
+            oh = size
+            ow = int(size * w / h)
 
         return (oh, ow)
 
     def __call__(self, sample):
-        image=sample[constants.KEY_IMAGE]
+        image = sample[constants.KEY_IMAGE]
         format_checker.check_pil_image(image)
-        target=sample[constants.KEY_LABEL_BOXES_2D]
-        size=self.get_size(image.size)
-        image=F.resize(image, size)
-        target=target.resize(image.size)
+        target = sample[constants.KEY_LABEL_BOXES_2D]
+        size = self.get_size(image.size)
+        image = F.resize(image, size)
+        target = target.resize(image.size)
 
-        sample[constants.KEY_IMAGE]=image
-        sample[constants.KEY_LABEL_BOXES_2D]=target
+        sample[constants.KEY_IMAGE] = image
+        sample[constants.KEY_LABEL_BOXES_2D] = target
         return sample
 
 
 @TRANSFORMS.register('to_tensor')
-class ToTensor(object):
+class ToTensor(Transform):
     """Convert a ``PIL.Image`` to tensor.
     Converts a PIL.Image in the range [0, 255] to a torch.FloatTensor
     of shape (C x H x W) in the range [0.0, 1.0].
@@ -358,9 +373,9 @@ class ToTensor(object):
         Returns:
         Tensor: Converted image.
         """
-        image=sample[constants.KEY_IMAGE]
+        image = sample[constants.KEY_IMAGE]
         format_checker.check_pil_image(image)
-        image=F.to_tensor(image)
-        sample[constants.KEY_IMAGE]=image
+        image = F.to_tensor(image)
+        sample[constants.KEY_IMAGE] = image
 
         return sample

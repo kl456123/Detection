@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
+from torchvision import transforms as trans
 
 # import models
 from models.feature_extractors import *
@@ -55,13 +56,18 @@ def build_sampler(config):
 
 
 def build_dataloader(config):
-    batch_size = config['batch_size']
-    shuffle = config['shuffle']
-    num_workers = config['num_workers']
+    dataloader_config = config['dataloader_config']
+    batch_size = dataloader_config['batch_size']
+    shuffle = dataloader_config['shuffle']
+    num_workers = dataloader_config['num_workers']
 
-    # build dataset first
+    # build transform first
+    transform_config = config['transform_config']
+    transform = build_transform(transform_config)
+
+    # then build dataset
     dataset_config = config['dataset_config']
-    dataset = build_dataset(dataset_config)
+    dataset = build_dataset(dataset_config, transform)
 
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -71,10 +77,7 @@ def build_dataloader(config):
     return dataloader
 
 
-def build_dataset(config):
-    # build transform first
-    transform_config = config['transform_config']
-    transform = build_transform(transform_config)
+def build_dataset(config, transform):
 
     return build(config, registry.DATASETS, transform)
 

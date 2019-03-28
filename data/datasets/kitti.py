@@ -10,12 +10,12 @@ from wavedata.tools.core import calib_utils
 from wavedata.tools.obj_detection import obj_utils
 
 from core import constants
+from utils.registry import DATASETS
 
 
+@DATASETS.register('kitti')
 class KITTIDataset(DetDataset):
     def __init__(self, config, transform=None, training=True):
-        import ipdb
-        ipdb.set_trace()
         # root path of dataset
         self._root_path = os.path.join(config['root_path'], 'object/training')
         self._dataset_file = config['dataset_file']
