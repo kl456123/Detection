@@ -3,7 +3,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from lib.model.roi_align.modules.roi_align import RoIAlignAvg
+# from lib.model.roi_align.modules.roi_align import RoIAlignAvg
 
 from core.model import Model
 from core.filler import Filler

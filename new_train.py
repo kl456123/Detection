@@ -1,4 +1,5 @@
 import os
+import logging
 
 from core.utils.summary_writer import SummaryWriter
 from core.saver import Saver
@@ -169,7 +170,7 @@ def generate_config(args, logger):
 if __name__ == '__main__':
     args = parse_args()
     # first setup logger
-    logger = setup_logger('detection', args.logger_level)
+    logger = setup_logger('detection')
 
     config = generate_config(args, logger)
     train(config, logger)

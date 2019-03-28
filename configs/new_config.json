@@ -11,7 +11,7 @@
             "classes":["Car"],
             "cache_bev": false,
             "dataset_file": "data/train.txt",
-            "root_path": "/data/object/training"
+            "root_path": "/data"
         },
         "name": "kitti",
         "transform_config":[
