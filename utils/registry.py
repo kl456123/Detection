@@ -44,3 +44,6 @@ OPTIMIZERS = Registry('optimizers')
 
 # schedulers
 SCHEDULERS = Registry('schedulers')
+
+# target_assigner
+TARGET_ASSIGNERS = Registry('target_assigners')

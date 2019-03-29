@@ -22,3 +22,17 @@ def get_modules_collection(dirname, exclude=[], include=None):
     if include is not None:
         modules = list(filter(lambda x: x in include, modules))
     return modules
+
+
+def import_file(module_name, file_path):
+    import imp
+    module = imp.load_source(module_name, file_path)
+    return module
+
+
+def import_dir(*args, **kwargs):
+    modules = get_modules_collection(*args, **kwargs)
+
+    for module_name in modules:
+        module_path = os.path.join(args[0], module_name + '.py')
+        import_file(module_name, module_path)

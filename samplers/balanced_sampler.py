@@ -3,8 +3,9 @@
 import torch
 import numpy as np
 from core.sampler import Sampler
+from utils.registry import SAMPLERS
 
-
+@SAMPLERS.register('balanced')
 class BalancedSampler(Sampler):
     def __init__(self, sampler_config):
         super().__init__(sampler_config)

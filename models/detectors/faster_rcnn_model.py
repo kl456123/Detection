@@ -11,11 +11,14 @@ from core import constants
 
 from models.losses import common_loss
 from models.losses.focal_loss import FocalLoss
+from lib.model.roi_align.modules.roi_align import RoIAlignAvg
 
 from utils.registry import DETECTORS
 from utils import box_ops
 
 from target_generators.target_generator import TargetGenerator
+from models import feature_extractors
+from models import detectors
 
 
 @DETECTORS.register('faster_rcnn')
@@ -69,16 +72,12 @@ class FasterRCNN(Model):
         Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
 
     def init_modules(self):
-        self.feature_extractor = ResNetFeatureExtractor(
+        self.feature_extractor = feature_extractors.build(
             self.feature_extractor_config)
-        self.rpn_model = RPNModel(self.rpn_config)
+        self.rpn_model = detectors.build(self.rpn_config)
         if self.pooling_mode == 'align':
             self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
                                             self.pooling_size, 1.0 / 16.0)
-        elif self.pooling_mode == 'psalign':
-            raise NotImplementedError('have not implemented yet!')
-        elif self.pooling_mode == 'deformable_psalign':
-            raise NotImplementedError('have not implemented yet!')
         self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
         if self.reduce:
             in_channels = 2048
@@ -105,12 +104,10 @@ class FasterRCNN(Model):
         self.class_agnostic = model_config['class_agnostic']
         self.pooling_size = model_config['pooling_size']
         self.pooling_mode = model_config['pooling_mode']
-        self.crop_resize_with_max_pool = model_config[
-            'crop_resize_with_max_pool']
         self.truncated = model_config['truncated']
 
         self.use_focal_loss = model_config['use_focal_loss']
-        self.rcnn_batch_size = model_config['rcnn_batch_size']
+        self.rcnn_batch_size = model_config['batch_size']
 
         # some submodule config
         self.feature_extractor_config = model_config['feature_extractor_config']

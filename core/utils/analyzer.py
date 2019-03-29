@@ -4,26 +4,15 @@ import torch
 
 
 class Analyzer(object):
-    # def __init__(self):
-    # # init value
-    # self.clean_stat()
-
-    # def clean_stat(self):
-    # self.stat = {
-    # 'num_det': 1,
-    # 'num_tp': 0,
-    # 'matched_thresh': 0,
-    # 'recall_thresh': 0
-    # 'match': None
-    # }
-    # self.match = None
+    def __init__(self, config):
+        super().__init__()
 
     def analyze(self, match, num_gt):
         """
         analyze result from match,calculate AP and AR
         note that -1 means it is not matched
         Args:
-        match: tensor(N,M)
+            match: tensor(N,M)
 
         """
         # import ipdb

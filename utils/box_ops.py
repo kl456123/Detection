@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
-from similarity_calcs.center_similarity_calc import CenterSimilarityCalc
+# from similarity_calcs.center_similarity_calc import CenterSimilarityCalc
 
 def box2rois(bboxes):
     """

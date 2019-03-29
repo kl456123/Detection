@@ -5,19 +5,23 @@ import torch
 import torch.nn.functional as F
 
 from core.model import Model
-from core.anchor_generators.anchor_generator import AnchorGenerator
 # from core.samplers.hard_negative_sampler import HardNegativeSampler
 # from core.samplers.balanced_sampler import BalancedSampler
-from core.samplers.detection_sampler import DetectionSampler
-from core.target_assigner import TargetAssigner
+# from core.samplers.detection_sampler import DetectionSampler
+# from core.target_assigner import TargetAssigner
 from core.filler import Filler
-from core.models.focal_loss import FocalLoss
+from models.losses.focal_loss import FocalLoss
 
 from utils import box_ops
 from lib.model.nms.nms_wrapper import nms
 import functools
+from utils.registry import DETECTORS
+from target_generators.target_generator import TargetGenerator
+# import samplers
+import anchor_generators
 
 
+@DETECTORS.register('rpn')
 class RPNModel(Model):
     def init_param(self, model_config):
         self.in_channels = model_config['din']
@@ -31,18 +35,22 @@ class RPNModel(Model):
         # sampler
         # self.sampler = HardNegativeSampler(model_config['sampler_config'])
         # self.sampler = BalancedSampler(model_config['sampler_config'])
-        self.sampler = DetectionSampler(model_config['sampler_config'])
+        # self.sampler = DetectionSampler(model_config['sampler_config'])
+        # self.sampler = samplers.build(model_config['sampler_config'])
 
         # anchor generator
-        self.anchor_generator = AnchorGenerator(
+        self.anchor_generator = anchor_generators.build(
             model_config['anchor_generator_config'])
         self.num_anchors = self.anchor_generator.num_anchors
         self.nc_bbox_out = 4 * self.num_anchors
         self.nc_score_out = self.num_anchors * 2
 
+        self.target_generators = TargetGenerator(
+            model_config['target_generator_config'])
+
         # target assigner
-        self.target_assigner = TargetAssigner(
-            model_config['target_assigner_config'])
+        # self.target_assigner = (
+        # model_config['target_assigner_config'])
 
         # bbox coder
         self.bbox_coder = self.target_assigner.bbox_coder

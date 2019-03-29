@@ -3,8 +3,10 @@
 
 from core.matcher import Matcher
 import torch
+from utils.registry import MATCHERS
 
 
+@MATCHERS.register('bipartitle')
 class BipartitleMatcher(Matcher):
     def __init__(self, matcher_config):
         super().__init__()

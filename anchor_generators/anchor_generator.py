@@ -4,7 +4,10 @@ import torch
 
 import core.ops as ops
 
+from utils.registry import ANCHOR_GENERATORS
 
+
+@ANCHOR_GENERATORS.register('default')
 class AnchorGenerator(object):
     def __init__(self, anchor_generator_config):
         """

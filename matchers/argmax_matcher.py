@@ -3,8 +3,10 @@
 import torch
 
 from core.matcher import Matcher
+from utils.registry import MATCHERS
 
 
+@MATCHERS.register('argmax')
 class ArgmaxMatcher(Matcher):
     def __init__(self, matcher_config):
         super().__init__()

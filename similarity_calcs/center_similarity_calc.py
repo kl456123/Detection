@@ -2,10 +2,13 @@
 # encoding: utf-8
 
 import torch
+from utils.registry import SIMILARITY_CALCS
+from core.similarity_calc import SimilarityCalc
 
 
-class CenterSimilarityCalc(object):
-    def __init__(self):
+@SIMILARITY_CALCS.register('center')
+class CenterSimilarityCalc(SimilarityCalc):
+    def __init__(self, config):
         pass
 
     def compare_batch(self, anchors, gt_boxes):
@@ -32,16 +35,16 @@ class CenterSimilarityCalc(object):
 
             anchors_boxes_x = (anchors[:, :, 2] - anchors[:, :, 0] + 1)
             anchors_boxes_y = (anchors[:, :, 3] - anchors[:, :, 1] + 1)
-            anchors_area = (anchors_boxes_x * anchors_boxes_y).view(
-                batch_size, N, 1)
+            anchors_area = (anchors_boxes_x * anchors_boxes_y).view(batch_size,
+                                                                    N, 1)
 
             gt_area_zero = (gt_boxes_x == 1) & (gt_boxes_y == 1)
             anchors_area_zero = (anchors_boxes_x == 1) & (anchors_boxes_y == 1)
 
-            boxes = anchors.view(batch_size, N, 1, 4).expand(
-                batch_size, N, K, 4)
-            query_boxes = gt_boxes.view(batch_size, 1, K, 4).expand(
-                batch_size, N, K, 4)
+            boxes = anchors.view(batch_size, N, 1, 4).expand(batch_size, N, K,
+                                                             4)
+            query_boxes = gt_boxes.view(batch_size, 1, K, 4).expand(batch_size,
+                                                                    N, K, 4)
 
             iw = (torch.min(boxes[:, :, :, 2], query_boxes[:, :, :, 2]) -
                   torch.max(boxes[:, :, :, 0], query_boxes[:, :, :, 0]) + 1)
@@ -58,8 +61,8 @@ class CenterSimilarityCalc(object):
                 gt_area_zero.view(batch_size, 1, K).expand(batch_size, N, K),
                 0)
             overlaps.masked_fill_(
-                anchors_area_zero.view(batch_size, N, 1).expand(
-                    batch_size, N, K), 0)
+                anchors_area_zero.view(batch_size, N, 1).expand(batch_size, N,
+                                                                K), 0)
 
         elif anchors.dim() == 3:
             N = anchors.size(1)
@@ -78,16 +81,16 @@ class CenterSimilarityCalc(object):
 
             anchors_boxes_x = (anchors[:, :, 2] - anchors[:, :, 0] + 1)
             anchors_boxes_y = (anchors[:, :, 3] - anchors[:, :, 1] + 1)
-            anchors_area = (anchors_boxes_x * anchors_boxes_y).view(
-                batch_size, N, 1)
+            anchors_area = (anchors_boxes_x * anchors_boxes_y).view(batch_size,
+                                                                    N, 1)
 
             gt_area_zero = (gt_boxes_x == 1) & (gt_boxes_y == 1)
             anchors_area_zero = (anchors_boxes_x == 1) & (anchors_boxes_y == 1)
 
-            boxes = anchors.view(batch_size, N, 1, 4).expand(
-                batch_size, N, K, 4)
-            query_boxes = gt_boxes.view(batch_size, 1, K, 4).expand(
-                batch_size, N, K, 4)
+            boxes = anchors.view(batch_size, N, 1, 4).expand(batch_size, N, K,
+                                                             4)
+            query_boxes = gt_boxes.view(batch_size, 1, K, 4).expand(batch_size,
+                                                                    N, K, 4)
 
             iw = (torch.min(boxes[:, :, :, 2], query_boxes[:, :, :, 2]) -
                   torch.max(boxes[:, :, :, 0], query_boxes[:, :, :, 0]) + 1)
@@ -105,8 +108,8 @@ class CenterSimilarityCalc(object):
                 gt_area_zero.view(batch_size, 1, K).expand(batch_size, N, K),
                 0)
             overlaps.masked_fill_(
-                anchors_area_zero.view(batch_size, N, 1).expand(
-                    batch_size, N, K), 0)
+                anchors_area_zero.view(batch_size, N, 1).expand(batch_size, N,
+                                                                K), 0)
         else:
             raise ValueError('anchors input dimension is not correct.')
 

@@ -7,6 +7,7 @@ import copy
 import os
 from utils.registry import FEATURE_EXTRACTORS
 from models.backbones import build_backbone
+from models import feature_extractors
 
 
 @FEATURE_EXTRACTORS.register('resnet')
@@ -20,6 +21,7 @@ class ResNetFeatureExtractor(Model):
         self.net_arch = model_config['net_arch']
         self.use_cascade = model_config['use_cascade']
         self.model_dir = model_config['pretrained_models_dir']
+        self.net_arch_path_map = {'res50': 'net50-19c8e357.pth'}
         self.model_path = os.path.join(self.model_dir,
                                        self.net_arch_path_map[self.net_arch])
 
@@ -30,11 +32,6 @@ class ResNetFeatureExtractor(Model):
             resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,
             resnet.layer1, resnet.layer2, resnet.layer3
         ]
-
-        if self.separate_feat:
-            base_features = base_features[:-1]
-            self.first_stage_cls_feature = resnet.layer3
-            self.first_stage_bbox_feature = copy.deepcopy(resnet.layer3)
 
         # if not image(e.g lidar)
         if not self.img_channels == 3:

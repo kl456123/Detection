@@ -6,26 +6,25 @@ import torch
 # core classes
 
 from core.utils.analyzer import Analyzer
+from utils.registry import TARGET_ASSIGNERS
+import similarity_calcs
+import bbox_coders
+import matchers
 
 
+@TARGET_ASSIGNERS.register('faster_rcnn')
 class TargetAssigner(object):
     def __init__(self, assigner_config):
 
         # some compositions
-        self.similarity_calc = similarity_calc_builder.build(
+        self.similarity_calc = similarity_calcs.build(
             assigner_config['similarity_calc_config'])
-        self.bbox_coder = bbox_coder_builder.build(
-            assigner_config['coder_config'])
-        self.matcher = matcher_builder.build(assigner_config['matcher_config'])
-        self.analyzer = Analyzer()
+        self.bbox_coder = bbox_coders.build(assigner_config['coder_config'])
+        self.matcher = matchers.build(assigner_config['matcher_config'])
 
         self.fg_thresh = assigner_config['fg_thresh']
         self.bg_thresh = assigner_config['bg_thresh']
         # self.clobber_positives = assigner_config['clobber_positives']
-
-    @property
-    def stat(self):
-        return self.analyzer.stat
 
     def assign(self,
                bboxes,
@@ -54,17 +53,6 @@ class TargetAssigner(object):
         # shape(N,K)
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
-        stats['iou'] = assigned_overlaps_batch
-
-        # self.analyzer.analyze(match, gt_boxes.shape[1])
-        # else:
-        # # fake data
-        # assigned_overlaps_batch = torch.zeros_like(match).float()
-        # true_match = self.matcher.match_batch(match_quality_matrix, 0.7)
-        # self.analyzer.analyze(true_match, gt_boxes.shape[1])
-
-        # get assigned infomation
-        # shape (num_batch,num_boxes)
 
         # assign regression targets
         reg_targets = self._assign_regression_targets(match, bboxes, gt_boxes)
