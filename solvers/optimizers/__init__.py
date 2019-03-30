@@ -3,15 +3,15 @@
 from core.utils.imports import import_dir
 from core.utils.common import build as _build
 import os
-from utils.registry import BBOX_CODERS
+from utils.registry import OPTIMIZERS
 
-include = ['center_coder']
+include = ['optimizers']
 
 import_dir(os.path.dirname(__file__), include=include)
 
 
-def build(config):
-    return _build(config, BBOX_CODERS)
+def build(config, model, logger=None):
+    return _build(config, OPTIMIZERS, model, logger)
 
 
 # only export build function to outside

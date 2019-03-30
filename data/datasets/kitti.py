@@ -11,6 +11,7 @@ from wavedata.tools.obj_detection import obj_utils
 
 from core import constants
 from utils.registry import DATASETS
+import cv2
 
 
 @DATASETS.register('kitti')
@@ -31,6 +32,8 @@ class KITTIDataset(DetDataset):
 
         sample_names = self.load_sample_names()
         self.sample_names = self.filter_sample_names(sample_names)
+
+        self.max_num_boxes = 40
 
     def _check_class(self, obj, classes):
         """This filters an object by class.
@@ -149,13 +152,13 @@ class KITTIDataset(DetDataset):
 
         # image
         image_path = self.get_rgb_image_path(sample_name)
-        image_input = Image.open(image_path)
-        # cv_bgr_image = cv2.imread(image_path)
-        # image_input = cv_bgr_image[..., ::-1]
+        # image_input = Image.open(image_path)
+        cv_bgr_image = cv2.imread(image_path)
+        image_input = cv_bgr_image[..., ::-1]
         image_shape = image_input.shape[0:2]
         # no scale now
-        image_scale = 1.0
-        image_info = image_shape + (image_scale, )
+        image_scale = (1.0, 1.0)
+        image_info = image_shape + image_scale
 
         # calib
         stereo_calib_p2 = calib_utils.read_calibration(self.calib_dir,
@@ -175,19 +178,40 @@ class KITTIDataset(DetDataset):
         ]
         label_classes = np.asarray(label_classes, dtype=np.int32)
 
+        all_label_boxes_3d = np.zeros(
+            (self.max_num_boxes, label_boxes_3d.shape[1]))
+        all_label_boxes_2d = np.zeros(
+            (self.max_num_boxes, label_boxes_2d.shape[1]))
+        all_label_classes = np.zeros((self.max_num_boxes, ))
+        all_label_classes[...] = -1
+        num_boxes = label_boxes_2d.shape[0]
+        all_label_classes[:num_boxes] = label_classes
+        all_label_boxes_2d[:num_boxes] = label_boxes_2d
+        all_label_boxes_3d[:num_boxes] = label_boxes_3d
+
+        # image_info = list(image_info).append(num_boxes)
+
         transform_sample = {}
         transform_sample[constants.KEY_IMAGE] = image_input.astype(np.float32)
         transform_sample[
             constants.KEY_STEREO_CALIB_P2] = stereo_calib_p2.astype(np.float32)
-        transform_sample[constants.KEY_LABEL_BOXES_3D] = label_boxes_3d.astype(
-            np.float32)
-        transform_sample[constants.KEY_LABEL_BOXES_2D] = label_boxes_2d.astype(
-            np.float32)
-        transform_sample[constants.KEY_LABEL_CLASSES] = label_classes
+        transform_sample[constants.
+                         KEY_LABEL_BOXES_3D] = all_label_boxes_3d.astype(
+                             np.float32)
+        transform_sample[constants.
+                         KEY_LABEL_BOXES_2D] = all_label_boxes_2d.astype(
+                             np.float32)
+        transform_sample[constants.KEY_LABEL_CLASSES] = all_label_classes
         transform_sample[constants.KEY_IMAGE_PATH] = image_path
 
         # (h,w,scale)
-        transform_sample[constants.KEY_IMAGE_INFO] = image_info
+        transform_sample[constants.KEY_IMAGE_INFO] = np.asarray(
+            image_info, dtype=np.float32)
+
+        transform_sample[constants.KEY_NUM_BOXES] = np.asarray(
+            num_boxes, dtype=np.int32)
+        #  import ipdb
+        #  ipdb.set_trace()
 
         return transform_sample
 

@@ -12,6 +12,7 @@ class Sampler(ABC):
         confidence or IoU e,c
         """
         self.fg_fraction = sampler_config['fg_fraction']
+        self.num_samples = sampler_config['num_samples']
 
     @abstractmethod
     def subsample(self,
@@ -22,7 +23,6 @@ class Sampler(ABC):
         pass
 
     def subsample_batch(self,
-                        num_samples,
                         pos_indicator,
                         criterion=None,
                         indicator=None):
@@ -44,7 +44,7 @@ class Sampler(ABC):
         else:
             criterion = criterion.detach()
 
-        num_samples_per_img = num_samples // batch_size
+        num_samples_per_img = self.num_samples // batch_size
 
         sample_mask = []
         for i in range(batch_size):

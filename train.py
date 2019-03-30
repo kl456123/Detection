@@ -1,34 +1,21 @@
-# --------------------------------------------------------
-# Pytorch multi-GPU Faster R-CNN
-# Licensed under The MIT License [see LICENSE for details]
-# Written by Jiasen Lu, Jianwei Yang, based on code from Ross Girshick
-# --------------------------------------------------------
-
-
-
-
 import os
+
+from core.utils.summary_writer import SummaryWriter
+from core.saver import Saver
+from core.utils.logger import setup_logger
+from core.utils.config import Config
+
+from core.trainer import Trainer
+from data import dataloaders
+from models import detectors
+from solvers import optimizers
+from solvers import schedulers
 
 import numpy as np
 import argparse
 import shutil
-import json
-
 import torch
 import torch.nn as nn
-
-# will depercated in the future
-import sys
-sys.path.append('./lib')
-
-from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
-from builder.optimizer_builder import OptimizerBuilder
-from builder.scheduler_builder import SchedulerBuilder
-from builder import model_builder
-from core import trainer
-from core.saver import Saver
-# from tensorboardX import SummaryWriter
-from core.summary_writer import SummaryWriter
 
 
 def parse_args():
@@ -88,6 +75,8 @@ def parse_args():
         '--in_path', default=None, type=str, help='Input directory.')
     parser.add_argument(
         '--out_path', default=None, type=str, help='Output directory.')
+    parser.add_argument(
+        '--logger_level', default='INFO', type=str, help='logger level')
     args = parser.parse_args()
     return args
 
@@ -98,95 +87,109 @@ def change_lr(lr, optimizer):
         param_group['initial_lr'] = lr
 
 
-if __name__ == '__main__':
-    # parse config of scripts
-    args = parse_args()
-    with open(args.config) as f:
-        config = json.load(f)
-
+def train(config, logger):
     data_config = config['data_config']
     model_config = config['model_config']
     train_config = config['train_config']
-    if args.in_path is not None:
-        # overwrite the data root path
-        data_config['dataset_config']['root_path'] = os.path.join(
-            args.in_path, 'object/training')
 
-    if args.resume:
-        model_config['pretrained'] = False
+    # build dataloader
+    # dataloader = dataloaders.build(data_config)
+    dataloader = dataloaders.make_data_loader(data_config)
 
-    assert args.net is not None, 'please select a base model'
-    model_config['net'] = args.net
+    # build model
+    model = detectors.build(model_config)
+
+    # move to gpus before building optimizer
+    if train_config['mGPUs']:
+        model = nn.DataParallel(model)
+
+    if train_config['cuda']:
+        model = model.cuda()
+
+    # build optimizer and scheduler
+    optimizer = optimizers.build(train_config['optimizer_config'], model)
+    scheduler = schedulers.build(train_config['scheduler_config'], optimizer)
+
+    # some components for logging and saving(saver and summaryer)
+    output_dir = os.path.join(train_config['output_path'],
+                              model_config['type'], data_config['name'])
+    saver = Saver(output_dir)
+
+    # resume
+    if train_config['resume']:
+        logger.info('resume from checkpoint {}'.format())
+
+    # use model to initialize
+    if train_config['model']:
+        pass
+    # change lr
+    if train_config['lr']:
+        pass
+
+    summary_path = os.path.join(output_dir, './summary')
+    summary_writer = SummaryWriter(summary_path)
+
+    trainer = Trainer(train_config)
+    trainer.train(dataloader, model, optimizer, scheduler, saver,
+                  summary_writer)
+
+
+def generate_config(args, logger):
+    # read config from file
+    config = Config.fromjson(args.config)
+
+    train_config = config['train_config']
+    model_config = config['model_config']
+    data_config = config['data_config']
 
     np.random.seed(train_config['rng_seed'])
 
+    train_config['output_path'] = args.out_path
+
     torch.backends.cudnn.benchmark = True
 
-    train_config['save_dir'] = args.out_path
+    assert args.net is not None, 'please select a base model'
+    model_config['type'] = args.net
 
-    output_dir = train_config['save_dir'] + "/" + model_config[
-        'net'] + "/" + data_config['name']
+    # output dir
+    output_dir = os.path.join(train_config['output_path'],
+                              model_config['type'], data_config['name'])
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-
+        logger.info('create new directory {}'.format(output_dir))
     else:
-        print('output_dir is already exist')
+        logger.info('output_dir is already exist')
 
     # copy config to output dir
     shutil.copy2(args.config, output_dir)
 
-    print('checkpoint will be saved to {}'.format(output_dir))
+    # data input path
+    if args.in_path is not None:
+        # overwrite the data root path
+        data_config['dataset_config']['root_path'] = args.in_path
 
-    # model
-    fasterRCNN = model_builder.build(model_config)
+    logger.info('checkpoint will be saved to {}'.format(output_dir))
 
-    # saver
-    saver = Saver(output_dir)
+    # use multi gpus to parallel
+    train_config['mGPUs'] = args.mGPUs
+    train_config['cuda'] = args.cuda
 
-    if args.mGPUs:
-        fasterRCNN = nn.DataParallel(fasterRCNN, train_config['device_ids'])
+    # resume from checkpoint
+    train_config['resume'] = args.resume
 
-    if args.cuda:
-        fasterRCNN.cuda()
+    # use pretrained model to initialize
+    train_config['model'] = args.model
 
-    data_loader_builder = KittiDataLoaderBuilder(data_config, training=True)
-    data_loader = data_loader_builder.build()
+    # reset lr(modify the initial_lr of lr_scheduler)
+    train_config['lr'] = args.lr
 
-    # optimizer
-    optimizer_builder = OptimizerBuilder(fasterRCNN,
-                                         train_config['optimizer_config'])
-    optimizer = optimizer_builder.build()
+    return config
 
-    scheduler_config = train_config['scheduler_config']
-    if args.resume:
-        # resume mode
-        checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
-                                                         args.checkpoint)
-        params_dict = {
-            'start_epoch': None,
-            'model': fasterRCNN,
-            'optimizer': optimizer,
-        }
-        saver.load(params_dict, checkpoint_name)
-        train_config['start_epoch'] = params_dict['start_epoch']
-        scheduler_config['last_epoch'] = params_dict['start_epoch'] - 1
 
-    if args.model is not None:
-        # pretrain mode
-        # just load pretrained model
-        params_dict = {'model': fasterRCNN, }
-        saver.load(params_dict, args.model)
+if __name__ == '__main__':
+    args = parse_args()
+    # first setup logger
+    logger = setup_logger('detection')
 
-    if args.lr is not None:
-        change_lr(args.lr, optimizer)
-
-    # scheduler(after resume)
-    scheduler_builder = SchedulerBuilder(optimizer, scheduler_config)
-    scheduler = scheduler_builder.build()
-
-    # summary writer
-    summary_path = os.path.join(output_dir, './summary')
-    summary_writer = SummaryWriter(summary_path)
-
-    trainer.train(train_config, data_loader, fasterRCNN, optimizer, scheduler,
-                  saver, summary_writer)
+    config = generate_config(args, logger)
+    train(config, logger)

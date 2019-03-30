@@ -10,7 +10,7 @@ import_dir(os.path.dirname(__file__), exclude=exclude)
 
 
 def build(config):
-    _build(config, FEATURE_EXTRACTORS)
+    return _build(config, FEATURE_EXTRACTORS)
 
 
 # only export build function to outside

@@ -2,7 +2,9 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 1,
+            "num_iters":120000,
+            "start_iters":0,
+            "batch_size": 8,
             "num_workers": 1,
             "shuffle": true
         },
@@ -15,8 +17,10 @@
         },
         "name": "kitti",
         "transform_config":[
+            {"type":"to_pil"},
             {"type":"random_hsv"
             },
+            {"type":"to_tensor"},
             {"type":"normalize",
                 "normal_mean": [
                     0.485,
@@ -28,9 +32,6 @@
                     0.224,
                     0.225
                 ]
-            },
-            {
-                "type":"to_tensor"
             }
         ]
     },
@@ -92,13 +93,40 @@
         }
     },
     "model_config": {
+        "batch_size":512,
         "class_agnostic": true,
+        "num_stages":1,
         "classes": [
             "bg",
             "Car"
         ],
+        "target_generator_config": [{
+            "target_assigner_config": {
+                "type": "faster_rcnn",
+                "similarity_calc_config": {
+                    "type": "center"
+                },
+                "fg_thresh": 0.3,
+                "bg_thresh": 0.3,
+                "coder_config": {
+                    "type": "center",
+                    "bbox_normalize_targets_precomputed": false
+                },
+                "matcher_config": {
+                    "type": "bipartitle"
+                }
+            },
+            "sampler_config": {
+                "num_samples":512,
+                "type": "balanced",
+                "fg_fraction": 0.5
+            },
+            "analyzer_config": {}
+        }],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
+            "type":"resnet",
+            "pretrained_models_dir": "./data/pretrained_model",
             "net_arch":"res50",
             "separate_feat":false,
             "use_cascade":true,
@@ -116,9 +144,12 @@
         "pooling_size": 7,
         "rcnn_batch_size": 512,
         "rpn_config": {
+            "type":"rpn",
+            "use_score":false,
             "use_iou":false,
             "use_focal_loss":true,
             "anchor_generator_config": {
+                "type":"default",
                 "anchor_offset": [
                     0,
                     0
@@ -140,6 +171,29 @@
                     16
                 ]
             },
+            "target_generator_config": {
+                "target_assigner_config": {
+                    "type": "faster_rcnn",
+                    "similarity_calc_config": {
+                        "type": "center"
+                    },
+                    "fg_thresh": 0.3,
+                    "bg_thresh": 0.3,
+                    "coder_config": {
+                        "type": "center",
+                        "bbox_normalize_targets_precomputed": false
+                    },
+                    "matcher_config": {
+                        "type": "bipartitle"
+                    }
+                },
+                "sampler_config": {
+                    "num_samples":512,
+                    "type": "balanced",
+                    "fg_fraction": 0.5
+                },
+                "analyzer_config": {}
+            },
             "din": 1024,
             "min_size": 16,
             "nms_thresh": 0.7,
@@ -147,29 +201,7 @@
             "pre_nms_topN": 12000,
             "rpn_batch_size": 1024,
             "num_reg_samples":1024,
-            "num_cls_samples":512,
-            "sampler_config": {
-                "fg_fraction": 0.25
-            },
-            "target_assigner_config": {
-                "similarity_calc_config":{
-                    "type":"center"
-                },
-                "fg_thresh_cls": 0.3,
-                "bg_thresh_cls":0.3,
-                "fg_thresh_reg":0.1,
-                "coder_config": {
-                    "type":"center",
-                    "bbox_normalize_targets_precomputed": false
-                },
-                "matcher_config": {
-                    "type": "bipartitle"
-                }
-            },
-            "use_score": false
-        },
-        "sampler_config": {
-            "fg_fraction": 0.25
+            "num_cls_samples":512
         },
         "num_cls_samples":256,
         "num_reg_samples":512,
@@ -222,13 +254,15 @@
         "mGPUs": true,
         "max_epochs": 100,
         "optimizer_config": {
-            "lr": 0.001,
+            "base_lr": 0.001,
+            "bias_lr_factor":1,
+            "weight_decay_bias":1,
             "momentum": 0.9,
             "type": "sgd"
         },
         "rng_seed": 3,
         "scheduler_config": {
-            "last_epoch": -1,
+            "last_step": -1,
             "lr_decay_gamma": 0.1,
             "lr_decay_step": 20,
             "type": "step"

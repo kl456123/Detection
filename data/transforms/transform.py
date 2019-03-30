@@ -20,6 +20,45 @@ class Transform(object):
         raise NotImplementedError
 
 
+@TRANSFORMS.register('to_pil')
+class ToPILImage(Transform):
+    """Convert a tensor or an ndarray to PIL Image.
+
+    Converts a torch.*Tensor of shape C x H x W or a numpy ndarray of shape
+    H x W x C to a PIL Image while preserving the value range.
+
+    Args:
+    mode (`PIL.Image mode`_): color space and pixel depth of input data (optional).
+        If ``mode`` is ``None`` (default) there are some assumptions made about the input data:
+        1. If the input has 3 channels, the ``mode`` is assumed to be ``RGB``.
+        2. If the input has 4 channels, the ``mode`` is assumed to be ``RGBA``.
+        3. If the input has 1 channel, the ``mode`` is determined by the data type (i,e,
+        ``int``, ``float``, ``short``).
+
+    .. _PIL.Image mode: http://pillow.readthedocs.io/en/3.4.x/handbook/concepts.html#modes
+    """
+
+    def __call__(self, sample):
+        """
+        Args:
+            pic (Tensor or numpy.ndarray): Image to be converted to PIL Image.
+
+        Returns:
+            PIL Image: Image converted to PIL Image.
+
+        """
+        pic = sample[constants.KEY_IMAGE]
+        sample[constants.KEY_IMAGE] = F.to_pil_image(pic, mode='RGB')
+        return sample
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        if self.mode is not None:
+            format_string += 'mode={0}'.format(self.mode)
+        format_string += ')'
+        return format_string
+
+
 @TRANSFORMS.register('random_hsv')
 class RandomHSV(Transform):
     """
@@ -34,11 +73,11 @@ class RandomHSV(Transform):
     labels (Tensor): the class labels for each bbox
     """
 
-    def __init__(self,
-                 h_range=(1.0, 1.0),
-                 s_range=(0.7, 1.3),
-                 v_range=(0.7, 1.3),
-                 ratio=0.5):
+    def __init__(self, config):
+        h_range = config.get('h_range', (1.0, 1.0))
+        s_range = config.get('s_range', (0.7, 1.3))
+        v_range = config.get('v_range', (0.7, 1.3))
+        ratio = config.get('ratio', 0.5)
         self.h_range = h_range
         self.s_range = s_range
         self.v_range = v_range
@@ -63,7 +102,7 @@ class RandomHSV(Transform):
         img_v = np.clip(img_v * v_random, 0, 255)
         img_hsv = np.stack([img_h, img_s, img_v], axis=2)
         img_new = matplotlib.colors.hsv_to_rgb(img_hsv)
-        sample[constants.KEY_IMAGE] = img_new
+        sample[constants.KEY_IMAGE] = Image.fromarray(img_new.astype(np.uint8))
 
         return sample
 
@@ -244,7 +283,8 @@ class Normalize(Transform):
         Returns:
         Tensor: Normalized image.
         """
-        tensor = sample['img']
+        tensor = sample[constants.KEY_IMAGE]
+        format_checker.check_tensor(tensor)
         # TODO: make efficient
         for t, m, s in zip(tensor, self.mean, self.std):
             t.sub_(m).div_(s)
@@ -347,12 +387,22 @@ class Resize(Transform):
         return (oh, ow)
 
     def __call__(self, sample):
+        import ipdb
+        ipdb.set_trace()
+
         image = sample[constants.KEY_IMAGE]
         format_checker.check_pil_image(image)
         target = sample[constants.KEY_LABEL_BOXES_2D]
         size = self.get_size(image.size)
         image = F.resize(image, size)
         target = target.resize(image.size)
+
+        image_info = sample[constants.KEY_IMAGE_INFO]
+        image_info[:2] = size
+        w, h = image.size
+        image_scale = (size[0] / h, size[1] / w)
+        image_info[2:4] = image_scale
+        sample[constants.KEY_IMAGE_INFO] = image_info
 
         sample[constants.KEY_IMAGE] = image
         sample[constants.KEY_LABEL_BOXES_2D] = target

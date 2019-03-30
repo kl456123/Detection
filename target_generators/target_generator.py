@@ -19,7 +19,7 @@ class TargetGenerator(ABC):
             target_generator_config['sampler_config'])
         self.analyzer = Analyzer(target_generator_config['analyzer_config'])
 
-    def generate_targets(self, proposals, feed_dict):
+    def generate_targets(self, proposals_dict, gt_dict):
         """
             use gt to encode preds for better predictable
         Args:
@@ -29,15 +29,14 @@ class TargetGenerator(ABC):
         Returns:
             targets_list: list, [(target1, weight1),(target2, weight2)]
         """
-        gt_boxes = feed_dict[constants.KEY_LABEL_BOXES_2D]
-        gt_labels = feed_dict[constants.KEY_LABEL_CLASSES]
+        batch_size = gt_dict[constants.KEY_PRIMARY].shape[0]
 
         ##########################
         # assigner
         ##########################
         #  import ipdb
         #  ipdb.set_trace()
-        targets = self.target_assigner.assign(proposals, gt_boxes, gt_labels)
+        targets = self.target_assigner.assign(proposals_dict, gt_dict)
 
         ##########################
         # subsampler
@@ -56,8 +55,8 @@ class TargetGenerator(ABC):
         batch_sampled_mask = self.sampler.subsample_batch(
             pos_indicator, indicator=indicator, criterion=cls_criterion)
 
-        cls_weights = cls_weights[batch_sampled_mask]
-        reg_weights = reg_weights[batch_sampled_mask]
+        cls_weights = cls_weights[batch_sampled_mask].view(batch_size, -1)
+        reg_weights = reg_weights[batch_sampled_mask].view(batch_size, -1)
         num_cls_coeff = (cls_weights > 0).sum(dim=-1)
         num_reg_coeff = (reg_weights > 0).sum(dim=-1)
 
@@ -70,9 +69,12 @@ class TargetGenerator(ABC):
         targets[0]['weight'] = cls_weights / num_cls_coeff.float()
         targets[1]['weight'] = reg_weights / num_reg_coeff.float()
 
-        targets[0]['target'] = cls_target[batch_sampled_mask]
-        targets[1]['target'] = reg_target[batch_sampled_mask]
+        targets[0]['target'] = cls_target[batch_sampled_mask].view(
+            batch_size, -1)
+        targets[1]['target'] = reg_target[batch_sampled_mask].view(
+            batch_size, -1, reg_target.shape[-1])
 
-        proposals = proposals[batch_sampled_mask]
+        proposals = proposals_dict[constants.KEY_PRIMARY]
+        proposals = proposals[batch_sampled_mask].view(batch_size, -1, 4)
 
-        return proposals, targets
+        return proposals, targets, batch_sampled_mask

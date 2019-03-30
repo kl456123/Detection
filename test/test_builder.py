@@ -11,7 +11,7 @@ import anchor_generators
 import matchers
 import bbox_coders
 import unittest
-
+from solvers import optimizers, schedulers
 
 
 class Test(unittest.TestCase):
@@ -42,18 +42,18 @@ def test_build_sampler():
 
     for i in range(batch_weights.shape[0]):
         weights = batch_weights[i]
-        print(
-            'Equal or not ({}/{})'.format(weights[weights].numel(), num_samplers))
+        print('Equal or not ({}/{})'.format(weights[weights].numel(),
+                                            num_samplers))
 
 
 def generate_anchors():
     anchor_generator_config = {
         "type": "default",
-                "anchor_offset": [0, 0],
-                "anchor_stride": [16, 16],
-                "aspect_ratios": [0.5, 0.8, 1],
-                "base_anchor_size": 16,
-                "scales": [2, 4, 8, 16]
+        "anchor_offset": [0, 0],
+        "anchor_stride": [16, 16],
+        "aspect_ratios": [0.5, 0.8, 1],
+        "base_anchor_size": 16,
+        "scales": [2, 4, 8, 16]
     }
     anchor_generator = anchor_generators.build(anchor_generator_config)
     feature_map_list = [(24, 80)]
@@ -64,8 +64,20 @@ def generate_anchors():
 
 def generate_fake_gt_boxes():
     gts = torch.tensor([100, 124, 125, 232]).float()
-    gts.view(-1, 1, 4)
+    gts = gts.view(-1, 1, 4)
     return gts
+
+
+def test_build_optimizer():
+    config = {'type': 'adam'}
+    optimizer = optimizers.build(config)
+    print(optimizer)
+
+
+def test_build_scheduler():
+    config = {}
+    scheduler = schedulers.build(config)
+    print(scheduler)
 
 
 def test_build_anchor_generator():
@@ -101,8 +113,15 @@ def test_build_similarity_calc():
 
     anchors = generate_anchors()
     gt_boxes = generate_fake_gt_boxes()
-    match_quality_matrix_batch = similarity_calc.compare_batch(
-        anchors, gt_boxes)
+    # no batch
+    match_quality_matrix_batch = similarity_calc.compare_batch(anchors,
+                                                               gt_boxes)
+    print(match_quality_matrix_batch.shape)
+
+    # batch version
+    anchors = anchors.unsqueeze(0)
+    match_quality_matrix_batch = similarity_calc.compare_batch(anchors,
+                                                               gt_boxes)
     print(match_quality_matrix_batch.shape)
 
 

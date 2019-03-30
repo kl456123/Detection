@@ -10,7 +10,7 @@ import_dir(os.path.dirname(__file__), include=include)
 
 
 def build(config):
-    _build(config, TARGET_ASSIGNERS)
+    return _build(config, TARGET_ASSIGNERS)
 
 
 # only export build function to outside

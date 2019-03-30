@@ -40,7 +40,7 @@ def build_sgd(optimizer_config, model, logger=None):
     optim_params = make_optim_params(model, optimizer_config, logger)
     sgd = optim.SGD(optim_params,
                     optimizer_config['base_lr'],
-                    momentum=optimizer_config['monmentum'])
+                    momentum=optimizer_config['momentum'])
     return sgd
 
 

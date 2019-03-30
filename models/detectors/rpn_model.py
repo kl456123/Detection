@@ -13,12 +13,14 @@ from core.filler import Filler
 from models.losses.focal_loss import FocalLoss
 
 from utils import box_ops
-# from lib.model.nms.nms_wrapper import nms
+from lib.model.nms.nms_wrapper import nms
 import functools
 from utils.registry import DETECTORS
 from target_generators.target_generator import TargetGenerator
 # import samplers
 import anchor_generators
+from models.losses import common_loss
+from core import constants
 
 
 @DETECTORS.register('rpn')
@@ -32,12 +34,6 @@ class RPNModel(Model):
         self.rpn_batch_size = model_config['rpn_batch_size']
         self.use_focal_loss = model_config['use_focal_loss']
 
-        # sampler
-        # self.sampler = HardNegativeSampler(model_config['sampler_config'])
-        # self.sampler = BalancedSampler(model_config['sampler_config'])
-        # self.sampler = DetectionSampler(model_config['sampler_config'])
-        # self.sampler = samplers.build(model_config['sampler_config'])
-
         # anchor generator
         self.anchor_generator = anchor_generators.build(
             model_config['anchor_generator_config'])
@@ -48,14 +44,10 @@ class RPNModel(Model):
         self.target_generators = TargetGenerator(
             model_config['target_generator_config'])
 
-        # target assigner
-        # self.target_assigner = (
-        # model_config['target_assigner_config'])
-
-        # bbox coder
-        self.bbox_coder = self.target_assigner.bbox_coder
-
         self.use_iou = model_config.get('use_iou')
+
+        # the same as target_assigner
+        self.bbox_coder = self.target_generators.target_assigner.bbox_coder
 
     def init_weights(self):
         self.truncated = False
@@ -82,15 +74,14 @@ class RPNModel(Model):
                                        1, 0)
 
         # bbox
-        self.rpn_bbox_loss = nn.modules.loss.SmoothL1Loss(reduce=False)
+        self.rpn_bbox_loss = common_loss.SmoothL1Loss(reduce=False)
 
         # cls
-        if self.use_focal_loss:
-            self.rpn_cls_loss = FocalLoss(
-                2, alpha=0.2, gamma=2, auto_alpha=False)
-        else:
-            self.rpn_cls_loss = functools.partial(
-                F.cross_entropy, reduce=False)
+        #  if self.use_focal_loss:
+        #  self.rpn_cls_loss = FocalLoss(
+        #  2, alpha=0.2, gamma=2, auto_alpha=False)
+        #  else:
+        self.rpn_cls_loss = common_loss.CrossEntropyLoss(reduce=False)
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
@@ -116,15 +107,6 @@ class RPNModel(Model):
         rpn_bbox_preds = rpn_bbox_preds.permute(0, 2, 3, 1).contiguous()
         # shape(N,H*W*num_anchors,4)
         rpn_bbox_preds = rpn_bbox_preds.view(batch_size, -1, 4)
-        # apply deltas to anchors to decode
-        # loop here due to many features maps
-        # proposals = []
-        # for rpn_bbox_preds_single_map, anchors_single_map in zip(
-        # rpn_bbox_preds, anchors):
-        # proposals.append(
-        # self.bbox_coder.decode(rpn_bbox_preds_single_map,
-        # anchors_single_map))
-        # proposals = torch.cat(proposals, dim=1)
 
         proposals = self.bbox_coder.decode_batch(rpn_bbox_preds, anchors)
 
@@ -179,8 +161,8 @@ class RPNModel(Model):
     def forward(self, bottom_blobs):
         base_feat = bottom_blobs['base_feat']
         batch_size = base_feat.shape[0]
-        gt_boxes = bottom_blobs['gt_boxes']
-        im_info = bottom_blobs['im_info']
+        self.batch_size = batch_size
+        im_info = bottom_blobs[constants.KEY_IMAGE_INFO]
 
         # rpn conv
         rpn_conv = F.relu(self.rpn_conv(base_feat), inplace=True)
@@ -224,10 +206,10 @@ class RPNModel(Model):
         # note that proposals_order is used for track transform of propsoals
         proposals_batch, proposals_order = self.generate_proposal(
             rpn_cls_probs, anchors, rpn_bbox_preds, im_info)
-        batch_idx = torch.arange(batch_size).view(batch_size, 1).expand(
-            -1, proposals_batch.shape[1]).type_as(proposals_batch)
-        rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
-                               dim=2)
+        #  batch_idx = torch.arange(batch_size).view(batch_size, 1).expand(
+        #  -1, proposals_batch.shape[1]).type_as(proposals_batch)
+        #  rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
+        #  dim=2)
 
         # if self.training:
         # rois_batch = self.append_gt(rois_batch, gt_boxes)
@@ -243,10 +225,15 @@ class RPNModel(Model):
             batch_size, 2, -1, rpn_cls_probs.shape[2], rpn_cls_probs.shape[3])
         rpn_cls_probs = rpn_cls_probs.permute(0, 3, 4, 2, 1).contiguous().view(
             batch_size, -1, 2)
+
+        rpn_bbox_preds = rpn_bbox_preds.permute(0, 2, 3, 1).contiguous()
+        # shape(N,H*W*num_anchors,4)
+        rpn_bbox_preds = rpn_bbox_preds.view(batch_size, -1, 4)
+
         predict_dict = {
-            'proposals_batch': proposals_batch,
+            'proposals': proposals_batch,
             'rpn_cls_scores': rpn_cls_scores,
-            'rois_batch': rois_batch,
+            #  'rois_batch': rois_batch,
             'anchors': anchors,
 
             # used for loss
@@ -272,72 +259,32 @@ class RPNModel(Model):
     def loss(self, prediction_dict, feed_dict):
         # loss for cls
         loss_dict = {}
+        batch_size = self.batch_size
+        anchors = prediction_dict['anchors'].unsqueeze(0).repeat(batch_size, 1,
+                                                                 1)
+        anchors_dict = {}
+        anchors_dict[constants.KEY_PRIMARY] = anchors
+        anchors_dict[constants.KEY_NON_PRIME] = [None]
+        gt_dict = {}
+        gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.KEY_LABEL_BOXES_2D]
+        gt_labels = feed_dict[constants.KEY_LABEL_CLASSES]
+        gt_dict[constants.KEY_NON_PRIME] = [torch.ones_like(gt_labels)]
 
-        gt_boxes = feed_dict['gt_boxes']
+        _, targets, mask = self.target_generators.generate_targets(
+            anchors_dict, gt_dict)
 
-        anchors = prediction_dict['anchors']
+        cls_target = targets[0]
+        reg_target = targets[1]
+        cls_target['pred'] = prediction_dict['rpn_cls_scores'][mask].view(
+            self.batch_size, -1, 2)
+        reg_target['pred'] = prediction_dict['rpn_bbox_preds'][mask].view(
+            self.batch_size, -1, 4)
 
-        #################################
-        # target assigner
-        ################################
-        # no need gt labels here,it just a binary classifcation problem
-        #  import ipdb
-        #  ipdb.set_trace()
-        rpn_cls_targets, rpn_reg_targets, \
-            rpn_cls_weights, rpn_reg_weights, _ = \
-            self.target_assigner.assign(anchors, gt_boxes, gt_labels=None)
+        rpn_cls_loss = self.rpn_cls_loss(cls_target)
+        rpn_reg_loss = self.rpn_bbox_loss(reg_target)
+        loss_dict.update({
+            'rpn_cls_loss': rpn_cls_loss,
+            'rpn_reg_loss': rpn_reg_loss
+        })
 
-        ################################
-        # subsample
-        ################################
-
-        pos_indicator = rpn_reg_weights > 0
-        indicator = rpn_cls_weights > 0
-
-        if self.use_iou:
-            cls_criterion = self.target_assigner.matcher.assigned_overlaps_batch
-        else:
-            rpn_cls_probs = prediction_dict['rpn_cls_probs'][:, :, 1]
-            cls_criterion = rpn_cls_probs
-
-        batch_sampled_mask = self.sampler.subsample_batch(
-            self.rpn_batch_size,
-            pos_indicator,
-            criterion=cls_criterion,
-            indicator=indicator)
-        batch_sampled_mask = batch_sampled_mask.type_as(rpn_cls_weights)
-        rpn_cls_weights = rpn_cls_weights * batch_sampled_mask
-        rpn_reg_weights = rpn_reg_weights * batch_sampled_mask
-        num_cls_coeff = (rpn_cls_weights > 0).sum(dim=1)
-        num_reg_coeff = (rpn_reg_weights > 0).sum(dim=1)
-        # check
-        #  assert num_cls_coeff, 'bug happens'
-        #  assert num_reg_coeff, 'bug happens'
-        if num_cls_coeff == 0:
-            num_cls_coeff = torch.ones([]).type_as(num_cls_coeff)
-        if num_reg_coeff == 0:
-            num_reg_coeff = torch.ones([]).type_as(num_reg_coeff)
-
-        # cls loss
-        rpn_cls_score = prediction_dict['rpn_cls_scores']
-        # rpn_cls_loss = self.rpn_cls_loss(rpn_cls_score, rpn_cls_targets)
-        rpn_cls_loss = self.rpn_cls_loss(
-            rpn_cls_score.view(-1, 2), rpn_cls_targets.view(-1))
-        rpn_cls_loss = rpn_cls_loss.view_as(rpn_cls_weights)
-        rpn_cls_loss *= rpn_cls_weights
-        rpn_cls_loss = rpn_cls_loss.sum(dim=1) / num_cls_coeff.float()
-
-        # bbox loss
-        # shape(N,num,4)
-        rpn_bbox_preds = prediction_dict['rpn_bbox_preds']
-        rpn_bbox_preds = rpn_bbox_preds.permute(0, 2, 3, 1).contiguous()
-        # shape(N,H*W*num_anchors,4)
-        rpn_bbox_preds = rpn_bbox_preds.view(rpn_bbox_preds.shape[0], -1, 4)
-        rpn_reg_loss = self.rpn_bbox_loss(rpn_bbox_preds, rpn_reg_targets)
-        rpn_reg_loss *= rpn_reg_weights.unsqueeze(-1).expand(-1, -1, 4)
-        rpn_reg_loss = rpn_reg_loss.view(rpn_reg_loss.shape[0], -1).sum(
-            dim=1) / num_reg_coeff.float()
-
-        loss_dict['rpn_cls_loss'] = rpn_cls_loss
-        loss_dict['rpn_bbox_loss'] = rpn_reg_loss
         return loss_dict

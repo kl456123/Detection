@@ -6,6 +6,7 @@ KEY_LABEL_BOXES_3D = 'label_boxes_3d'
 KEY_LABEL_CLASSES = 'label_classes'
 KEY_IMAGE_PATH = 'image_path'
 KEY_IMAGE_INFO = 'image_info'
+KEY_NUM_BOXES = 'num_boxes'
 
 KEY_STEREO_CALIB_P2 = 'stereo_calib_p2'
 
@@ -18,3 +19,7 @@ KEY_LOGGER_PATH = 'logger_path'
 
 # pred
 KEY_TARGETS = 'targets'
+
+
+KEY_PRIMARY = 'primary'
+KEY_NON_PRIME = 'non_prime'

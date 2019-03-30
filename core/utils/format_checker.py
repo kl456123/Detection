@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 """
 There are many formats in detection project.
 just list all following here
@@ -26,27 +25,30 @@ all boxes can be represented by some format,
 """
 import numpy as np
 import torch
+from PIL import Image
 
 
 def check_anchor_2d_format(anchors):
     if not (anchors.shape[-1] == 4):
         raise TypeError(
-            'unknown anchors format due to the num of last dim must be 4 not {}'.format(anchors.shape[-1]))
+            'unknown anchors format due to the num of last dim must be 4 not {}'.
+            format(anchors.shape[-1]))
     if len(anchors.shape) == 2:
         pass
     elif len(anchors.shape) == 3:
         # including batch dims
         pass
     else:
-        raise TypeError('anchors shape is wrong, length of shape is {}, but expect it is 2 or 3'.format(
-            len(anchors.shape)))
+        raise TypeError(
+            'anchors shape is wrong, length of shape is {}, but expect it is 2 or 3'.
+            format(len(anchors.shape)))
 
 
 def check_if_integer(tensor):
     if isinstance(tensor, np.ndarray):
         tensor_float = tensor.astype(np.float32)
-        tenosr_int = tensor.astype(np.int).astype(np.float32)
-        deltas = tensor_int-tensor_float
+        tensor_int = tensor.astype(np.int).astype(np.float32)
+        deltas = tensor_int - tensor_float
         deltas_norm = np.linalg.norm(deltas)
         if deltas_norm > 0:
             return False
@@ -54,8 +56,8 @@ def check_if_integer(tensor):
     elif isinstance(tensor, torch.Tensor):
         tensor_int = tensor.int().float()
         tensor_float = tensor.float()
-        deltas_norm = tensor.norm(tensor_int-tensor_float)
-        if detlas_norm > 0:
+        deltas_norm = tensor.norm(tensor_int - tensor_float)
+        if deltas_norm > 0:
             return False
         return True
     else:
@@ -74,7 +76,10 @@ def check_if_positive(tensor):
         raise TypeError('unknown tensor type {}'.format(type(tensor)))
 
 
-def check_if_in_interval(tensor, interval, including_left=True, including_right=True):
+def check_if_in_interval(tensor,
+                         interval,
+                         including_left=True,
+                         including_right=True):
     assert interval[0] < interval[1], ValueError('the interval is wrong')
     if including_left:
         cond_left = tensor >= interval[0]
@@ -93,8 +98,9 @@ def check_if_in_interval(tensor, interval, including_left=True, including_right=
 def check_rois_format(rois_batch):
     # last dim checker
     if not (rois_batch.shape[-1] == 5):
-        raise TypeError('unknown rois format due to the num of last dim must be 5 not {}'.format(
-            rois_batch.shape[-1]))
+        raise TypeError(
+            'unknown rois format due to the num of last dim must be 5 not {}'.
+            format(rois_batch.shape[-1]))
 
     # batch_checker
     if not (len(rois_batch.shape) == 3):
@@ -105,7 +111,8 @@ def check_rois_format(rois_batch):
     # batch dim should be interger
     batch_dim = rois_batch[..., 0]
     assert check_if_integer(
-        batch_dim), 'batch dim should be integer due to it refers to image index'
+        batch_dim
+    ), 'batch dim should be integer due to it refers to image index'
 
 
 def check_box_xywh(boxes):
@@ -117,8 +124,9 @@ def check_box_xywh(boxes):
 
 def check_box_3d(boxes_3d):
     if not (boxes_3d.shape[-1] == 7):
-        raise TypeError('unknown boxes_3d format due to the num of last dim must be 7 not {}'.format(
-            boxes_3d.shape[-1]))
+        raise TypeError(
+            'unknown boxes_3d format due to the num of last dim must be 7 not {}'.
+            format(boxes_3d.shape[-1]))
 
     # check hwl
     dims = boxes_3d[..., 3:6]
@@ -137,16 +145,18 @@ def check_image_format(image, num_channels=3):
 
 
 def check_image_div255(image):
-    assert check_if_(image, [
-                     0, 1]), 'image value is too larger than 1 so it can not be number after divided by 255'
+    assert check_if_in_interval(image, [
+        0, 1
+    ]), 'image value is too larger than 1 so it can not be number after divided by 255'
 
 
 def check_anchor_3d_format(anchors_3d):
     if anchors_3d.shape[-1] != 6:
-        raise TypeError('unknown anchor_3d format due to the num of last dim must be 6 not {}'.format(
-            anchors_3d.shape[-1]))
+        raise TypeError(
+            'unknown anchor_3d format due to the num of last dim must be 6 not {}'.
+            format(anchors_3d.shape[-1]))
 
-    dims = anchor_3d[..., 3:6]
+    dims = anchors_3d[..., 3:6]
     assert check_if_positive(dims), 'dims of anchors should be positive'
 
 
@@ -161,10 +171,18 @@ def check_pil_image(image):
         accimage = None
 
     if accimage is not None:
-        return isinstance(image, (Image.Image, accimage.Image))
+        assert isinstance(image, (Image.Image, accimage.Image))
     else:
-        return isinstance(image, Image.Image)
+        assert isinstance(image, Image.Image)
 
 
 def check_tensor_dims(tensor, num_dims):
     assert len(tensor.shape) == num_dims
+
+
+def check_tensor(tensor):
+    assert isinstance(tensor, torch.Tensor)
+
+
+def check_np(tensor):
+    assert isinstance(tensor, np.ndarray)

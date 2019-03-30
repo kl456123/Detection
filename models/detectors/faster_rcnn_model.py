@@ -3,7 +3,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-# from lib.model.roi_align.modules.roi_align import RoIAlignAvg
+from lib.model.roi_align.modules.roi_align import RoIAlignAvg
 
 from core.model import Model
 from core.filler import Filler
@@ -24,6 +24,8 @@ from models import detectors
 @DETECTORS.register('faster_rcnn')
 class FasterRCNN(Model):
     def forward(self, feed_dict):
+        import ipdb
+        ipdb.set_trace()
 
         prediction_dict = {}
 
@@ -38,8 +40,17 @@ class FasterRCNN(Model):
         proposals = prediction_dict['proposals']
         multi_stage_targets = []
         for i in range(self.num_stages):
-            proposals, targets = self.target_generators[i].generate_targets(
-                proposals, feed_dict)
+            proposals_dict = {}
+            proposals_dict[constants.KEY_PRIMARY] = proposals
+            proposals_dict[constants.KEY_NON_PRIME] = [None]
+            gt_dict = {}
+            gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
+                                                       KEY_LABEL_BOXES_2D]
+            gt_dict[constants.KEY_NON_PRIME] = [
+                feed_dict[constants.KEY_LABEL_CLASSES]
+            ]
+            proposals, targets, _ = self.target_generators[i].generate_targets(
+                proposals_dict, gt_dict)
 
             # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
             rois = box_ops.box2rois(proposals)
@@ -55,8 +66,9 @@ class FasterRCNN(Model):
 
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
-            targets[0]['pred'] = rcnn_cls_probs
-            targets[1]['pred'] = rcnn_bbox_preds
+            batch_size = rois.shape[0]
+            targets[0]['pred'] = rcnn_cls_probs.view(batch_size, -1, 2)
+            targets[1]['pred'] = rcnn_bbox_preds.view(batch_size, -1, 4)
             multi_stage_targets.extend(targets)
 
         prediction_dict[constants.KEY_TARGETS] = targets
@@ -79,20 +91,17 @@ class FasterRCNN(Model):
             self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
                                             self.pooling_size, 1.0 / 16.0)
         self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
-        if self.reduce:
-            in_channels = 2048
-        else:
-            in_channels = 2048 * 4 * 4
+        in_channels = 2048
         if self.class_agnostic:
             self.rcnn_bbox_pred = nn.Linear(in_channels, 4)
         else:
             self.rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
 
         # loss module
-        if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(self.num_classes)
-        else:
-            self.rcnn_cls_loss = common_loss.CrossEntropyLoss(reduce=False)
+        # if self.use_focal_loss:
+        # self.rcnn_cls_loss = FocalLoss(self.n_classes)
+        # else:
+        self.rcnn_cls_loss = common_loss.CrossEntropyLoss(reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
@@ -105,9 +114,7 @@ class FasterRCNN(Model):
         self.pooling_size = model_config['pooling_size']
         self.pooling_mode = model_config['pooling_mode']
         self.truncated = model_config['truncated']
-
         self.use_focal_loss = model_config['use_focal_loss']
-        self.rcnn_batch_size = model_config['batch_size']
 
         # some submodule config
         self.feature_extractor_config = model_config['feature_extractor_config']
@@ -133,8 +140,8 @@ class FasterRCNN(Model):
         cls_target = targets[0]
         reg_target = targets[1]
 
-        rcnn_cls_loss = self.rcnn_cls_loss(*cls_target)
-        rcnn_reg_loss = self.rcnn_bbox_loss(*reg_target)
+        rcnn_cls_loss = self.rcnn_cls_loss(cls_target)
+        rcnn_reg_loss = self.rcnn_bbox_loss(reg_target)
         loss_dict.update({
             'rcnn_cls_loss': rcnn_cls_loss,
             'rcnn_reg_loss': rcnn_reg_loss

@@ -5,11 +5,11 @@ import torch
 
 # core classes
 
-from core.utils.analyzer import Analyzer
 from utils.registry import TARGET_ASSIGNERS
 import similarity_calcs
 import bbox_coders
 import matchers
+from core import constants
 
 
 @TARGET_ASSIGNERS.register('faster_rcnn')
@@ -24,14 +24,8 @@ class TargetAssigner(object):
 
         self.fg_thresh = assigner_config['fg_thresh']
         self.bg_thresh = assigner_config['bg_thresh']
-        # self.clobber_positives = assigner_config['clobber_positives']
 
-    def assign(self,
-               bboxes,
-               gt_boxes,
-               gt_labels=None,
-               cls_prob=None,
-               match=None):
+    def assign(self, proposals_dict, gt_dict):
         """
         Assign each bboxes with label and bbox targets for training
 
@@ -43,20 +37,20 @@ class TargetAssigner(object):
         # ipdb.set_trace()
 
         # usually IoU overlaps is used as metric
-        bboxes = bboxes.detach()
-        match_quality_matrix = self.similarity_calc.compare_batch(bboxes,
-                                                                  gt_boxes)
-        # match 0.7 for truly recall calculation
-        fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
-        stats = self.analyzer.analyze(fake_match, gt_boxes.shape[1])
-        # match
-        # shape(N,K)
+        proposals_primary = proposals_dict[constants.KEY_PRIMARY].detach()
+        gt_primary = gt_dict[constants.KEY_PRIMARY].detach()
+
+        match_quality_matrix = self.similarity_calc.compare_batch(
+            proposals_primary, gt_primary)
+
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
 
         # assign regression targets
-        reg_targets = self._assign_regression_targets(match, bboxes, gt_boxes)
+        reg_targets = self._assign_regression_targets(match, proposals_primary,
+                                                      gt_primary)
 
+        gt_labels = gt_dict[constants.KEY_NON_PRIME][0]
         # assign classification targets
         cls_targets = self._assign_classification_targets(match, gt_labels)
 
@@ -81,7 +75,14 @@ class TargetAssigner(object):
                 match == -1)
             cls_weights[ignored_bg] = 0
 
-        return cls_targets, reg_targets, cls_weights, reg_weights, stats
+        targets = [{
+            'weight': cls_weights,
+            'target': cls_targets
+        }, {
+            'weight': reg_weights,
+            'target': reg_targets
+        }]
+        return targets
 
     def _create_regression_weights(self, assigned_overlaps_batch):
         """
@@ -127,18 +128,13 @@ class TargetAssigner(object):
         For the first stage, generate binary labels, For the second stage
         generate countpart gt_labels
         """
-        # binary labels classifcation
-        if gt_labels is None:
-            # consider it as binary classification problem
-            return self._generate_binary_labels(match)
-
         # multiple labels classification
         batch_size = match.shape[0]
         offset = torch.arange(0, batch_size) * gt_labels.size(1)
         match += offset.view(batch_size, 1).type_as(match)
         cls_targets_batch = gt_labels.view(-1)[match.view(-1)].view(
             batch_size, match.shape[1])
-        return cls_targets_batch
+        return cls_targets_batch.long()
 
     def _generate_binary_labels(self, match):
         gt_labels_batch = torch.ones_like(match).long()
