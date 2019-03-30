@@ -11,7 +11,7 @@ import_dir(os.path.dirname(__file__), include=include)
 
 
 def build(config):
-    _build(config, MATCHERS)
+    return _build(config, MATCHERS)
 
 
 # only export build function to outside

@@ -13,7 +13,7 @@ from core.filler import Filler
 from models.losses.focal_loss import FocalLoss
 
 from utils import box_ops
-from lib.model.nms.nms_wrapper import nms
+# from lib.model.nms.nms_wrapper import nms
 import functools
 from utils.registry import DETECTORS
 from target_generators.target_generator import TargetGenerator

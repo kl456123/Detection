@@ -4,6 +4,8 @@ import torch
 import numpy as np
 from core.sampler import Sampler
 from utils.registry import SAMPLERS
+from core.utils import format_checker
+
 
 @SAMPLERS.register('balanced')
 class BalancedSampler(Sampler):
@@ -22,8 +24,16 @@ class BalancedSampler(Sampler):
                   indicator=None):
         """
         Args:
-            num_samples
+            num_samples: scalar
+            pos_indicator: shape(N, )
+            indicator: shape(N, )
+        Returns:
+            sample_weights: shape(N, )
         """
+        # format check
+        format_checker.check_tensor_dims(pos_indicator, 1)
+        format_checker.check_tensor_dims(indicator, 1)
+
         num_fg = int(num_samples * self.fg_fraction)
         pos_indicator = indicator & pos_indicator
         fg_inds = torch.nonzero(pos_indicator).view(-1)

@@ -8,9 +8,6 @@ from core.similarity_calc import SimilarityCalc
 
 @SIMILARITY_CALCS.register('center')
 class CenterSimilarityCalc(SimilarityCalc):
-    def __init__(self, config):
-        pass
-
     def compare_batch(self, anchors, gt_boxes):
         """
         anchors: (N, 4) ndarray of float

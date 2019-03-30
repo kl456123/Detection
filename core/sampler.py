@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 import torch
+from .utils import format_checker
 
 
 class Sampler(ABC):
@@ -26,12 +27,16 @@ class Sampler(ABC):
                         criterion=None,
                         indicator=None):
         """
-        batch version of subsample
+            batch version of subsample
         """
         pos_indicator = pos_indicator.detach()
         if indicator is None:
             indicator = torch.ones_like(pos_indicator)
         indicator = indicator.detach()
+
+        # check format
+        format_checker.check_tensor_dims(pos_indicator, 2)
+        format_checker.check_tensor_dims(indicator, 2)
 
         batch_size = pos_indicator.shape[0]
         if criterion is None:

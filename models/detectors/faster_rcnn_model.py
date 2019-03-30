@@ -11,7 +11,7 @@ from core import constants
 
 from models.losses import common_loss
 from models.losses.focal_loss import FocalLoss
-from lib.model.roi_align.modules.roi_align import RoIAlignAvg
+# from lib.model.roi_align.modules.roi_align import RoIAlignAvg
 
 from utils.registry import DETECTORS
 from utils import box_ops

@@ -164,3 +164,7 @@ def check_pil_image(image):
         return isinstance(image, (Image.Image, accimage.Image))
     else:
         return isinstance(image, Image.Image)
+
+
+def check_tensor_dims(tensor, num_dims):
+    assert len(tensor.shape) == num_dims
