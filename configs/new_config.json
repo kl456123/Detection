@@ -13,7 +13,7 @@
             "classes":["Car"],
             "cache_bev": false,
             "dataset_file": "data/train.txt",
-            "root_path": "/data"
+            "root_path": "/home/breakpoint/Data/KITTI"
         },
         "name": "kitti",
         "transform_config":[

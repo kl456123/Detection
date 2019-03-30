@@ -14,15 +14,15 @@ class AnchorGenerator(object):
         """
         self.base_anchor_size = torch.tensor(
             anchor_generator_config['base_anchor_size'],
-            dtype=torch.float32).cuda()
+            dtype=torch.float32)
         self.scales = torch.tensor(
-            anchor_generator_config['scales'], dtype=torch.float32).cuda()
+            anchor_generator_config['scales'], dtype=torch.float32)
         self.aspect_ratios = torch.tensor(
             anchor_generator_config['aspect_ratios'],
-            dtype=torch.float32).cuda()
+            dtype=torch.float32)
         self.anchor_offset = torch.tensor(
             anchor_generator_config['anchor_offset'],
-            dtype=torch.float32).cuda()
+            dtype=torch.float32)
 
         if anchor_generator_config.get('use_pyramid'):
             self.num_anchors = self.aspect_ratios.numel()
@@ -73,9 +73,9 @@ class AnchorGenerator(object):
             input_size[1] / feature_map_shape[1]
         ]
 
-        y_ctrs = torch.arange(feature_map_shape[0]).cuda() * anchor_stride[
+        y_ctrs = torch.arange(feature_map_shape[0]) * anchor_stride[
             0] + self.anchor_offset[0]
-        x_ctrs = torch.arange(feature_map_shape[1]).cuda() * anchor_stride[
+        x_ctrs = torch.arange(feature_map_shape[1]) * anchor_stride[
             1] + self.anchor_offset[1]
 
         # meshgrid

@@ -11,7 +11,6 @@ from core import constants
 
 from models.losses import common_loss
 from models.losses.focal_loss import FocalLoss
-# from lib.model.roi_align.modules.roi_align import RoIAlignAvg
 
 from utils.registry import DETECTORS
 from utils import box_ops
@@ -19,6 +18,8 @@ from utils import box_ops
 from target_generators.target_generator import TargetGenerator
 from models import feature_extractors
 from models import detectors
+
+from utils import batch_ops
 
 
 @DETECTORS.register('faster_rcnn')
@@ -40,19 +41,14 @@ class FasterRCNN(Model):
         proposals = prediction_dict['proposals']
         multi_stage_targets = []
         for i in range(self.num_stages):
-            proposals_dict = {}
-            proposals_dict[constants.KEY_PRIMARY] = proposals
-            proposals_dict[constants.KEY_NON_PRIME] = [None]
-            gt_dict = {}
-            gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
-                                                       KEY_LABEL_BOXES_2D]
-            gt_dict[constants.KEY_NON_PRIME] = [
-                feed_dict[constants.KEY_LABEL_CLASSES]
-            ]
-            proposals, targets, _ = self.target_generators[i].generate_targets(
+            proposals_dict = batch_ops.make_match_dict(primary=proposals)
+            gt_dict = batch_ops.make_match_dict(primary=feed_dict[constants.KEY_LABEL_BOXES_2D],
+                                                non_prime=[feed_dict[constants.KEY_LABEL_CLASSES]])
+            proposals_dict, loss_units = self.target_generators[i].generate_targets(
                 proposals_dict, gt_dict)
 
             # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
+            proposals = proposals_dict[constants.KEY_PRIMARY]
             rois = box_ops.box2rois(proposals)
             pooled_feat = self.rcnn_pooling(base_feat, rois.view(-1, 5))
 
@@ -67,11 +63,11 @@ class FasterRCNN(Model):
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
             batch_size = rois.shape[0]
-            targets[0]['pred'] = rcnn_cls_probs.view(batch_size, -1, 2)
-            targets[1]['pred'] = rcnn_bbox_preds.view(batch_size, -1, 4)
+            loss_units[0]['pred'] = rcnn_cls_probs.view(batch_size, -1, 2)
+            loss_units[1]['pred'] = rcnn_bbox_preds.view(batch_size, -1, 4)
             multi_stage_targets.extend(targets)
 
-        prediction_dict[constants.KEY_TARGETS] = targets
+        prediction_dict[constants.KEY_TARGETS] = multi_stage_targets
 
         return prediction_dict
 

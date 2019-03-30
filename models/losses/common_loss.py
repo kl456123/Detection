@@ -9,7 +9,7 @@ def WeightedLossWrapper(cls):
 
     forward = cls.forward
 
-    def new_forward(self, targets):
+    def new_forward(self, targets, normalize=True):
         """
         Args:
             weight: shape(N)
@@ -27,7 +27,7 @@ def WeightedLossWrapper(cls):
         if len(preds_shape) == len(target_shape):
             # assume one2one match(reg loss)
             loss = forward(self, preds, target) * weight.unsqueeze(-1)
-            loss = loss.sum(dim=-1).sum(dim=-1)
+            loss = loss.sum(dim=-1)
 
         elif len(preds_shape) == len(target_shape) + 1:
             # assume cls loss
@@ -36,11 +36,14 @@ def WeightedLossWrapper(cls):
             preds = preds.view(-1, preds_shape[-1])
 
             loss = forward(self, preds, target) * weight
-            loss = loss.view(batch_size, -1).sum(dim=-1)
+            loss = loss.view(batch_size, -1)
         else:
             raise ValueError('can not assume any possible loss type')
 
-        return loss
+        if normalize:
+            return loss.mean(dim=-1)
+        else:
+            return loss.sum(dim=-1)
 
     cls.forward = new_forward
 

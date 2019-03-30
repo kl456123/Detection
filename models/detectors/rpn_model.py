@@ -5,10 +5,6 @@ import torch
 import torch.nn.functional as F
 
 from core.model import Model
-# from core.samplers.hard_negative_sampler import HardNegativeSampler
-# from core.samplers.balanced_sampler import BalancedSampler
-# from core.samplers.detection_sampler import DetectionSampler
-# from core.target_assigner import TargetAssigner
 from core.filler import Filler
 from models.losses.focal_loss import FocalLoss
 

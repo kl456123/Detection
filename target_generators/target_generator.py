@@ -9,6 +9,7 @@ import samplers
 import target_assigners
 from core import constants
 import torch
+from utils import batch_ops
 
 
 class TargetGenerator(ABC):
@@ -34,18 +35,16 @@ class TargetGenerator(ABC):
         ##########################
         # assigner
         ##########################
-        #  import ipdb
-        #  ipdb.set_trace()
-        targets = self.target_assigner.assign(proposals_dict, gt_dict)
+        loss_units = self.target_assigner.assign(proposals_dict, gt_dict)
 
         ##########################
         # subsampler
         ##########################
         cls_criterion = None
-        reg_weights = targets[1]['weight']
-        cls_weights = targets[0]['weight']
-        cls_target = targets[0]['target']
-        reg_target = targets[1]['target']
+        reg_weights = loss_units[1]['weight']
+        cls_weights = loss_units[0]['weight']
+        cls_target = loss_units[0]['target']
+        reg_target = loss_units[1]['target']
 
         pos_indicator = reg_weights > 0
         indicator = cls_weights > 0
@@ -55,26 +54,9 @@ class TargetGenerator(ABC):
         batch_sampled_mask = self.sampler.subsample_batch(
             pos_indicator, indicator=indicator, criterion=cls_criterion)
 
-        cls_weights = cls_weights[batch_sampled_mask].view(batch_size, -1)
-        reg_weights = reg_weights[batch_sampled_mask].view(batch_size, -1)
-        num_cls_coeff = (cls_weights > 0).sum(dim=-1)
-        num_reg_coeff = (reg_weights > 0).sum(dim=-1)
+        # dict
+        proposals_dict = batch_ops.filter_tensor_container(proposals_dict)
+        # list
+        loss_units = batch_ops.filter_tensor_container(loss_units)
 
-        if num_reg_coeff == 0:
-            num_reg_coeff = torch.ones_like(num_reg_coeff)
-        if num_cls_coeff == 0:
-            num_cls_coeff = torch.ones_like(num_cls_coeff)
-
-        # targets = [target.update() for target in targets]
-        targets[0]['weight'] = cls_weights / num_cls_coeff.float()
-        targets[1]['weight'] = reg_weights / num_reg_coeff.float()
-
-        targets[0]['target'] = cls_target[batch_sampled_mask].view(
-            batch_size, -1)
-        targets[1]['target'] = reg_target[batch_sampled_mask].view(
-            batch_size, -1, reg_target.shape[-1])
-
-        proposals = proposals_dict[constants.KEY_PRIMARY]
-        proposals = proposals[batch_sampled_mask].view(batch_size, -1, 4)
-
-        return proposals, targets, batch_sampled_mask
+        return proposals_dict, loss_units
