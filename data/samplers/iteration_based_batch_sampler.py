@@ -8,23 +8,22 @@ class IterationBasedBatchSampler(BatchSampler):
     a specified number of iterations have been sampled
     """
 
-    def __init__(self, batch_sampler, num_iterations, start_iter=0):
+    def __init__(self, batch_sampler):
         self.batch_sampler = batch_sampler
-        self.num_iterations = num_iterations
-        self.start_iter = start_iter
+        # self.num_iterations = num_iterations
 
     def __iter__(self):
-        iteration = self.start_iter
-        while iteration <= self.num_iterations:
+        # iteration = 1
+        while True:
             # if the underlying sampler has a set_epoch method, like
             # DistributedSampler, used for making each process see
             # a different split of the dataset, then set it
-            if hasattr(self.batch_sampler.sampler, "set_epoch"):
-                self.batch_sampler.sampler.set_epoch(iteration)
+            # if hasattr(self.batch_sampler.sampler, "set_epoch"):
+                # self.batch_sampler.sampler.set_epoch(iteration)
             for batch in self.batch_sampler:
-                iteration += 1
-                if iteration > self.num_iterations:
-                    break
+                # iteration += 1
+                # if iteration > self.num_iterations:
+                    # break
                 yield batch
 
     def __len__(self):

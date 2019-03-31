@@ -3,11 +3,15 @@
 import os
 import torch
 import shutil
+import logging
 
 
 class Saver():
-    def __init__(self, checkpoint_dir):
+    def __init__(self, checkpoint_dir, logger=None):
         self.checkpoint_dir = checkpoint_dir
+        if logger is None:
+            logger = logging.getLogger(__name__)
+        self.logger = logger
 
     def get_checkpoint_path(self, checkpoint_name):
         checkpoint_path = os.path.join(self.checkpoint_dir, checkpoint_name)
@@ -15,7 +19,7 @@ class Saver():
 
     def load(self, params_dict, checkpoint_name):
         checkpoint_path = self.get_checkpoint_path(checkpoint_name)
-        print(("loading checkpoint %s" % (checkpoint_path)))
+        self.logger.info(("loading checkpoint %s" % (checkpoint_path)))
 
         checkpoint = torch.load(checkpoint_path)
         for name, module in list(params_dict.items()):
@@ -39,9 +43,10 @@ class Saver():
                 else:
                     params_dict[name] = checkpoint[name]
             else:
-                print(('module:{} can not be loaded'.format(name)))
+                self.logger.warning(
+                    ('module:{} can not be loaded'.format(name)))
 
-        print(("loaded checkpoint %s" % (checkpoint_name)))
+        self.logger.info(("loaded checkpoint %s" % (checkpoint_name)))
 
     def save(self, params_dict, checkpoint_name, is_best=False):
         checkpoint_path = self.get_checkpoint_path(checkpoint_name)
@@ -54,7 +59,7 @@ class Saver():
             else:
                 state[name] = module
         self.save_checkpoint(state, is_best, checkpoint_path)
-        print(('save model: {}'.format(checkpoint_name)))
+        self.logger.info(('save model: {}'.format(checkpoint_name)))
 
     @staticmethod
     def save_checkpoint(state, is_best=False, filename='checkpoint.pth.tar'):

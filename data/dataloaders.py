@@ -41,14 +41,11 @@ def make_data_sampler(dataset, shuffle):
 
 def make_batch_data_sampler(dataset,
                             sampler,
-                            images_per_batch,
-                            num_iters=None,
-                            start_iter=0):
+                            images_per_batch):
     batch_sampler = torch.utils.data.sampler.BatchSampler(
         sampler, images_per_batch, drop_last=False)
-    if num_iters is not None:
-        batch_sampler = samplers.IterationBasedBatchSampler(
-            batch_sampler, num_iters, start_iter)
+    batch_sampler = samplers.IterationBasedBatchSampler(
+        batch_sampler)
     return batch_sampler
 
 
@@ -57,8 +54,6 @@ def make_data_loader(config):
     batch_size = dataloader_config['batch_size']
     shuffle = dataloader_config['shuffle']
     num_workers = dataloader_config['num_workers']
-    num_iters = dataloader_config['num_iters']
-    start_iters = dataloader_config['start_iters']
 
     # build transform first
     transform_config = config['transform_config']
@@ -72,7 +67,7 @@ def make_data_loader(config):
 
     sampler = make_data_sampler(dataset, shuffle)
     batch_sampler = make_batch_data_sampler(dataset, sampler, batch_size,
-                                            num_iters, start_iters)
+                                            )
     #  collator = BatchCollator()
 
     dataloader = torch.utils.data.DataLoader(

@@ -16,6 +16,7 @@ import argparse
 import shutil
 import torch
 import torch.nn as nn
+from core.utils import common
 
 
 def parse_args():
@@ -47,12 +48,6 @@ def parse_args():
     parser.add_argument(
         '--net', dest='net', help='which base mode to use', type=str)
     parser.add_argument(
-        '--checkepoch',
-        dest='checkepoch',
-        help='checkepoch to load model',
-        default=1,
-        type=int)
-    parser.add_argument(
         '--checkpoint',
         dest='checkpoint',
         help='checkpoint to load model',
@@ -81,20 +76,10 @@ def parse_args():
     return args
 
 
-def change_lr(lr, optimizer):
-    for param_group in optimizer.param_groups:
-        # used for scheduler
-        param_group['initial_lr'] = lr
-
-
 def train(config, logger):
     data_config = config['data_config']
     model_config = config['model_config']
     train_config = config['train_config']
-
-    # build dataloader
-    # dataloader = dataloaders.build(data_config)
-    dataloader = dataloaders.make_data_loader(data_config)
 
     # build model
     model = detectors.build(model_config)
@@ -108,6 +93,11 @@ def train(config, logger):
 
     # build optimizer and scheduler
     optimizer = optimizers.build(train_config['optimizer_config'], model)
+
+    # force to change lr before scheduler
+    if train_config['lr']:
+        common.change_lr(optimizer, train_config['lr'])
+
     scheduler = schedulers.build(train_config['scheduler_config'], optimizer)
 
     # some components for logging and saving(saver and summaryer)
@@ -117,19 +107,33 @@ def train(config, logger):
 
     # resume
     if train_config['resume']:
-        logger.info('resume from checkpoint {}'.format())
+        checkpoint_path = '{}.pth'.format(
+            train_config['checkpoint'])
+        logger.info(
+            'resume from checkpoint detector_{}'.format(checkpoint_path))
+        params_dict = {'model': model,
+                       'optimizer': optimizer, 'scheduler': scheduler, 'num_iters': None}
+
+        saver.load(params_dict, checkpoint_path)
+        train_config['num_iters'] = params_dict['num_iters']
+
+    # build dataloader after resume(may be or not)
+    # dataloader = dataloaders.build(data_config)
+    dataloader = dataloaders.make_data_loader(data_config)
 
     # use model to initialize
     if train_config['model']:
-        pass
-    # change lr
-    if train_config['lr']:
-        pass
+        model_path = train_config['model']
+        logger.info('initialize model from {}'.format(model_path))
+        params_dict = {'model': model}
+        saver.load(params_dict, model_path)
 
     summary_path = os.path.join(output_dir, './summary')
+    logger.info('setup summary_dir: {}'.format(summary_path))
     summary_writer = SummaryWriter(summary_path)
 
-    trainer = Trainer(train_config)
+    logger.info('setup trainer')
+    trainer = Trainer(train_config, logger)
     trainer.train(dataloader, model, optimizer, scheduler, saver,
                   summary_writer)
 
@@ -182,6 +186,8 @@ def generate_config(args, logger):
 
     # reset lr(modify the initial_lr of lr_scheduler)
     train_config['lr'] = args.lr
+
+    train_config['checkpoint'] = args.checkpoint
 
     return config
 
