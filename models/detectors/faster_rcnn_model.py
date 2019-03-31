@@ -25,8 +25,8 @@ from utils import batch_ops
 @DETECTORS.register('faster_rcnn')
 class FasterRCNN(Model):
     def forward(self, feed_dict):
-        import ipdb
-        ipdb.set_trace()
+        #  import ipdb
+        #  ipdb.set_trace()
 
         prediction_dict = {}
 
@@ -39,13 +39,21 @@ class FasterRCNN(Model):
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
         proposals = prediction_dict['proposals']
-        multi_stage_targets = []
+        multi_stage_loss_units = []
         for i in range(self.num_stages):
-            proposals_dict = batch_ops.make_match_dict(primary=proposals)
-            gt_dict = batch_ops.make_match_dict(primary=feed_dict[constants.KEY_LABEL_BOXES_2D],
-                                                non_prime=[feed_dict[constants.KEY_LABEL_CLASSES]])
-            proposals_dict, loss_units = self.target_generators[i].generate_targets(
-                proposals_dict, gt_dict)
+
+            proposals_dict = {}
+            proposals_dict[constants.KEY_PRIMARY] = proposals
+            gt_dict = {}
+            gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
+                                                       KEY_LABEL_BOXES_2D]
+            gt_dict[constants.KEY_CLASSES] = feed_dict[constants.
+                                                       KEY_LABEL_CLASSES]
+            gt_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
+                                                        KEY_LABEL_BOXES_2D]
+
+            proposals_dict, loss_units = self.target_generators[
+                i].generate_targets(proposals_dict, gt_dict)
 
             # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
             proposals = proposals_dict[constants.KEY_PRIMARY]
@@ -63,11 +71,18 @@ class FasterRCNN(Model):
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
             batch_size = rois.shape[0]
-            loss_units[0]['pred'] = rcnn_cls_probs.view(batch_size, -1, 2)
-            loss_units[1]['pred'] = rcnn_bbox_preds.view(batch_size, -1, 4)
-            multi_stage_targets.extend(targets)
+            loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_probs.view(
+                batch_size, -1, 2)
+            loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds.view(
+                batch_size, -1, 4)
+            # import ipdb
+            # ipdb.set_trace()
+            multi_stage_loss_units.extend([
+                loss_units[constants.KEY_CLASSES],
+                loss_units[constants.KEY_BOXES_2D]
+            ])
 
-        prediction_dict[constants.KEY_TARGETS] = multi_stage_targets
+        prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
 
         return prediction_dict
 
@@ -137,6 +152,7 @@ class FasterRCNN(Model):
         reg_target = targets[1]
 
         rcnn_cls_loss = self.rcnn_cls_loss(cls_target)
+
         rcnn_reg_loss = self.rcnn_bbox_loss(reg_target)
         loss_dict.update({
             'rcnn_cls_loss': rcnn_cls_loss,

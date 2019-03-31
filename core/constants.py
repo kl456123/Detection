@@ -10,16 +10,22 @@ KEY_NUM_BOXES = 'num_boxes'
 
 KEY_STEREO_CALIB_P2 = 'stereo_calib_p2'
 
-
 # logger config key
 KEY_LOGGER_NAME = 'logger_name'
 KEY_LOGGER_LEVEL = 'logger_level'
 KEY_LOGGER_PATH = 'logger_path'
 
-
 # pred
 KEY_TARGETS = 'targets'
 
-
+# all attributions of instance
 KEY_PRIMARY = 'primary'
 KEY_NON_PRIME = 'non_prime'
+KEY_PRED_CLASSES = 'pred_classes'
+KEY_PRED_BOXES_2D = 'pred_boxes_2d'
+KEY_PRED_BOXES_3D = 'pred_boxes_3d'
+
+# loss unit
+KEY_BOXES_2D = 'boxes_2d'
+KEY_BOXES_3D = 'boxes_3d'
+KEY_CLASSES = 'classes'

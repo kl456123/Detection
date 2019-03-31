@@ -13,16 +13,13 @@ class AnchorGenerator(object):
         """
         """
         self.base_anchor_size = torch.tensor(
-            anchor_generator_config['base_anchor_size'],
-            dtype=torch.float32)
+            anchor_generator_config['base_anchor_size'], dtype=torch.float32)
         self.scales = torch.tensor(
             anchor_generator_config['scales'], dtype=torch.float32)
         self.aspect_ratios = torch.tensor(
-            anchor_generator_config['aspect_ratios'],
-            dtype=torch.float32)
+            anchor_generator_config['aspect_ratios'], dtype=torch.float32)
         self.anchor_offset = torch.tensor(
-            anchor_generator_config['anchor_offset'],
-            dtype=torch.float32)
+            anchor_generator_config['anchor_offset'], dtype=torch.float32)
 
         if anchor_generator_config.get('use_pyramid'):
             self.num_anchors = self.aspect_ratios.numel()
@@ -44,7 +41,7 @@ class AnchorGenerator(object):
 
         return torch.cat(anchors_list, dim=0)
 
-    def generate(self, feature_map_list, input_size):
+    def generate(self, feature_map_list, input_size, device='cuda'):
         """
         Args:
             feature_map_list, list of (stride, ratio)
@@ -52,31 +49,43 @@ class AnchorGenerator(object):
             anchors
         """
         anchors_list = []
-        scales, aspect_ratios = ops.meshgrid(self.scales, self.aspect_ratios)
+        scales, aspect_ratios = ops.meshgrid(
+            self.scales.to(device), self.aspect_ratios.to(device))
         for feature_map_shape in feature_map_list:
             anchors_list.append(
                 self._generate(feature_map_shape, scales, aspect_ratios,
-                               input_size))
+                               input_size, device))
 
         return torch.cat(anchors_list, dim=0)
 
-    def _generate(self, feature_map_shape, scales, aspect_ratios, input_size):
+    def _generate(self,
+                  feature_map_shape,
+                  scales,
+                  aspect_ratios,
+                  input_size,
+                  device='cuda'):
         """
         """
         # shape(A,)
 
         ratios_sqrt = torch.sqrt(aspect_ratios)
-        heights = scales * ratios_sqrt * self.base_anchor_size
-        widths = scales / ratios_sqrt * self.base_anchor_size
+        heights = scales * ratios_sqrt * self.base_anchor_size.to(device)
+        widths = scales / ratios_sqrt * self.base_anchor_size.to(device)
         anchor_stride = [
             input_size[0] / feature_map_shape[0],
             input_size[1] / feature_map_shape[1]
         ]
 
-        y_ctrs = torch.arange(feature_map_shape[0]) * anchor_stride[
-            0] + self.anchor_offset[0]
-        x_ctrs = torch.arange(feature_map_shape[1]) * anchor_stride[
-            1] + self.anchor_offset[1]
+        #  import ipdb
+        #  ipdb.set_trace()
+        y_ctrs = torch.arange(
+            feature_map_shape[0],
+            device=device) * anchor_stride[0] + self.anchor_offset[0].to(
+                device)
+        x_ctrs = torch.arange(
+            feature_map_shape[1],
+            device=device) * anchor_stride[1] + self.anchor_offset[1].to(
+                device)
 
         # meshgrid
         # shape(H*W,)

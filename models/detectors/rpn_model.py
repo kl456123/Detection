@@ -157,7 +157,6 @@ class RPNModel(Model):
     def forward(self, bottom_blobs):
         base_feat = bottom_blobs['base_feat']
         batch_size = base_feat.shape[0]
-        self.batch_size = batch_size
         im_info = bottom_blobs[constants.KEY_IMAGE_INFO]
 
         # rpn conv
@@ -230,7 +229,7 @@ class RPNModel(Model):
             'proposals': proposals_batch,
             'rpn_cls_scores': rpn_cls_scores,
             #  'rois_batch': rois_batch,
-            'anchors': anchors,
+            'anchors': anchors.unsqueeze(0).repeat(batch_size, 1, 1),
 
             # used for loss
             'rpn_bbox_preds': rpn_bbox_preds,
@@ -255,27 +254,24 @@ class RPNModel(Model):
     def loss(self, prediction_dict, feed_dict):
         # loss for cls
         loss_dict = {}
-        batch_size = self.batch_size
-        anchors = prediction_dict['anchors'].unsqueeze(0).repeat(batch_size, 1,
-                                                                 1)
+        anchors = prediction_dict['anchors']
         anchors_dict = {}
         anchors_dict[constants.KEY_PRIMARY] = anchors
-        anchors_dict[constants.KEY_NON_PRIME] = [None]
+        anchors_dict[constants.KEY_BOXES_2D] = prediction_dict['rpn_bbox_preds']
+        anchors_dict[constants.KEY_CLASSES] = prediction_dict['rpn_cls_scores']
+
         gt_dict = {}
         gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.KEY_LABEL_BOXES_2D]
         gt_labels = feed_dict[constants.KEY_LABEL_CLASSES]
-        gt_dict[constants.KEY_NON_PRIME] = [torch.ones_like(gt_labels)]
+        gt_dict[constants.KEY_CLASSES] = torch.ones_like(gt_labels)
 
-        _, targets, mask = self.target_generators.generate_targets(
-            anchors_dict, gt_dict)
+        _, targets = self.target_generators.generate_targets(anchors_dict,
+                                                             gt_dict)
 
-        cls_target = targets[0]
-        reg_target = targets[1]
-        cls_target['pred'] = prediction_dict['rpn_cls_scores'][mask].view(
-            self.batch_size, -1, 2)
-        reg_target['pred'] = prediction_dict['rpn_bbox_preds'][mask].view(
-            self.batch_size, -1, 4)
+        cls_target = targets[constants.KEY_CLASSES]
+        reg_target = targets[constants.KEY_BOXES_2D]
 
+        # loss
         rpn_cls_loss = self.rpn_cls_loss(cls_target)
         rpn_reg_loss = self.rpn_bbox_loss(reg_target)
         loss_dict.update({

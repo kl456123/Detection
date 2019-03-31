@@ -1,15 +1,20 @@
 # -*- coding: utf-8 -*-
 
 import torch
+from core import constants
 
 
 def filter_tensor_container(tensor_container, mask):
     if isinstance(tensor_container, dict):
         for key, tensor in tensor_container.items():
-            tensor_container[key] = filter_tensor(tensor, mask)
+            tensor_container[key] = filter_tensor_container(tensor, mask)
+        return tensor_container
     elif isinstance(tensor_container, list):
-        for item in tensor_container:
-            filter_tensor_container(item, mask)
+        for idx, item in enumerate(tensor_container):
+            tensor_container[idx] = filter_tensor_container(item, mask)
+        return tensor_container
+    elif isinstance(tensor_container, torch.Tensor):
+        return filter_tensor(tensor_container, mask)
     else:
         raise ValueError('cannot filter tensor container')
 
@@ -36,6 +41,6 @@ def filter_tensor(tensor, mask):
 
 def make_match_dict(primary, non_prime=[]):
     proposals_dict = {}
-    proposals_dict[constants.KEY_PRIMARY] = proposals
+    proposals_dict[constants.KEY_PRIMARY] = primary
     proposals_dict[constants.KEY_NON_PRIME] = non_prime
     return proposals_dict

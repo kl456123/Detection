@@ -19,25 +19,25 @@ def box2rois(bboxes):
     return rois
 
 
-def clip_boxes(boxes, im_shape):
+def clip_boxes(boxes, image_shape):
     """
-    Clip boxes to image boundaries.
+    Args:
+        boxes: shape(N, M, 4)
+        image_shape: shape(N, 2)
     """
     boxes = boxes.clone()
     boxes[boxes < 0] = 0
-
-    batch_x = im_shape[:, 1] - 1
-    batch_y = im_shape[:, 0] - 1
-
-    size = boxes.size()
-    boxes = boxes.view(-1, 4)
-
-    boxes[:, 0][boxes[:, 0] > batch_x] = batch_x
-    boxes[:, 1][boxes[:, 1] > batch_y] = batch_y
-    boxes[:, 2][boxes[:, 2] > batch_x] = batch_x
-    boxes[:, 3][boxes[:, 3] > batch_y] = batch_y
-
-    boxes = boxes.view(size)
+    num_boxes = boxes.shape[1]
+    boxes_x = boxes[:, :, ::2]
+    boxes_y = boxes[:, :, 1::2]
+    y_boundary = image_shape[:, 0].unsqueeze(1).unsqueeze(1).repeat(
+        1, num_boxes, 2)
+    x_boundary = image_shape[:, 1].unsqueeze(1).unsqueeze(1).repeat(
+        1, num_boxes, 2)
+    boxes_x[boxes_x > x_boundary] = x_boundary[boxes_x > x_boundary]
+    boxes_y[boxes_y > y_boundary] = y_boundary[boxes_y > y_boundary]
+    boxes[:, :, ::2] = boxes_x
+    boxes[:, :, 1::2] = boxes_y
 
     return boxes
 

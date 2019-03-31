@@ -25,7 +25,7 @@ class TargetAssigner(object):
         self.fg_thresh = assigner_config['fg_thresh']
         self.bg_thresh = assigner_config['bg_thresh']
 
-    def assign(self, proposals_dict, gt_dict):
+    def assign(self, proposals_dict, gt_dict, device='cuda'):
         """
         Assign each bboxes with label and bbox targets for training
 
@@ -33,9 +33,6 @@ class TargetAssigner(object):
         bboxes: shape(N,K,4), encoded by xxyy
         gt_boxes: shape(N,M,4), encoded likes as bboxes
         """
-        # import ipdb
-        # ipdb.set_trace()
-
         # usually IoU overlaps is used as metric
         proposals_primary = proposals_dict[constants.KEY_PRIMARY].detach()
         gt_primary = gt_dict[constants.KEY_PRIMARY].detach()
@@ -44,13 +41,14 @@ class TargetAssigner(object):
             proposals_primary, gt_primary)
 
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
-        assigned_overlaps_batch = self.matcher.assigned_overlaps_batch
+        assigned_overlaps_batch = self.matcher.assigned_overlaps_batch.to(
+            device)
 
         # assign regression targets
         reg_targets = self._assign_regression_targets(match, proposals_primary,
                                                       gt_primary)
 
-        gt_labels = gt_dict[constants.KEY_NON_PRIME][0]
+        gt_labels = gt_dict[constants.KEY_CLASSES]
         # assign classification targets
         cls_targets = self._assign_classification_targets(match, gt_labels)
 
@@ -75,13 +73,15 @@ class TargetAssigner(object):
                 match == -1)
             cls_weights[ignored_bg] = 0
 
-        targets = [{
+        targets = {}
+        targets[constants.KEY_CLASSES] = {
             'weight': cls_weights,
             'target': cls_targets
-        }, {
+        }
+        targets[constants.KEY_BOXES_2D] = {
             'weight': reg_weights,
             'target': reg_targets
-        }]
+        }
         return targets
 
     def _create_regression_weights(self, assigned_overlaps_batch):
@@ -102,7 +102,11 @@ class TargetAssigner(object):
         cls_weights = torch.ones_like(assigned_overlaps_batch)
         return cls_weights
 
-    def _assign_regression_targets(self, match, bboxes, gt_boxes):
+    def _assign_regression_targets(self,
+                                   match,
+                                   bboxes,
+                                   gt_boxes,
+                                   device='cuda'):
         """
         Args:
             match: Tensor(num_batch,num_boxes)
@@ -112,8 +116,8 @@ class TargetAssigner(object):
         """
         # shape(num_batch,num_boxes,4)
         batch_size = gt_boxes.shape[0]
-        offset = torch.arange(0, batch_size) * gt_boxes.size(1)
-        match += offset.view(batch_size, 1).type_as(match)
+        offset = torch.arange(0, batch_size, device=device) * gt_boxes.size(1)
+        match = match + offset.view(batch_size, 1).type_as(match)
         assigned_gt_boxes = gt_boxes.view(-1, 4)[match.view(-1)].view(
             batch_size, -1, 4)
         reg_targets_batch = self.bbox_coder.encode_batch(bboxes,
@@ -121,7 +125,7 @@ class TargetAssigner(object):
         # no need grad_fn
         return reg_targets_batch
 
-    def _assign_classification_targets(self, match, gt_labels):
+    def _assign_classification_targets(self, match, gt_labels, device='cuda'):
         """
         Just return the countpart labels
         Note that use zero to represent background labels
@@ -130,12 +134,12 @@ class TargetAssigner(object):
         """
         # multiple labels classification
         batch_size = match.shape[0]
-        offset = torch.arange(0, batch_size) * gt_labels.size(1)
-        match += offset.view(batch_size, 1).type_as(match)
+        offset = torch.arange(0, batch_size, device=device) * gt_labels.size(1)
+        match = match + offset.view(batch_size, 1).type_as(match)
         cls_targets_batch = gt_labels.view(-1)[match.view(-1)].view(
             batch_size, match.shape[1])
         return cls_targets_batch.long()
 
-    def _generate_binary_labels(self, match):
-        gt_labels_batch = torch.ones_like(match).long()
+    def _generate_binary_labels(self, match, device='cuda'):
+        gt_labels_batch = torch.ones_like(match, device=device).long()
         return gt_labels_batch

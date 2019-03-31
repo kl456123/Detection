@@ -8,8 +8,6 @@ from core.utils import common
 class Trainer(object):
     def __init__(self, train_config, logger=None):
         self.num_iters = train_config['num_iters']
-        self.max_epochs = train_config['max_epochs']
-
         self.disp_interval = train_config['disp_interval']
         self.checkpoint_interval = train_config['checkpoint_interval']
         self.clip_gradient = train_config['clip_gradient']
@@ -49,8 +47,7 @@ class Trainer(object):
             loss.backward()
 
             # clip gradients
-            nn.utils.clip_grad_norm_(model.parameters(),
-                                     self.clip_gradient)
+            nn.utils.clip_grad_norm_(model.parameters(), self.clip_gradient)
             # update weight
             optimizer.step()
 
@@ -60,13 +57,14 @@ class Trainer(object):
             if step and step % self.disp_interval == 0:
                 # display info
                 duration_time = time.time() - start_time
-                self.logger.info('time cost: {}'.format(duration_time))
+                self.logger.info(
+                    '[iter {}] time cost: {}'.format(step, duration_time))
 
             if step and step % self.checkpoint_interval == 0:
                 # save model
                 checkpoint_name = 'detector_{}.pth'.format(step)
                 params_dict = {
-                    'num_iters': self.num_iters-step,
+                    'num_iters': self.num_iters - step,
                     'model': model,
                     'optimizer': optimizer,
                     'scheduler': scheduler

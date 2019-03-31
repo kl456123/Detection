@@ -294,8 +294,8 @@ class Normalize(Transform):
 
 @TRANSFORMS.register('random_brightness')
 class RandomBrightness(Transform):
-    def __init__(self, shift_value=30):
-        self.shift_value = shift_value
+    def __init__(self, config):
+        self.shift_value = config.get('shift_value', 30)
 
     def __call__(self, sample):
         img = sample[constants.KEY_IMAGE]
@@ -313,8 +313,8 @@ class RandomBrightness(Transform):
 
 @TRANSFORMS.register('random_gaussian_blur')
 class RandomGaussBlur(Transform):
-    def __init__(self, max_blur=4):
-        self.max_blur = max_blur
+    def __init__(self, config):
+        self.max_blur = config.get('max_blur', 4)
 
     def __call__(self, sample):
         img = sample[constants.KEY_IMAGE]
@@ -354,11 +354,70 @@ class RandomHorizontalFlip(Transform):
             return sample
 
 
+@TRANSFORMS.register('fix_shape_resize')
+class FixShapeResize(object):
+    """random Rescale the input PIL.Image to the given size.
+    Args:
+    size (sequence or int): Desired output size. If size is a sequence like
+    (w, h), output size will be matched to this. If size is an int,
+    smaller edge of the image will be matched to this number.
+    i.e, if height > width, then image will be rescaled to
+    (size * height / width, size)
+    interpolation (int, optional): Desired interpolation. Default is
+    ``PIL.Image.BILINEAR``
+    """
+    interpolate_map = {'bilinear': Image.BILINEAR, 'bicubic': Image.BICUBIC}
+
+    def __init__(self, config):
+        interpolate = config.get('interpolate', 'bilinear')
+        self.interpolation = self.interpolate_map[interpolate]
+        # h, w
+        self.size = config['size']
+
+    def __call__(self, sample):
+        """
+        Args:
+        img (PIL.Image): Image to be scaled.
+        Returns:
+        PIL.Image: Rescaled image.
+        """
+        img = sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(img)
+        w, h = img.size
+        # w, h
+        target_shape = (int(self.size[1]), int(self.size[0]))
+        # h, w
+        image_scale = [self.size[0] / h, self.size[1] / w]
+
+        # resized image
+        sample[constants.KEY_IMAGE] = img.resize(target_shape,
+                                                 self.interpolation)
+
+        # image_info
+        image_info = sample[constants.KEY_IMAGE_INFO]
+        image_info[:2] = self.size
+        image_info[2:4] = image_scale
+        sample[constants.KEY_IMAGE_INFO] = image_info
+
+        # bbox
+        if sample.get(constants.KEY_LABEL_BOXES_2D) is not None:
+            bbox = sample[constants.KEY_LABEL_BOXES_2D]
+            bbox[:, ::2] *= image_scale[1]
+            bbox[:, 1::2] *= image_scale[0]
+
+            sample[constants.KEY_LABEL_BOXES_2D] = bbox
+
+        return sample
+
+
 @TRANSFORMS.register('resize')
 class Resize(Transform):
-    def __init__(self, min_size, max_size):
+    def __init__(self, config):
+        min_size = config.get('min_size')
+        max_size = config.get('max_size')
         if not isinstance(min_size, (list, tuple)):
             min_size = (min_size, )
+
         self.min_size = min_size
         self.max_size = max_size
 

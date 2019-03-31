@@ -15,7 +15,6 @@ import numpy as np
 import argparse
 import shutil
 import torch
-import torch.nn as nn
 from core.utils import common
 
 
@@ -86,7 +85,7 @@ def train(config, logger):
 
     # move to gpus before building optimizer
     if train_config['mGPUs']:
-        model = nn.DataParallel(model)
+        model = common.MyParallel(model, device_ids=[0, 1])
 
     if train_config['cuda']:
         model = model.cuda()
@@ -107,12 +106,15 @@ def train(config, logger):
 
     # resume
     if train_config['resume']:
-        checkpoint_path = '{}.pth'.format(
-            train_config['checkpoint'])
+        checkpoint_path = '{}.pth'.format(train_config['checkpoint'])
         logger.info(
             'resume from checkpoint detector_{}'.format(checkpoint_path))
-        params_dict = {'model': model,
-                       'optimizer': optimizer, 'scheduler': scheduler, 'num_iters': None}
+        params_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'scheduler': scheduler,
+            'num_iters': None
+        }
 
         saver.load(params_dict, checkpoint_path)
         train_config['num_iters'] = params_dict['num_iters']

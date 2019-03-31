@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import torch
+import sys
+import torch.nn as nn
 
 
 def build(config, registry, *args, **kwargs):
@@ -42,3 +45,28 @@ def print_loss(loss_dict):
             sys.stdout.write("\n")
     if print_num % 3:
         sys.stdout.write("\n")
+
+
+class MyParallel(nn.DataParallel):
+    def __getattr__(self, name):
+        if '_parameters' in self.__dict__:
+            _parameters = self.__dict__['_parameters']
+            if name in _parameters:
+                return _parameters[name]
+        if '_buffers' in self.__dict__:
+            _buffers = self.__dict__['_buffers']
+            if name in _buffers:
+                return _buffers[name]
+        if '_modules' in self.__dict__:
+            modules = self.__dict__['_modules']
+            if name in modules:
+                return modules[name]
+        if '_modules' in self.__dict__:
+            modules = self.__dict__['_modules']
+            if name in modules:
+                return modules[name]
+        return getattr(self.module, name)
+
+
+# def make_parallel(module):
+# return MyParallel(module)
