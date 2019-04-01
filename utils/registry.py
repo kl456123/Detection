@@ -47,3 +47,6 @@ SCHEDULERS = Registry('schedulers')
 
 # target_assigner
 TARGET_ASSIGNERS = Registry('target_assigners')
+
+# coder(encode and decode)
+CODERS = Registry('coders')

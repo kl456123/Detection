@@ -8,7 +8,6 @@ from core.utils.analyzer import Analyzer
 import samplers
 import target_assigners
 from core import constants
-import torch
 from utils import batch_ops
 
 
@@ -20,7 +19,7 @@ class TargetGenerator(ABC):
             target_generator_config['sampler_config'])
         self.analyzer = Analyzer(target_generator_config['analyzer_config'])
 
-    def generate_targets(self, proposals_dict, gt_dict):
+    def generate_targets(self, proposals_dict, gt_dict, num_instances):
         """
             use gt to encode preds for better predictable
         Args:
@@ -38,7 +37,7 @@ class TargetGenerator(ABC):
         # assigner
         ##########################
 
-        loss_units = self.target_assigner.assign(proposals_dict, gt_dict)
+        loss_units = self.target_assigner.assign(proposals_dict, gt_dict, num_instances)
 
         ##########################
         # subsampler

@@ -53,7 +53,7 @@ class FasterRCNN(Model):
                                                         KEY_LABEL_BOXES_2D]
 
             proposals_dict, loss_units = self.target_generators[
-                i].generate_targets(proposals_dict, gt_dict)
+                i].generate_targets(proposals_dict, gt_dict, feed_dict[constants.KEY_NUM_INSTANCES])
 
             # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
             proposals = proposals_dict[constants.KEY_PRIMARY]

@@ -266,7 +266,7 @@ class RPNModel(Model):
         gt_dict[constants.KEY_CLASSES] = torch.ones_like(gt_labels)
 
         _, targets = self.target_generators.generate_targets(anchors_dict,
-                                                             gt_dict)
+                                                             gt_dict, feed_dict[constants.KEY_NUM_INSTANCES])
 
         cls_target = targets[constants.KEY_CLASSES]
         reg_target = targets[constants.KEY_BOXES_2D]

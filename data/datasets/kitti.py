@@ -208,7 +208,7 @@ class KITTIDataset(DetDataset):
         transform_sample[constants.KEY_IMAGE_INFO] = np.asarray(
             image_info, dtype=np.float32)
 
-        transform_sample[constants.KEY_NUM_BOXES] = np.asarray(
+        transform_sample[constants.KEY_NUM_INSTANCES] = np.asarray(
             num_boxes, dtype=np.int32)
         #  import ipdb
         #  ipdb.set_trace()

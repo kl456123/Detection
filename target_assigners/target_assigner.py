@@ -24,14 +24,26 @@ class TargetAssigner(object):
 
         self.fg_thresh = assigner_config['fg_thresh']
         self.bg_thresh = assigner_config['bg_thresh']
+    def suppress_ignore(self, match_quality_matrix, num_instances):
+        """
+        Args:
+            match_quality_matrix: shape(N, M, K)
+            num_instances: shape(N, ), it determines the num of valid instances,
+            it refers to the last dim of match_quality_matrix
+        """
+        N, M, K = match_quality_matrix.shape
+        num_instances = num_instances.unsqueeze(-1).repeat(1, M)
+        offsets = torch.arange(0, ) * K
+        num_instances = offsets + num_instances
+        match_quality_matrix.view(-1, K)
 
-    def assign(self, proposals_dict, gt_dict, device='cuda'):
+    def assign(self, proposals_dict, gt_dict, num_instances, device='cuda'):
         """
         Assign each bboxes with label and bbox targets for training
 
         Args:
-        bboxes: shape(N,K,4), encoded by xxyy
-        gt_boxes: shape(N,M,4), encoded likes as bboxes
+            bboxes: shape(N,K,4), encoded by xxyy
+            gt_boxes: shape(N,M,4), encoded likes as bboxes
         """
         # usually IoU overlaps is used as metric
         proposals_primary = proposals_dict[constants.KEY_PRIMARY].detach()
@@ -39,6 +51,8 @@ class TargetAssigner(object):
 
         match_quality_matrix = self.similarity_calc.compare_batch(
             proposals_primary, gt_primary)
+
+
 
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch.to(
