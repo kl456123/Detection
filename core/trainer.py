@@ -3,6 +3,7 @@ import time
 import torch.nn as nn
 import logging
 from core.utils import common
+import copy
 
 
 class Trainer(object):
@@ -14,6 +15,8 @@ class Trainer(object):
         if logger is None:
             logger = logging.getLogger(__name__)
         self.logger = logger
+
+        self.stats = common.Stats()
 
     def pre_forward(self, step):
         pass
@@ -36,7 +39,6 @@ class Trainer(object):
 
             # forward and backward
             prediction = model(data)
-            optimizer.zero_grad()
             # loss
             loss_dict = model.loss(prediction, data)
 
@@ -44,6 +46,7 @@ class Trainer(object):
             for loss_key, loss_val in loss_dict.items():
                 loss += loss_val.mean()
 
+            optimizer.zero_grad()
             loss.backward()
 
             # clip gradients
@@ -54,11 +57,19 @@ class Trainer(object):
             # adjust lr
             scheduler.step()
 
+            self.stats.update_stats(model)
+
             if step and step % self.disp_interval == 0:
                 # display info
                 duration_time = time.time() - start_time
                 self.logger.info(
-                    '[iter {}] time cost: {}'.format(step, duration_time))
+                    '[iter {}] time cost: {:.4f}, loss: {:.4f}, lr: {:.2e}'.
+                    format(step, duration_time, loss, scheduler.get_lr()[0]))
+
+                # info stats
+                self.logger.info(self.stats)
+                common.print_loss(loss_dict)
+                self.stats.clear_stats()
 
             if step and step % self.checkpoint_interval == 0:
                 # save model

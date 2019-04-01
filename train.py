@@ -126,6 +126,7 @@ def train(config, logger):
     # use model to initialize
     if train_config['model']:
         model_path = train_config['model']
+        assert os.path.isabs(model_path)
         logger.info('initialize model from {}'.format(model_path))
         params_dict = {'model': model}
         saver.load(params_dict, model_path)

@@ -2,7 +2,7 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 8,
+            "batch_size": 1,
             "num_workers": 2,
             "shuffle": true
         },
@@ -102,20 +102,18 @@
             "Car"
         ],
         "target_generator_config": [{
-            "target_assigner_config": {
-                "type": "faster_rcnn",
-                "similarity_calc_config": {
-                    "type": "center"
-                },
-                "fg_thresh": 0.3,
-                "bg_thresh": 0.3,
-                "coder_config": {
-                    "type": "center",
-                    "bbox_normalize_targets_precomputed": false
-                },
-                "matcher_config": {
-                    "type": "bipartitle"
-                }
+            "type": "faster_rcnn",
+            "similarity_calc_config": {
+                "type": "center"
+            },
+            "fg_thresh": 0.5,
+            "bg_thresh": 0.5,
+            "coder_config": {
+                "type": "center",
+                "bbox_normalize_targets_precomputed": false
+            },
+            "matcher_config": {
+                "type": "argmax"
             },
             "sampler_config": {
                 "num_samples":512,
@@ -173,20 +171,18 @@
                 ]
             },
             "target_generator_config": {
-                "target_assigner_config": {
-                    "type": "faster_rcnn",
-                    "similarity_calc_config": {
-                        "type": "center"
-                    },
-                    "fg_thresh": 0.3,
-                    "bg_thresh": 0.3,
-                    "coder_config": {
-                        "type": "center",
-                        "bbox_normalize_targets_precomputed": false
-                    },
-                    "matcher_config": {
-                        "type": "bipartitle"
-                    }
+                "type": "faster_rcnn",
+                "similarity_calc_config": {
+                    "type": "center"
+                },
+                "fg_thresh": 0.3,
+                "bg_thresh": 0.3,
+                "coder_config": {
+                    "type": "center",
+                    "bbox_normalize_targets_precomputed": false
+                },
+                "matcher_config": {
+                    "type": "bipartitle"
                 },
                 "sampler_config": {
                     "num_samples":512,
@@ -207,47 +203,12 @@
         "num_cls_samples":256,
         "num_reg_samples":512,
         "subsample_twice": false,
-        "target_assigner_config": {
-            "similarity_calc_config":{
-                "type":"center"
-            },
-            "fg_thresh_cls": 0.5,
-            "bg_thresh_cls":0.15,
-            "fg_thresh_reg":0.1,
-            "fg_thresh":0.5,
-            "bg_thresh":0.5,
-            "coder_config": {
-                "type":"center",
-                "bbox_inside_weights": [
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0
-                ],
-                "bbox_normalize_means": [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "bbox_normalize_stds": [
-                    0.1,
-                    0.1,
-                    0.2,
-                    0.2
-                ],
-                "bbox_normalize_targets_precomputed": true
-            },
-            "matcher_config": {
-                "type": "argmax"
-            }
-        },
         "truncated": false,
         "use_focal_loss": true
     },
     "train_config": {
         "num_iters":120000,
-        "checkpoint_interval": 10000,
+        "checkpoint_interval": 4000,
         "clip_gradient": 10,
         "device_ids": [
             0
@@ -265,7 +226,7 @@
         "scheduler_config": {
             "last_step": -1,
             "lr_decay_gamma": 0.1,
-            "lr_decay_step": 20,
+            "lr_decay_step": 60000,
             "type": "step"
         },
         "start_epoch": 1

@@ -25,8 +25,8 @@ from utils import batch_ops
 @DETECTORS.register('faster_rcnn')
 class FasterRCNN(Model):
     def forward(self, feed_dict):
-        #  import ipdb
-        #  ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
 
         prediction_dict = {}
 
@@ -71,7 +71,7 @@ class FasterRCNN(Model):
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
             batch_size = rois.shape[0]
-            loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_probs.view(
+            loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores.view(
                 batch_size, -1, 2)
             loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds.view(
                 batch_size, -1, 4)

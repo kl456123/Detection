@@ -28,7 +28,9 @@ class KITTIDataset(DetDataset):
         self.transforms = transform
 
         # classes to be trained
-        self.classes = config['classes']
+        # 0 refers to bg
+        classes = ['bg']
+        self.classes = classes + config['classes']
 
         sample_names = self.load_sample_names()
         self.sample_names = self.filter_sample_names(sample_names)
@@ -85,7 +87,7 @@ class KITTIDataset(DetDataset):
 
     def filter_labels(self,
                       objects,
-                      classes=None,
+                      classes,
                       difficulty=None,
                       max_occlusion=None):
         """Filters ground truth labels based on class, difficulty, and
@@ -101,8 +103,6 @@ class KITTIDataset(DetDataset):
         Returns:
         filtered object label list
         """
-        if classes is None:
-            classes = self.dataset.classes
 
         objects = np.asanyarray(objects)
         filter_mask = np.ones(len(objects), dtype=np.bool)

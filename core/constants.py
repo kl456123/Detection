@@ -20,12 +20,16 @@ KEY_TARGETS = 'targets'
 
 # all attributions of instance
 KEY_PRIMARY = 'primary'
-KEY_NON_PRIME = 'non_prime'
-KEY_PRED_CLASSES = 'pred_classes'
-KEY_PRED_BOXES_2D = 'pred_boxes_2d'
-KEY_PRED_BOXES_3D = 'pred_boxes_3d'
+# KEY_NON_PRIME = 'non_prime'
+# KEY_PRED_CLASSES = 'pred_classes'
+# KEY_PRED_BOXES_2D = 'pred_boxes_2d'
+# KEY_PRED_BOXES_3D = 'pred_boxes_3d'
 
-# loss unit
+# attribution fields of instance
 KEY_BOXES_2D = 'boxes_2d'
 KEY_BOXES_3D = 'boxes_3d'
 KEY_CLASSES = 'classes'
+KEY_KEYPOINTS = 'keypoints'
+
+# key of stats
+KEY_STATS_NUM_INSTANCES = 'num_stats_instances'

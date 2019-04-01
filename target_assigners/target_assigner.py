@@ -24,6 +24,7 @@ class TargetAssigner(object):
 
         self.fg_thresh = assigner_config['fg_thresh']
         self.bg_thresh = assigner_config['bg_thresh']
+
     def suppress_ignore(self, match_quality_matrix, num_instances):
         """
         Args:
@@ -51,8 +52,6 @@ class TargetAssigner(object):
 
         match_quality_matrix = self.similarity_calc.compare_batch(
             proposals_primary, gt_primary)
-
-
 
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch.to(

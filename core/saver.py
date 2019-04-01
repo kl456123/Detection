@@ -4,6 +4,7 @@ import os
 import torch
 import shutil
 import logging
+from core.utils.model_serialization import load_state_dict
 
 
 class Saver():
@@ -16,6 +17,15 @@ class Saver():
     def get_checkpoint_path(self, checkpoint_name):
         checkpoint_path = os.path.join(self.checkpoint_dir, checkpoint_name)
         return checkpoint_path
+
+    def load_pretrained_model(self, model, checkpoint_name):
+        # import ipdb
+        # ipdb.set_trace()
+        checkpoint_path = self.get_checkpoint_path(checkpoint_name)
+        self.logger.info(("loading checkpoint %s" % (checkpoint_path)))
+        state_dict = torch.load(checkpoint_path)
+        load_state_dict(model, state_dict)
+        self.logger.info(("loaded checkpoint %s" % (checkpoint_name)))
 
     def load(self, params_dict, checkpoint_name):
         checkpoint_path = self.get_checkpoint_path(checkpoint_name)

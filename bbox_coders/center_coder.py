@@ -2,28 +2,28 @@
 import torch
 
 from utils.registry import BBOX_CODERS
+from core import constants
 
 
-@BBOX_CODERS.register('center')
+@BBOX_CODERS.register(constants.KEY_BOXES_2D)
 class CenterCoder(object):
-    def __init__(self, coder_config):
-        self.bbox_normalize_targets_precomputed = torch.tensor(
-            coder_config['bbox_normalize_targets_precomputed'])
-        if self.bbox_normalize_targets_precomputed:
-            self.bbox_normalize_means = torch.tensor(
-                coder_config['bbox_normalize_means'])
-            self.bbox_normalize_stds = torch.tensor(
-                coder_config['bbox_normalize_stds'])
+    # self.bbox_normalize_targets_precomputed = torch.tensor(
+    # coder_config['bbox_normalize_targets_precomputed'])
+    # if self.bbox_normalize_targets_precomputed:
+    # self.bbox_normalize_means = torch.tensor(
+    # coder_config['bbox_normalize_means'])
+    # self.bbox_normalize_stds = torch.tensor(
+    # coder_config['bbox_normalize_stds'])
 
-    def decode_batch(self, box_deltas, boxes):
-        if self.bbox_normalize_targets_precomputed:
-            type = box_deltas.type()
-            box_deltas = box_deltas * self.bbox_normalize_stds.expand_as(
-                box_deltas).type(type) + self.bbox_normalize_means.expand_as(
-                    box_deltas).type(type)
-        return self._decode_batch(box_deltas, boxes)
-
-    def _decode_batch(self, deltas, boxes):
+    # def decode_batch(self, box_deltas, boxes):
+    # # if self.bbox_normalize_targets_precomputed:
+    # # type = box_deltas.type()
+    # # box_deltas = box_deltas * self.bbox_normalize_stds.expand_as(
+    # # box_deltas).type(type) + self.bbox_normalize_means.expand_as(
+    # # box_deltas).type(type)
+    # return self._decode_batch(box_deltas, boxes)
+    @staticmethod
+    def decode_batch(deltas, boxes):
         """
         Args:
             deltas: shape(N,K*A,4)
@@ -62,21 +62,22 @@ class CenterCoder(object):
 
         return pred_boxes
 
-    def encode_batch(self, bboxes, assigned_gt_boxes):
-        reg_targets_batch = self._encode_batch(bboxes, assigned_gt_boxes)
+    # def encode_batch(self, bboxes, assigned_gt_boxes):
+    # reg_targets_batch = self.encode_batch(bboxes, assigned_gt_boxes)
 
-        if self.bbox_normalize_targets_precomputed:
-            dtype = reg_targets_batch.type()
-            # Optionally normalize targets by a precomputed mean and stdev
-            reg_targets_batch = (
-                (reg_targets_batch - self.bbox_normalize_means.expand_as(
-                    reg_targets_batch).type(dtype)) /
-                self.bbox_normalize_stds.expand_as(reg_targets_batch).type(
-                    dtype))
+    # # if self.bbox_normalize_targets_precomputed:
+    # # dtype = reg_targets_batch.type()
+    # # # Optionally normalize targets by a precomputed mean and stdev
+    # # reg_targets_batch = (
+    # # (reg_targets_batch - self.bbox_normalize_means.expand_as(
+    # # reg_targets_batch).type(dtype)) /
+    # # self.bbox_normalize_stds.expand_as(reg_targets_batch).type(
+    # # dtype))
 
-        return reg_targets_batch
+    # return reg_targets_batch
 
-    def _encode_batch(self, ex_rois, gt_rois):
+    @staticmethod
+    def encode_batch(ex_rois, gt_rois):
 
         if ex_rois.dim() == 2:
             ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0

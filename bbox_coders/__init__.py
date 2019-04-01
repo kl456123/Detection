@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from core.utils.imports import import_dir
-from core.utils.common import build as _build
+from core.utils.common import build_class as _build
 import os
 from utils.registry import BBOX_CODERS
 

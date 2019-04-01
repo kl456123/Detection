@@ -8,6 +8,7 @@ import os
 from utils.registry import FEATURE_EXTRACTORS
 from models.backbones import build_backbone
 from models import feature_extractors
+import torch
 
 
 @FEATURE_EXTRACTORS.register('resnet')
@@ -21,12 +22,20 @@ class ResNetFeatureExtractor(Model):
         self.net_arch = model_config['net_arch']
         self.use_cascade = model_config['use_cascade']
         self.model_dir = model_config['pretrained_models_dir']
-        self.net_arch_path_map = {'res50': 'net50-19c8e357.pth'}
+        self.net_arch_path_map = {'res50': 'resnet50-19c8e357.pth'}
         self.model_path = os.path.join(self.model_dir,
                                        self.net_arch_path_map[self.net_arch])
 
     def init_modules(self):
         resnet = build_backbone(self.net_arch)()
+        if self.training and self.pretrained:
+            print(("Loading pretrained weights from %s" % (self.model_path)))
+            state_dict = torch.load(self.model_path)
+            resnet.load_state_dict({
+                k: v
+                for k, v in list(state_dict.items())
+                if k in resnet.state_dict()
+            })
 
         base_features = [
             resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,

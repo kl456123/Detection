@@ -1,63 +1,35 @@
 # -*- coding: utf-8 -*-
 
 import torch
+from core import constants
 
 
 class Analyzer(object):
-    def __init__(self, config):
-        super().__init__()
-
-    def analyze(self, match, num_gt):
+    @staticmethod
+    def analyze_recall(match, num_instances):
         """
-        analyze result from match,calculate AP and AR
-        note that -1 means it is not matched
         Args:
-            match: tensor(N,M)
-
+            match: shape(N, M)
+            num_instances: shape(N, )
+        Returns:
+            stats: dict
         """
-        # import ipdb
-        # ipdb.set_trace()
-        self.match = match
-        assert match.shape[0] == 1
-        match = match[0]
-        match_inds = torch.nonzero(match > -1)
-        unmatch_inds = torch.nonzero(match == -1)[:, 0]
+        batch_size = match.shape[0]
+        num_matched = 0
+        num_gt = num_instances.sum()
+        for batch_ind in range(batch_size):
+            match_per_img = match[batch_ind]
+            num_instances_per_img = num_instances[batch_ind]
+            gt_mask = torch.zeros(num_instances_per_img.item()).type_as(match)
+            gt_mask[match_per_img[match_per_img > -1]] = 1
+            num_matched = num_matched + gt_mask.sum()
 
-        if match_inds.numel():
-            # check non zero first
-            match_inds = match_inds[:, 0]
+        stats = {}
+        stats[constants.KEY_STATS_NUM_INSTANCES] = (num_matched, num_gt)
+        return stats
 
-            # iou rate in all
-            rate = match_inds.numel() / match.numel()
-        else:
-            rate = 0
-
-        match = match[match > -1]
-        gt_mask = torch.zeros(num_gt).type_as(match)
-        gt_mask[match] = 1
-        matched = gt_mask.sum().item()
-        recall = matched / num_gt
-        return {
-            'matched': matched,
-            'num_gt': num_gt,
-            'recall': recall,
-            'match_inds': match_inds,
-            'match': self.match,
-            'rate': rate,
-            'unmatch_inds': unmatch_inds
-        }
-        # return self.stat
-        # print('matched_gt/all_gt/average recall({}/{}/{}): '.format(
-
-    # matched, num_gt, recall))
-    # num_all_samples = match.numel()
-    # num_unmatched_samples = torch.nonzero(
-
-    # match[match == -1]).view(-1).numel()
-    # num_matched_samples = num_all_samples - num_unmatched_samples
-    # print('match rate: ', num_matched_samples / num_all_samples)
-
-    def analyze_ap(self, match, rcnn_cls_probs, num_gt, thresh=0.5):
+    @staticmethod
+    def analyze_precision(match, rcnn_cls_probs, num_gt, thresh=0.5):
         # import ipdb
         # ipdb.set_trace()
         if match.dim() == 2:

@@ -17,6 +17,7 @@ from target_generators.target_generator import TargetGenerator
 import anchor_generators
 from models.losses import common_loss
 from core import constants
+import bbox_coders
 
 
 @DETECTORS.register('rpn')
@@ -43,7 +44,6 @@ class RPNModel(Model):
         self.use_iou = model_config.get('use_iou')
 
         # the same as target_assigner
-        self.bbox_coder = self.target_generators.target_assigner.bbox_coder
 
     def init_weights(self):
         self.truncated = False
@@ -104,7 +104,9 @@ class RPNModel(Model):
         # shape(N,H*W*num_anchors,4)
         rpn_bbox_preds = rpn_bbox_preds.view(batch_size, -1, 4)
 
-        proposals = self.bbox_coder.decode_batch(rpn_bbox_preds, anchors)
+        coders = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+        proposals = coders.decode_batch(rpn_bbox_preds,
+                                                                anchors)
 
         # filer and clip
         proposals = box_ops.clip_boxes(proposals, im_info)
@@ -264,14 +266,19 @@ class RPNModel(Model):
         gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.KEY_LABEL_BOXES_2D]
         gt_labels = feed_dict[constants.KEY_LABEL_CLASSES]
         gt_dict[constants.KEY_CLASSES] = torch.ones_like(gt_labels)
+        gt_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
+                                                    KEY_LABEL_BOXES_2D]
 
-        _, targets = self.target_generators.generate_targets(anchors_dict,
-                                                             gt_dict, feed_dict[constants.KEY_NUM_INSTANCES])
+        # import ipdb
+        # ipdb.set_trace()
+        _, targets = self.target_generators.generate_targets(
+            anchors_dict, gt_dict, feed_dict[constants.KEY_NUM_INSTANCES])
 
         cls_target = targets[constants.KEY_CLASSES]
         reg_target = targets[constants.KEY_BOXES_2D]
 
         # loss
+
         rpn_cls_loss = self.rpn_cls_loss(cls_target)
         rpn_reg_loss = self.rpn_bbox_loss(reg_target)
         loss_dict.update({
