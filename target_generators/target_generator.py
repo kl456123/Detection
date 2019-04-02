@@ -36,11 +36,12 @@ class TargetGenerator(object):
             num_instances: shape(N, ), it determines the num of valid instances,
             it refers to the last dim of match_quality_matrix
         """
-        m = match_quality_matrix
+        # any negative number is ok
+        m = torch.zeros_like(match_quality_matrix).fill_(-1)
         batch_size = m.shape[0]
         for batch_ind in range(batch_size):
-            m[batch_ind, :, num_instances[
-                batch_ind]:] = -1  # any negative number is ok
+            m[batch_ind, :, :num_instances[batch_ind]
+              ] = match_quality_matrix[batch_ind, ::num_instances[batch_ind]]
         return m
 
     def generate_targets(self,

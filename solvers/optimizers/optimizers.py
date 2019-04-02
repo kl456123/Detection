@@ -20,15 +20,17 @@ def make_optim_params(model, config, logger=None):
         if value.requires_grad:
             # learnable_params.append(param)
             logger.info('{} is learnable!'.format(name))
+            lr = config['base_lr']
+            weight_decay = config['weight_decay']
             if 'bias' in name:
                 lr = config['base_lr'] * config['bias_lr_factor']
                 weight_decay = config['weight_decay_bias']
-                param = {
-                    'params': [value],
-                    'lr': lr,
-                    'weight_decay': weight_decay
-                }
-                optim_params.append(param)
+            param = {
+                'params': [value],
+                'lr': lr,
+                'weight_decay': weight_decay
+            }
+            optim_params.append(param)
         else:
             logger.info('{} is not learnable'.format(name))
 
