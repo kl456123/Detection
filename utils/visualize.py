@@ -127,7 +127,7 @@ def vis_featmap(featmap):
     return ax
 
 
-def read_kitti(label_file, classes=['Car'], pred=True, use_3d=False):
+def read_kitti(label_file, classes=['Car', 'Pedestrian','Truck','Cyslist'], pred=True, use_3d=False):
     """
     Car 0.00 0 1.85 387.63 181.54 423.81 203.12 1.67 1.87 3.69 -16.53 2.39 58.49 1.57
     """

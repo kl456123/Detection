@@ -37,7 +37,7 @@
         ]
     },
     "eval_config": {
-        "batch_size": 1,
+        "batch_size": 2,
         "bbox_normalize_means": [
             0.0,
             0.0,
@@ -54,7 +54,8 @@
         "bbox_reg": true,
         "class_agnostic": true,
         "classes": [
-            "Car"
+            "Car",
+            "Pedestrian"
         ],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
@@ -71,26 +72,33 @@
             "shuffle": false
         },
         "dataset_config": {
-            "dataset_file": "val.txt",
-            "root_path": "/data/object/training"
+            "type":"kitti",
+            "classes":["Car", "Pedestrian"],
+            "cache_bev": false,
+            "dataset_file": "data/val.txt",
+            "root_path": "/data"
         },
         "name": "kitti",
-        "transform_config": {
-            "crop_size": [
-                384,
-                1280
-            ],
-            "normal_mean": [
-                0.485,
-                0.456,
-                0.406
-            ],
-            "normal_van": [
-                0.229,
-                0.224,
-                0.225
-            ]
-        }
+        "transform_config":[
+            {"type":"to_pil"},
+            {
+            "type":"fix_shape_resize",
+            "size":[384, 1280]
+            },
+            {"type":"to_tensor"},
+            {"type":"normalize",
+                "normal_mean": [
+                    0.485,
+                    0.456,
+                    0.406
+                ],
+                "normal_std": [
+                    0.229,
+                    0.224,
+                    0.225
+                ]
+            }
+        ]
     },
     "model_config": {
         "batch_size":512,
@@ -137,7 +145,6 @@
             "pretrained_model": "",
             "pretrained": true
         },
-        "num_classes": 2,
         "pooling_mode": "align",
         "pooling_size": 7,
         "rcnn_batch_size": 512,

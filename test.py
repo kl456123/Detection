@@ -4,20 +4,21 @@
 # Written by Jiasen Lu, Jianwei Yang, based on code from Ross Girshick # --------------------------------------------------------
 
 import sys
-sys.path.append('./lib')
 import os
 import numpy as np
 import argparse
 import pprint
 import time
 import json
+import torch
 
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
 from core.saver import Saver
-from core import tester
-from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
-from builder import model_builder
+from core.tester import Tester
+from core.utils.logger import setup_logger
+from core.utils.config import Config
+
+from data import dataloaders
+from models import detectors
 
 
 def parse_args():
@@ -125,44 +126,107 @@ def parse_args():
     return args
 
 
-def infer_config_fn(args):
-    import glob
-    output_dir = args.load_dir + '/' + args.net + '/' + args.dataset
-    possible_config = glob.glob(os.path.join(output_dir, '*.json'))
-    assert len(possible_config) == 1
-    return os.path.join(output_dir, possible_config[0])
-
-
-if __name__ == '__main__':
-    args = parse_args()
-    # assert args.config is not None, 'please select a config file(json)'
-    if args.config is None:
-        # infer it
-        args.config = infer_config_fn(args)
-    with open(args.config) as f:
-        config = json.load(f)
-
+def test(config, logger):
+    eval_config = config['eval_config']
     model_config = config['model_config']
     data_config = config['eval_data_config']
+
+    np.random.seed(eval_config['rng_seed'])
+
+    logger.info('Using config:')
+    pprint.pprint({
+        'model_config': model_config,
+        'data_config': data_config,
+        'eval_config': eval_config
+    })
+
+    eval_out = eval_config['eval_out']
+    if not os.path.exists(eval_out):
+        logger.info('creat eval out directory {}'.format(eval_out))
+        os.makedirs(eval_out)
+    else:
+        logger.warning('dir {} exist already!'.format(eval_out))
+
+    #restore from random or checkpoint
+    restore = True
+    # two methods to load model
+    # 1. load from any other dirs,it just needs config and model path
+    # 2. load from training dir
+    if args.model is not None:
+        # assert args.model is not None, 'please determine model or checkpoint'
+        # it should be a path to model
+        checkpoint_name = os.path.basename(args.model)
+        input_dir = os.path.dirname(args.model)
+    elif args.checkpoint is not None:
+        checkpoint_name = 'detector_{}.pth'.format(args.checkpoint)
+        assert args.load_dir is not None, 'please choose a directory to load checkpoint'
+        eval_config['load_dir'] = args.load_dir
+        input_dir = os.path.join(eval_config['load_dir'], model_config['type'],
+                                 data_config['name'])
+        if not os.path.exists(input_dir):
+            raise Exception(
+                'There is no input directory for loading network from {}'.
+                format(input_dir))
+    else:
+        restore = False
+
+    # log for restore
+    if restore:
+        logger.info("restore from checkpoint")
+    else:
+        logger.info("use pytorch default initialization")
+
+    # model
+    model = detectors.build(model_config)
+    model.eval()
+
+    if restore:
+        # saver
+        saver = Saver(input_dir)
+        saver.load({'model': model}, checkpoint_name)
+
+    if args.cuda:
+        model = model.cuda()
+
+    dataloader = dataloaders.make_data_loader(data_config, training=False)
+
+    tester = Tester(eval_config)
+
+    tester.test(dataloader, model, logger)
+
+
+def generate_config(args, logger):
+
+    # read config from file
+    if args.config is None:
+        output_dir = os.path.join(args.load_dir, args.net, args.dataset)
+        config_path = Config.infer_fromdir(output_dir)
+    else:
+        config_path = args.config
+    config = Config.fromjson(config_path)
+
     eval_config = config['eval_config']
+    model_config = config['model_config']
+    data_config = config['eval_data_config']
+
+    np.random.seed(eval_config['rng_seed'])
+
+    torch.backends.cudnn.benchmark = True
 
     model_config['pretrained'] = False
-    model_config['target_assigner_config'][
-        'fake_match_thresh'] = args.fake_match_thresh
-    # copy it in eval_config
-    eval_config['fake_match_thresh'] = args.fake_match_thresh
-
-    assert args.net is not None, 'please select a base model'
-    model_config['net'] = args.net
-
     eval_config['feat_vis'] = args.feat_vis
 
-    if args.dataset is not None:
-        data_config['name'] = args.dataset
+    assert args.net is not None, 'please select a base model'
+    model_config['type'] = args.net
 
-    eval_config['rois_vis'] = args.rois_vis
-    eval_config['use_which_result'] = args.use_which_result
-    data_config['dataset_config']['use_gt'] = args.use_gt
+    # use multi gpus to parallel
+    eval_config['mGPUs'] = args.mGPUs
+    eval_config['cuda'] = args.cuda
+
+    # use pretrained model to initialize
+    eval_config['model'] = args.model
+
+    eval_config['checkpoint'] = args.checkpoint
 
     if args.nms is not None:
         eval_config['nms'] = args.nms
@@ -177,70 +241,13 @@ if __name__ == '__main__':
         dataset_config['dataset_file'] = None
         dataset_config['demo_file'] = args.img_path
 
-    print('Called with args:')
-    print(args)
+    return config
 
-    np.random.seed(eval_config['rng_seed'])
 
-    print('Using config:')
-    pprint.pprint({
-        'model_config': model_config,
-        'data_config': data_config,
-        'eval_config': eval_config
-    })
+if __name__ == '__main__':
+    args = parse_args()
+    # first setup logger
+    logger = setup_logger('detection')
 
-    eval_out = eval_config['eval_out']
-    if not os.path.exists(eval_out):
-        os.makedirs(eval_out)
-    else:
-        print('dir {} exist already!'.format(eval_out))
-
-    #restore from random or checkpoint
-    restore = True
-    # two methods to load model
-    # 1. load from any other dirs,it just needs config and model path
-    # 2. load from training dir
-    if args.model is not None:
-        # assert args.model is not None, 'please determine model or checkpoint'
-        # it should be a path to model
-        checkpoint_name = os.path.basename(args.model)
-        input_dir = os.path.dirname(args.model)
-    elif args.checkepoch is not None and args.checkpoint is not None:
-        checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
-                                                         args.checkpoint)
-
-        assert args.load_dir is not None, 'please choose a directory to load checkpoint'
-        eval_config['load_dir'] = args.load_dir
-        input_dir = eval_config['load_dir'] + "/" + model_config[
-            'net'] + "/" + data_config['name']
-        if not os.path.exists(input_dir):
-            raise Exception(
-                'There is no input directory for loading network from {}'.
-                format(input_dir))
-    else:
-        restore = False
-
-    # log for restore
-    if restore:
-        print("restore from checkpoint")
-    else:
-        print("use pytorch default initialization")
-
-    # model
-    fasterRCNN = model_builder.build(model_config, training=False)
-
-    if restore:
-        # saver
-        saver = Saver(input_dir)
-        saver.load({'model': fasterRCNN}, checkpoint_name)
-
-    if args.cuda:
-        fasterRCNN.cuda()
-
-    start = time.time()
-
-    vis = args.vis
-    data_loader_builder = KittiDataLoaderBuilder(data_config, training=False)
-    data_loader = data_loader_builder.build()
-
-    tester.test(eval_config, data_loader, fasterRCNN)
+    config = generate_config(args, logger)
+    test(config, logger)

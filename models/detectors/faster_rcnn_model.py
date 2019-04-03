@@ -20,6 +20,7 @@ from models import feature_extractors
 from models import detectors
 
 from utils import batch_ops
+import bbox_coders
 
 
 @DETECTORS.register('faster_rcnn')
@@ -53,7 +54,8 @@ class FasterRCNN(Model):
                                                         KEY_LABEL_BOXES_2D]
 
             proposals_dict, loss_units = self.target_generators[
-                i].generate_targets(proposals_dict, gt_dict, feed_dict[constants.KEY_NUM_INSTANCES])
+                i].generate_targets(proposals_dict, gt_dict,
+                                    feed_dict[constants.KEY_NUM_INSTANCES])
 
             # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
             proposals = proposals_dict[constants.KEY_PRIMARY]
@@ -71,10 +73,13 @@ class FasterRCNN(Model):
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
             batch_size = rois.shape[0]
-            loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores.view(
-                batch_size, -1, 2)
-            loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds.view(
-                batch_size, -1, 4)
+            rcnn_cls_scores = rcnn_cls_scores.view(batch_size, -1,
+                                                   self.n_classes)
+            rcnn_cls_probs = rcnn_cls_probs.view(batch_size, -1,
+                                                 self.n_classes)
+            rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
+            loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
+            loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
             # import ipdb
             # ipdb.set_trace()
             multi_stage_loss_units.extend([
@@ -82,7 +87,23 @@ class FasterRCNN(Model):
                 loss_units[constants.KEY_BOXES_2D]
             ])
 
-        prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
+            # decode for next stage
+            coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+            proposals = coder.decode_batch(rcnn_bbox_preds, proposals)
+
+        if self.training:
+            prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
+        else:
+            prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
+
+            image_info = feed_dict[constants.KEY_IMAGE_INFO]
+            proposals[:, :, ::2] = proposals[:, :, ::
+                                             2] / image_info[:, 3].unsqueeze(
+                                                 -1).unsqueeze(-1)
+            proposals[:, :, 1::2] = proposals[:, :, 1::
+                                              2] / image_info[:, 2].unsqueeze(
+                                                  -1).unsqueeze(-1)
+            prediction_dict[constants.KEY_BOXES_2D] = proposals
 
         return prediction_dict
 
@@ -143,6 +164,8 @@ class FasterRCNN(Model):
         """
         loss_dict = {}
 
+        # import ipdb
+        # ipdb.set_trace()
         # submodule loss
         loss_dict.update(self.rpn_model.loss(prediction_dict, feed_dict))
 

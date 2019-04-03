@@ -7,7 +7,7 @@ from . import samplers
 from .collate_batch import BatchCollator
 
 
-def build(config):
+def build(config, training=True):
     dataloader_config = config['dataloader_config']
     batch_size = dataloader_config['batch_size']
     shuffle = dataloader_config['shuffle']
@@ -19,7 +19,7 @@ def build(config):
 
     # then build dataset
     dataset_config = config['dataset_config']
-    dataset = datasets.build(dataset_config, transform)
+    dataset = datasets.build(dataset_config, transform, training)
     # for debug
     dataset[0]
 
@@ -39,17 +39,15 @@ def make_data_sampler(dataset, shuffle):
     return sampler
 
 
-def make_batch_data_sampler(dataset,
-                            sampler,
-                            images_per_batch):
+def make_batch_data_sampler(dataset, sampler, images_per_batch, training):
     batch_sampler = torch.utils.data.sampler.BatchSampler(
         sampler, images_per_batch, drop_last=False)
-    batch_sampler = samplers.IterationBasedBatchSampler(
-        batch_sampler)
+    if training:
+        batch_sampler = samplers.IterationBasedBatchSampler(batch_sampler)
     return batch_sampler
 
 
-def make_data_loader(config):
+def make_data_loader(config, training=True):
     dataloader_config = config['dataloader_config']
     batch_size = dataloader_config['batch_size']
     shuffle = dataloader_config['shuffle']
@@ -61,13 +59,13 @@ def make_data_loader(config):
 
     # then build dataset
     dataset_config = config['dataset_config']
-    dataset = datasets.build(dataset_config, transform)
+    dataset = datasets.build(dataset_config, transform, training)
     # for debug
     dataset[0]
 
     sampler = make_data_sampler(dataset, shuffle)
     batch_sampler = make_batch_data_sampler(dataset, sampler, batch_size,
-                                            )
+                                            training)
     #  collator = BatchCollator()
 
     dataloader = torch.utils.data.DataLoader(

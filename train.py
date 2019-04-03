@@ -82,6 +82,7 @@ def train(config, logger):
 
     # build model
     model = detectors.build(model_config)
+    model.train()
 
     # move to gpus before building optimizer
     if train_config['mGPUs']:

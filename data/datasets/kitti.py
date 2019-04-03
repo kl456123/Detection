@@ -183,7 +183,8 @@ class KITTIDataset(DetDataset):
         all_label_boxes_2d = np.zeros(
             (self.max_num_boxes, label_boxes_2d.shape[1]))
         all_label_classes = np.zeros((self.max_num_boxes, ))
-        all_label_classes[...] = -1
+        # assign it with bg label
+        all_label_classes[...] = 0
         num_boxes = label_boxes_2d.shape[0]
         all_label_classes[:num_boxes] = label_classes
         all_label_boxes_2d[:num_boxes] = label_boxes_2d

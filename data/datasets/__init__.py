@@ -10,9 +10,9 @@ include = ['coco', 'kitti']
 import_dir(os.path.dirname(__file__), include=include)
 
 
-def build(config, transform):
+def build(config, transform, training):
 
-    return _build(config, DATASETS, transform)
+    return _build(config, DATASETS, transform, training)
 
 
 # only export build function to outside
