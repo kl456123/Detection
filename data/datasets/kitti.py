@@ -192,7 +192,7 @@ class KITTIDataset(DetDataset):
         # image_info = list(image_info).append(num_boxes)
 
         transform_sample = {}
-        transform_sample[constants.KEY_IMAGE] = image_input.astype(np.float32)
+        transform_sample[constants.KEY_IMAGE] = image_input
         transform_sample[
             constants.KEY_STEREO_CALIB_P2] = stereo_calib_p2.astype(np.float32)
         transform_sample[constants.

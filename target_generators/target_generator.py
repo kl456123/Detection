@@ -68,8 +68,6 @@ class TargetGenerator(object):
         match_quality_matrix = self.similarity_calc.compare_batch(
             proposals_primary, gt_primary)
 
-        match_quality_matrix = self.suppress_ignored_case(match_quality_matrix,
-                                                          num_instances)
 
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch.to(

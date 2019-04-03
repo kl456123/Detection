@@ -2,13 +2,13 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 1,
+            "batch_size": 2,
             "num_workers": 2,
             "shuffle": true
         },
         "dataset_config": {
             "type":"kitti",
-            "classes":["Car"],
+            "classes":["Car", "Pedestrian"],
             "cache_bev": false,
             "dataset_file": "data/train.txt",
             "root_path": "/data"
@@ -54,7 +54,6 @@
         "bbox_reg": true,
         "class_agnostic": true,
         "classes": [
-            "bg",
             "Car"
         ],
         "eval_out": "./results/data",
@@ -98,8 +97,8 @@
         "class_agnostic": true,
         "num_stages":1,
         "classes": [
-            "bg",
-            "Car"
+            "Car",
+            "Pedestrian"
         ],
         "target_generator_config": [{
             "type": "faster_rcnn",
@@ -131,8 +130,8 @@
             "use_cascade":true,
             "class_agnostic": true,
             "classes": [
-                "bg",
-                "Car"
+                "Car",
+                "Pedestrian"
             ],
             "img_channels": 3,
             "pretrained_model": "",
@@ -218,7 +217,8 @@
         "optimizer_config": {
             "base_lr": 0.001,
             "bias_lr_factor":1,
-            "weight_decay_bias":1,
+            "weight_decay_bias":0,
+            "weight_decay":0,
             "momentum": 0.9,
             "type": "sgd"
         },

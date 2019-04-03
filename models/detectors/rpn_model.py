@@ -70,14 +70,14 @@ class RPNModel(Model):
                                        1, 0)
 
         # bbox
-        self.rpn_bbox_loss = common_loss.SmoothL1Loss(reduce=False)
+        self.rpn_bbox_loss = nn.SmoothL1Loss(reduce=False)
 
         # cls
         #  if self.use_focal_loss:
         #  self.rpn_cls_loss = FocalLoss(
         #  2, alpha=0.2, gamma=2, auto_alpha=False)
         #  else:
-        self.rpn_cls_loss = common_loss.CrossEntropyLoss(reduce=False)
+        self.rpn_cls_loss = nn.CrossEntropyLoss(reduce=False)
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
@@ -279,8 +279,8 @@ class RPNModel(Model):
 
         # loss
 
-        rpn_cls_loss = self.rpn_cls_loss(cls_target)
-        rpn_reg_loss = self.rpn_bbox_loss(reg_target)
+        rpn_cls_loss = common_loss.calc_loss(self.rpn_cls_loss, cls_target)
+        rpn_reg_loss = common_loss.calc_loss(self.rpn_bbox_loss, reg_target)
         loss_dict.update({
             'rpn_cls_loss': rpn_cls_loss,
             'rpn_reg_loss': rpn_reg_loss

@@ -112,7 +112,7 @@ class FasterRCNN(Model):
         # if self.use_focal_loss:
         # self.rcnn_cls_loss = FocalLoss(self.n_classes)
         # else:
-        self.rcnn_cls_loss = common_loss.CrossEntropyLoss(reduce=False)
+        self.rcnn_cls_loss = nn.CrossEntropyLoss(reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
@@ -120,7 +120,7 @@ class FasterRCNN(Model):
         self.num_stages = model_config['num_stages']
         classes = model_config['classes']
         self.classes = classes
-        self.n_classes = len(classes)
+        self.n_classes = len(classes) + 1
         self.class_agnostic = model_config['class_agnostic']
         self.pooling_size = model_config['pooling_size']
         self.pooling_mode = model_config['pooling_mode']
@@ -151,9 +151,9 @@ class FasterRCNN(Model):
         cls_target = targets[0]
         reg_target = targets[1]
 
-        rcnn_cls_loss = self.rcnn_cls_loss(cls_target)
+        rcnn_cls_loss = common_loss.calc_loss(self.rcnn_cls_loss, cls_target)
 
-        rcnn_reg_loss = self.rcnn_bbox_loss(reg_target)
+        rcnn_reg_loss = common_loss.calc_loss(self.rcnn_bbox_loss, reg_target)
         loss_dict.update({
             'rcnn_cls_loss': rcnn_cls_loss,
             'rcnn_reg_loss': rcnn_reg_loss
