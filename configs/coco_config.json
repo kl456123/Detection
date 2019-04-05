@@ -2,24 +2,24 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 2,
-            "num_workers": 2,
+            "batch_size": 8,
+            "num_workers": 8,
             "shuffle": true
         },
         "dataset_config": {
-            "type":"kitti",
-            "classes":["Car", "Pedestrian"],
+            "type":"coco",
+            "classes":["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
             "cache_bev": false,
-            "dataset_file": "data/train.txt",
-            "root_path": "/data"
+            "root_path": "/data/liangxiong/COCO2017/",
+            "data_path":"train2017",
+            "label_path":"annotations/instances_train2017.json"
         },
-        "name": "kitti",
+        "name": "coco",
         "transform_config":[
-            {"type":"to_pil"},
             {"type":"random_hsv"
             },{
             "type":"fix_shape_resize",
-            "size":[384, 1280]
+            "size":[384, 512]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -37,7 +37,6 @@
         ]
     },
     "eval_config": {
-        "batch_size": 2,
         "bbox_normalize_means": [
             0.0,
             0.0,
@@ -52,11 +51,8 @@
         ],
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
-        "class_agnostic": true,
-        "classes": [
-            "Car",
-            "Pedestrian"
-        ],
+        "class_agnostic": false,
+        "classes":["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
@@ -68,22 +64,22 @@
     "eval_data_config": {
         "dataloader_config": {
             "batch_size": 1,
-            "num_workers": 1,
+            "num_workers": 2,
             "shuffle": false
         },
         "dataset_config": {
-            "type":"kitti",
-            "classes":["Car", "Pedestrian"],
+            "type":"coco",
+            "classes":["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
             "cache_bev": false,
-            "dataset_file": "data/val.txt",
-            "root_path": "/data"
+            "root_path": "/data/liangxiong/COCO2017/",
+            "data_path":"val2017",
+            "label_path":"annotations/instances_val2017.json"
         },
-        "name": "kitti",
+        "name": "coco",
         "transform_config":[
-            {"type":"to_pil"},
             {
             "type":"fix_shape_resize",
-            "size":[384, 1280]
+            "size":[384, 512]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -102,12 +98,9 @@
     },
     "model_config": {
         "batch_size":512,
-        "class_agnostic": true,
+        "class_agnostic": false,
         "num_stages":1,
-        "classes": [
-            "Car",
-            "Pedestrian"
-        ],
+        "classes":["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
         "target_generator_config": [{
             "type": "faster_rcnn",
             "similarity_calc_config": {
@@ -128,58 +121,15 @@
                 "fg_fraction": 0.5
             },
             "analyzer_config": {}
-        },{
-            "type": "faster_rcnn",
-            "similarity_calc_config": {
-                "type": "center"
-            },
-            "fg_thresh": 0.6,
-            "bg_thresh": 0.6,
-            "coder_config": {
-                "type": "center",
-                "bbox_normalize_targets_precomputed": false
-            },
-            "matcher_config": {
-                "type": "argmax"
-            },
-            "sampler_config": {
-                "num_samples":256,
-                "type": "balanced",
-                "fg_fraction": 0.5
-            },
-            "analyzer_config": {}
-        },{
-            "type": "faster_rcnn",
-            "similarity_calc_config": {
-                "type": "center"
-            },
-            "fg_thresh": 0.7,
-            "bg_thresh": 0.7,
-            "coder_config": {
-                "type": "center",
-                "bbox_normalize_targets_precomputed": false
-            },
-            "matcher_config": {
-                "type": "argmax"
-            },
-            "sampler_config": {
-                "num_samples":128,
-                "type": "balanced",
-                "fg_fraction": 0.5
-            },
-            "analyzer_config": {}
         }],
+        "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
             "type":"resnet",
             "pretrained_path": "./data/pretrained_model",
             "net_arch":"res50",
             "separate_feat":false,
             "use_cascade":true,
-            "class_agnostic": true,
-            "classes": [
-                "Car",
-                "Pedestrian"
-            ],
+            "classes":["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
             "img_channels": 3,
             "pretrained_model": "",
             "pretrained": true
@@ -204,16 +154,11 @@
                 ],
                 "aspect_ratios": [
                     0.5,
-                    0.8,
-                    1
+                    1,
+                    2
                 ],
-                "base_anchor_size": 16,
-                "scales": [
-                    2,
-                    4,
-                    8,
-                    16
-                ]
+                "base_anchor_size": 1,
+                "scales": [200, 72, 32, 120, 36]
             },
             "target_generator_config": {
                 "type": "faster_rcnn",
@@ -245,6 +190,9 @@
             "num_reg_samples":1024,
             "num_cls_samples":512
         },
+        "num_cls_samples":256,
+        "num_reg_samples":512,
+        "subsample_twice": false,
         "truncated": false,
         "use_focal_loss": true
     },

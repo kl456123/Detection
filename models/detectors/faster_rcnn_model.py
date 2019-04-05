@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import torch.nn as nn
+import torch
 import torch.nn.functional as F
 
 from lib.model.roi_align.modules.roi_align import RoIAlignAvg
@@ -21,6 +22,7 @@ from models import detectors
 
 from utils import batch_ops
 import bbox_coders
+from core.utils.analyzer import Analyzer
 
 
 @DETECTORS.register('faster_rcnn')
@@ -43,22 +45,23 @@ class FasterRCNN(Model):
         multi_stage_loss_units = []
         for i in range(self.num_stages):
 
-            proposals_dict = {}
-            proposals_dict[constants.KEY_PRIMARY] = proposals
-            gt_dict = {}
-            gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
-                                                       KEY_LABEL_BOXES_2D]
-            gt_dict[constants.KEY_CLASSES] = feed_dict[constants.
-                                                       KEY_LABEL_CLASSES]
-            gt_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
-                                                        KEY_LABEL_BOXES_2D]
+            if self.training:
+                proposals_dict = {}
+                proposals_dict[constants.KEY_PRIMARY] = proposals
+                gt_dict = {}
+                gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
+                                                           KEY_LABEL_BOXES_2D]
+                gt_dict[constants.KEY_CLASSES] = feed_dict[constants.
+                                                           KEY_LABEL_CLASSES]
+                gt_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
+                                                            KEY_LABEL_BOXES_2D]
 
-            proposals_dict, loss_units = self.target_generators[
-                i].generate_targets(proposals_dict, gt_dict,
-                                    feed_dict[constants.KEY_NUM_INSTANCES])
+                proposals_dict, loss_units = self.target_generators[
+                    i].generate_targets(proposals_dict, gt_dict,
+                                        feed_dict[constants.KEY_NUM_INSTANCES])
 
-            # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
-            proposals = proposals_dict[constants.KEY_PRIMARY]
+                # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
+                proposals = proposals_dict[constants.KEY_PRIMARY]
             rois = box_ops.box2rois(proposals)
             pooled_feat = self.rcnn_pooling(base_feat, rois.view(-1, 5))
 
@@ -67,8 +70,8 @@ class FasterRCNN(Model):
                 pooled_feat)
             pooled_feat = pooled_feat.mean(3).mean(2)
 
-            rcnn_bbox_preds = self.rcnn_bbox_pred(pooled_feat)
-            rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
+            rcnn_bbox_preds = self.rcnn_bbox_preds[i](pooled_feat)
+            rcnn_cls_scores = self.rcnn_cls_preds[i](pooled_feat)
 
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -77,19 +80,29 @@ class FasterRCNN(Model):
                                                    self.n_classes)
             rcnn_cls_probs = rcnn_cls_probs.view(batch_size, -1,
                                                  self.n_classes)
+            if self.training:
+                if not self.class_agnostic:
+                    # import ipdb
+                    # ipdb.set_trace()
+                    rcnn_bbox_preds = self.squeeze_bbox_preds(
+                        rcnn_bbox_preds,
+                        loss_units[constants.KEY_CLASSES]['target'].view(-1))
+
             rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
-            loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
-            loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
-            # import ipdb
-            # ipdb.set_trace()
-            multi_stage_loss_units.extend([
-                loss_units[constants.KEY_CLASSES],
-                loss_units[constants.KEY_BOXES_2D]
-            ])
+
+            if self.training:
+                loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
+                loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
+                # import ipdb
+                # ipdb.set_trace()
+                multi_stage_loss_units.extend([
+                    loss_units[constants.KEY_CLASSES],
+                    loss_units[constants.KEY_BOXES_2D]
+                ])
 
             # decode for next stage
             coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
-            proposals = coder.decode_batch(rcnn_bbox_preds, proposals)
+            proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
@@ -107,13 +120,28 @@ class FasterRCNN(Model):
 
         return prediction_dict
 
+    def squeeze_bbox_preds(self, rcnn_bbox_preds, rcnn_cls_targets, out_c=4):
+        """
+        squeeze rcnn_bbox_preds from shape (N, 4 * num_classes) to shape (N, 4)
+        Args:
+            rcnn_bbox_preds: shape(N, num_classes, 4)
+            rcnn_cls_targets: shape(N, 1)
+        """
+        rcnn_bbox_preds = rcnn_bbox_preds.view(-1, self.n_classes, out_c)
+        batch_size = rcnn_bbox_preds.shape[0]
+        offset = torch.arange(0, batch_size) * rcnn_bbox_preds.size(1)
+        rcnn_cls_targets = rcnn_cls_targets + offset.type_as(rcnn_cls_targets)
+        rcnn_bbox_preds = rcnn_bbox_preds.contiguous().view(
+            -1, out_c)[rcnn_cls_targets]
+        return rcnn_bbox_preds
+
     def init_weights(self):
         # submodule init weights
         self.feature_extractor.init_weights()
         self.rpn_model.init_weights()
 
-        Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
-        Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
+        # Filler.normal_init(self.rcnn_cls_preds, 0, 0.01, self.truncated)
+        # Filler.normal_init(self.rcnn_bbox_preds, 0, 0.001, self.truncated)
 
     def init_modules(self):
         self.feature_extractor = feature_extractors.build(
@@ -122,12 +150,16 @@ class FasterRCNN(Model):
         if self.pooling_mode == 'align':
             self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
                                             self.pooling_size, 1.0 / 16.0)
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        # note that roi extractor is shared but heads not
+        self.rcnn_cls_preds = nn.ModuleList(
+            [nn.Linear(2048, self.n_classes) for _ in range(self.num_stages)])
         in_channels = 2048
         if self.class_agnostic:
-            self.rcnn_bbox_pred = nn.Linear(in_channels, 4)
+            rcnn_bbox_pred = nn.Linear(in_channels, 4)
         else:
-            self.rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
+            rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
+        self.rcnn_bbox_preds = nn.ModuleList(
+            [rcnn_bbox_pred for _ in range(self.num_stages)])
 
         # loss module
         # if self.use_focal_loss:
@@ -138,7 +170,6 @@ class FasterRCNN(Model):
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
     def init_param(self, model_config):
-        self.num_stages = model_config['num_stages']
         classes = model_config['classes']
         self.classes = classes
         self.n_classes = len(classes) + 1
@@ -152,6 +183,7 @@ class FasterRCNN(Model):
         self.feature_extractor_config = model_config['feature_extractor_config']
         self.rpn_config = model_config['rpn_config']
 
+        self.num_stages = len(model_config['target_generator_config'])
         self.target_generators = [
             TargetGenerator(model_config['target_generator_config'][i])
             for i in range(self.num_stages)
@@ -171,12 +203,18 @@ class FasterRCNN(Model):
 
         targets = prediction_dict[constants.KEY_TARGETS]
 
-        cls_target = targets[0]
-        reg_target = targets[1]
+        # cls_target = targets[0]
+        # reg_target = targets[3]
 
-        rcnn_cls_loss = common_loss.calc_loss(self.rcnn_cls_loss, cls_target)
+        rcnn_cls_loss = 0
+        rcnn_reg_loss = 0
+        for cls_target in targets[::2]:
+            rcnn_cls_loss = rcnn_cls_loss + common_loss.calc_loss(
+                self.rcnn_cls_loss, cls_target)
+        for reg_target in targets[1::2]:
+            rcnn_reg_loss = rcnn_reg_loss + common_loss.calc_loss(
+                self.rcnn_bbox_loss, reg_target)
 
-        rcnn_reg_loss = common_loss.calc_loss(self.rcnn_bbox_loss, reg_target)
         loss_dict.update({
             'rcnn_cls_loss': rcnn_cls_loss,
             'rcnn_reg_loss': rcnn_reg_loss

@@ -94,22 +94,25 @@ class Tester(object):
                     threshed_scores_per_img = scores_per_img[inds, class_ind]
                     if inds.numel() > 0:
                         if self.class_agnostic:
-                            threshed_boxes_2d_per_img = boxes_2d_per_img[inds, :]
-
+                            threshed_boxes_2d_per_img = boxes_2d_per_img[
+                                inds, :]
                         else:
-                            threshed_boxes_2d_per_img = boxes_2d_per_img[inds, j * 4:j *
-                                                                4 + 4]
+                            threshed_boxes_2d_per_img = boxes_2d_per_img[
+                                inds, class_ind * 4:class_ind * 4 + 4]
                         # concat boxes and scores
-                        threshed_dets_per_img = torch.cat(
-                            [threshed_boxes_2d_per_img, threshed_scores_per_img.unsqueeze(-1)],
-                            dim=-1)
+                        threshed_dets_per_img = torch.cat([
+                            threshed_boxes_2d_per_img,
+                            threshed_scores_per_img.unsqueeze(-1)
+                        ],
+                                                          dim=-1)
 
                         # sort by scores
                         _, order = torch.sort(threshed_scores_per_img, 0, True)
                         threshed_dets_per_img = threshed_dets_per_img[order]
 
                         # nms
-                        keep = nms(threshed_dets_per_img, self.nms).view(-1).long()
+                        keep = nms(threshed_dets_per_img,
+                                   self.nms).view(-1).long()
                         nms_dets_per_img = threshed_dets_per_img[keep]
 
                         dets.append(nms_dets_per_img.detach().cpu().numpy())

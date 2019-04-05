@@ -23,6 +23,15 @@ class TargetAssigner(object):
             assigned_gt_boxes = assigned_gt_boxes.squeeze(-1)
         return assigned_gt_boxes
 
+    # @classmethod
+    # def suppress_ignored_case(match, num_instances):
+    # """
+    # create new match that ignore some cases
+    # Args:
+    # match: shape(N, M)
+    # num_instances: shape(N, )
+    # """
+
     # def _assign_target(self, assigned_gt, *args, **kwargs):
     # raise NotImplementedError
 
@@ -44,7 +53,8 @@ class ClassesTargetAssigner(TargetAssigner):
     def assign_target(cls, *args, **kwargs):
         match = args[0]
         gt = args[1]
-        assigned_gt = cls.generate_assigned_label(cls, match, gt)
+        assigned_gt = cls.generate_assigned_label(cls, kwargs['ignored_match'],
+                                                  gt)
         assigned_gt[match == -1] = 0
 
         return assigned_gt.long()
@@ -68,7 +78,8 @@ class Box2DTargetAssigner(TargetAssigner):
         match = args[0]
         gt = args[1]
         proposals = args[2]
-        assigned_gt = cls.generate_assigned_label(cls, match, gt)
+        assigned_gt = cls.generate_assigned_label(cls, kwargs['ignored_match'],
+                                                  gt)
         # prepare coder
         coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
         reg_targets_batch = coder.encode_batch(proposals, assigned_gt)

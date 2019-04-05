@@ -66,11 +66,11 @@ def make_data_loader(config, training=True):
     sampler = make_data_sampler(dataset, shuffle)
     batch_sampler = make_batch_data_sampler(dataset, sampler, batch_size,
                                             training)
-    #  collator = BatchCollator()
+    # collator = BatchCollator()
 
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_sampler=batch_sampler,
-        #  collate_fn=collator,
+         # collate_fn=collator,
         num_workers=num_workers)
     return dataloader

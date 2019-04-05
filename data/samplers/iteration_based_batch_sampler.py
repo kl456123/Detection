@@ -12,6 +12,9 @@ class IterationBasedBatchSampler(BatchSampler):
         self.batch_sampler = batch_sampler
         # self.num_iterations = num_iterations
 
+    def __getattr__(self, name):
+        return getattr(self.batch_sampler, name)
+
     def __iter__(self):
         # iteration = 1
         while True:

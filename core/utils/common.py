@@ -107,6 +107,15 @@ class Stats(object):
             stats[key] = (value1[0] + value2[0], value2[1] + value1[1])
         return stats
 
+    def get_summary_dict(self):
+        summary_dict = {}
+        for stat in self.stats:
+            for key in stat:
+                value = stat[key]
+                # tensor here
+                summary_dict[key] = value[0].float() / value[1].float()
+        return summary_dict
+
     def __repr__(self):
         total_str = []
         for stat in self.stats:

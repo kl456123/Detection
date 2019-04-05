@@ -33,7 +33,7 @@ class KITTIDataset(DetDataset):
         self.classes = classes + config['classes']
 
         sample_names = self.load_sample_names()
-        self.sample_names = self.filter_sample_names(sample_names)
+        self.sample_names = sorted(self.filter_sample_names(sample_names))
 
         self.max_num_boxes = 40
 

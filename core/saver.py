@@ -34,21 +34,24 @@ class Saver():
         checkpoint = torch.load(checkpoint_path)
         for name, module in list(params_dict.items()):
             if name in checkpoint:
-                if hasattr(module, 'load_state_dict'):
-                    module_dict = module.state_dict()
+                if isinstance(module, torch.nn.parallel.DataParallel):
+                    module.module.load_state_dict(checkpoint[name])
+                elif hasattr(module, 'load_state_dict'):
+                    module.load_state_dict(checkpoint[name])
+                    # module_dict = module.state_dict()
 
-                    checkpoint_dict = {
-                        k: v
-                        for k, v in checkpoint[name].items()
-                        if k in module_dict
-                    }
+                    # checkpoint_dict = {
+                        # k: v
+                        # for k, v in checkpoint[name].items()
+                        # if k in module_dict
+                    # }
                     #  import ipdb
                     #  ipdb.set_trace()
                     #  if hasattr(module, 'unloaded_parameters'):
                     #  for unloaded_param in module.unloaded_parameters():
                     #  checkpoint_dict.pop(unloaded_param, None)
-                    module_dict.update(checkpoint_dict)
-                    module.load_state_dict(module_dict)
+                    # module_dict.update(checkpoint_dict)
+                    # module.load_state_dict(module_dict)
                     # module.load_state_dict(checkpoint[name])
                 else:
                     params_dict[name] = checkpoint[name]

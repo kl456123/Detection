@@ -25,35 +25,34 @@ class Analyzer(object):
             num_matched = num_matched + gt_mask.sum()
 
         stats = {}
-        stats[constants.KEY_STATS_NUM_INSTANCES] = (num_matched, num_gt)
+        stats[constants.KEY_STATS_RECALL] = (num_matched, num_gt)
         return stats
 
     @staticmethod
-    def analyze_precision(match, rcnn_cls_probs, num_gt, thresh=0.5):
-        # import ipdb
-        # ipdb.set_trace()
-        if match.dim() == 2:
-            assert match.shape[0] == 1
-            match = match[0]
-        num_det = torch.nonzero(rcnn_cls_probs > thresh).numel()
-        num_tp = torch.nonzero((rcnn_cls_probs > thresh) & (match > -1
-                                                            )).numel()
+    def analyze_precision(match, rcnn_cls_probs, num_instances, thresh=0.5):
+        batch_size = match.shape[0]
+        num_dets = 0
+        num_gt = num_instances.sum()
+        num_matched_thresh = 0
+        num_tps = 0
+        for batch_ind in range(batch_size):
+            cls_probs_per_img = rcnn_cls_probs[batch_ind]
+            match_per_img = match[batch_ind]
+            num_det = torch.nonzero(cls_probs_per_img > thresh).numel()
+            num_tp = torch.nonzero((cls_probs_per_img > thresh) & (
+                match_per_img > -1)).numel()
+            num_tps = num_tp + num_tps
+            match_thresh = match[(cls_probs_per_img > thresh) & (match_per_img
+                                                                 > -1)]
 
-        match_thresh = match[(rcnn_cls_probs > thresh) & (match > -1)]
+            gt_mask = torch.zeros(
+                num_instances[batch_ind]).type_as(match_thresh)
+            gt_mask[match_thresh] = 1
+            num_matched_thresh = num_matched_thresh + gt_mask.sum()
 
-        gt_mask = torch.zeros(num_gt).type_as(match_thresh)
-        gt_mask[match_thresh] = 1
-        matched_thresh = gt_mask.sum().item()
-        recall_thresh = matched_thresh / num_gt
-        # if num_det:
-        # precision = num_tp/num_det
-        # else:
-        # precision = 0
-        return {
-            'num_tp': num_tp,
-            'num_det': num_det,
+            num_dets = num_det + num_dets
 
-            # recall after thresh
-            'matched_thresh': matched_thresh,
-            'recall_thresh': recall_thresh
-        }
+        stats = {}
+        stats[constants.KEY_STATS_PRECISION] = (num_tps, num_dets)
+        stats[constants.KEY_STATS_THRESH_RECALL] = (num_matched_thresh, num_gt)
+        return stats

@@ -138,8 +138,8 @@ def read_kitti(label_file, classes=['Car', 'Pedestrian','Truck','Cyslist'], pred
     for line in lines:
         obj = line.strip().split(' ')
         obj_name = obj[0]
-        if obj_name not in classes:
-            continue
+        #  if obj_name not in classes:
+            #  continue
         xmin = int(float(obj[4]))
         ymin = int(float(obj[5]))
         xmax = int(float(obj[6]))

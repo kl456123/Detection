@@ -7,8 +7,10 @@ from PIL import Image
 
 from data.det_dataset import DetDataset
 from core import constants
+from utils.registry import DATASETS
 
 
+@DATASETS.register('coco')
 class CocoDataset(DetDataset):
     def __init__(self, config, transform=None, training=True):
         # root path of dataset
@@ -27,12 +29,12 @@ class CocoDataset(DetDataset):
         # classes to be trained
         self.classes = config['classes']
 
-        # import ipdb
-        # ipdb.set_trace()
-        self.class_ids = self.coco.getCatIds(catNms=self.classes)
+        self.class_ids = [0] + self.coco.getCatIds(catNms=self.classes)
 
         sample_names = self.load_sample_names()
-        self.sample_names = self.filter_sample_names(sample_names)
+        self.sample_names = sorted(self.filter_sample_names(sample_names))
+
+        self.max_num_boxes = 100
 
     def _check_class(self, obj, classes):
         """This filters an object by class.
@@ -88,28 +90,77 @@ class CocoDataset(DetDataset):
         img_id = self.sample_names[index]
         ann_ids = coco.getAnnIds(imgIds=img_id)
         target = coco.loadAnns(ann_ids)
-        bbox, lbl = self.read_annotation(target)
+        label_boxes_2d, label_classes = self.read_annotation(target)
 
         path = coco.loadImgs(img_id)[0]['file_name']
         image_path = os.path.join(self._data_path, path)
         image = Image.open(image_path).convert('RGB')
+        w, h = image.size
+        image_info = np.asarray([h, w, 1.0, 1.0])
+
+        all_label_boxes_2d = np.zeros(
+            (self.max_num_boxes, label_boxes_2d.shape[1]))
+        all_label_classes = np.zeros((self.max_num_boxes, ))
+        num_boxes = label_boxes_2d.shape[0]
+        all_label_classes[:num_boxes] = label_classes
+        all_label_boxes_2d[:num_boxes] = label_boxes_2d
 
         sample = {}
         sample[constants.KEY_IMAGE] = image
-        sample[constants.KEY_LABEL_BOXES_2D] = bbox
-        sample[constants.KEY_LABEL_CLASSES] = lbl
+        sample[constants.KEY_LABEL_BOXES_2D] = all_label_boxes_2d.astype(
+            np.float32)
+        sample[constants.KEY_LABEL_CLASSES] = all_label_classes.astype(
+            np.int32)
         sample[constants.KEY_IMAGE_PATH] = image_path
+        sample[constants.KEY_IMAGE_INFO] = image_info.astype(np.float32)
+        sample[constants.KEY_NUM_INSTANCES] = np.asarray(
+            num_boxes, dtype=np.int32)
 
         return sample
 
+    def visuliaze_sample(self, sample):
+        image = sample[constants.KEY_IMAGE]
+        # if image.shape[0] == 3:
+        # image = image.permute(1, 2, 0)
+        boxes = sample[constants.KEY_LABEL_BOXES_2D]
+        from utils.visualize import visualize_bbox
+        image = np.asarray(image)
+        visualize_bbox(image, boxes)
+
 
 if __name__ == '__main__':
+    import sys
     dataset_config = {
         'root_path': '/data/liangxiong/COCO2017/',
-        'data_path': 'train2017',
-        'label_path': 'annotations/instances_train2017.json',
-        'classes': ['car']
+        'data_path': 'val2017',
+        'label_path': 'annotations/instances_val2017.json',
+        "classes":
+        ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"]
     }
-    dataset = CocoDataset(dataset_config)
-    sample = dataset[0]
-    print(len(dataset))
+    from data import transforms
+    transform_config = [
+        {
+            "type": "fix_shape_resize",
+            "size": [384, 512]
+        },
+        # {
+        # "type": "to_tensor"
+        # },
+        # {
+        # "type": "normalize",
+        # "normal_mean": [0.485, 0.456, 0.406],
+        # "normal_std": [0.229, 0.224, 0.225]
+        # }
+    ]
+    trans = transforms.build(transform_config)
+    dataset = CocoDataset(dataset_config, trans)
+    max_num = 0
+    dataset.visuliaze_sample(dataset[0])
+    #  import ipdb
+    #  ipdb.set_trace()
+    #  for ind, sample in enumerate(dataset):
+#  num = sample[constants.KEY_NUM_INSTANCES]
+#  if num > max_num:
+#  max_num = num
+#  sys.stdout.write('\r{}/{} num:{} max_num: {}'.format(
+#  ind, len(dataset), num, max_num))

@@ -21,9 +21,9 @@ class ResNetFeatureExtractor(Model):
         self.img_channels = model_config['img_channels']
         self.net_arch = model_config['net_arch']
         self.use_cascade = model_config['use_cascade']
-        self.model_dir = model_config['pretrained_models_dir']
+        self.pretrained_path = model_config['pretrained_path']
         self.net_arch_path_map = {'res50': 'resnet50-19c8e357.pth'}
-        self.model_path = os.path.join(self.model_dir,
+        self.model_path = os.path.join(self.pretrained_path,
                                        self.net_arch_path_map[self.net_arch])
 
     def init_modules(self):

@@ -29,19 +29,15 @@ class TargetGenerator(object):
 
         self.stats = {}
 
-    def suppress_ignored_case(self, match_quality_matrix, num_instances):
+    def suppress_ignored_case(self, match, num_instances):
         """
         Args:
-            match_quality_matrix: shape(N, M, K)
+            match: shape(N, M)
             num_instances: shape(N, ), it determines the num of valid instances,
             it refers to the last dim of match_quality_matrix
         """
-        # any negative number is ok
-        m = torch.zeros_like(match_quality_matrix).fill_(-1)
-        batch_size = m.shape[0]
-        for batch_ind in range(batch_size):
-            m[batch_ind, :, :num_instances[batch_ind]
-              ] = match_quality_matrix[batch_ind, ::num_instances[batch_ind]]
+        m = match.clone()
+        m[match == -1] = 0
         return m
 
     def generate_targets(self,
@@ -68,7 +64,6 @@ class TargetGenerator(object):
         match_quality_matrix = self.similarity_calc.compare_batch(
             proposals_primary, gt_primary)
 
-
         match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
         assigned_overlaps_batch = self.matcher.assigned_overlaps_batch.to(
             device)
@@ -76,6 +71,8 @@ class TargetGenerator(object):
         # get recall stats
         fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
         self.stats.update(Analyzer.analyze_recall(fake_match, num_instances))
+
+        ignored_match = self.suppress_ignored_case(match, num_instances)
 
         ##########################
         # assigner
@@ -90,7 +87,11 @@ class TargetGenerator(object):
             target_args = [
                 match, gt_dict[key], proposals_dict[constants.KEY_PRIMARY]
             ]
-            kwargs = {'bg_thresh': self.bg_thresh}
+            kwargs = {
+                'bg_thresh': self.bg_thresh,
+                # no any ignored case will be assigned
+                'ignored_match': ignored_match
+            }
             weight_args = [match, assigned_overlaps_batch]
 
             weight = target_assigner.assign_weight(*weight_args, **kwargs)
@@ -117,6 +118,9 @@ class TargetGenerator(object):
         # shape (N,M)
         batch_sampled_mask = self.sampler.subsample_batch(
             pos_indicator, indicator=indicator, criterion=cls_criterion)
+
+        assert batch_sampled_mask[batch_sampled_mask].numel(
+        ) == self.sampler.num_samples, 'not enough samples'
 
         # dict
         proposals_dict = batch_ops.filter_tensor_container(proposals_dict,

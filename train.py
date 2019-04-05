@@ -39,7 +39,7 @@ def parse_args():
 
     # resume trained model
     parser.add_argument(
-        '--r',
+        '--resume',
         dest='resume',
         help='resume checkpoint or not',
         default=False,
@@ -64,6 +64,12 @@ def parse_args():
     parser.add_argument('--lr', dest='lr', help='learning rate', type=float)
     parser.add_argument(
         '--model', dest='model', help='path to pretrained model', type=str)
+    parser.add_argument(
+        '--pretrained_path',
+        default=None,
+        type=str,
+        help='Path to pretained model')
+    parser.add_argument('--job_name', default='', type=str, help='name of job')
 
     parser.add_argument(
         '--in_path', default=None, type=str, help='Input directory.')
@@ -86,7 +92,7 @@ def train(config, logger):
 
     # move to gpus before building optimizer
     if train_config['mGPUs']:
-        model = common.MyParallel(model, device_ids=[0, 1])
+        model = common.MyParallel(model)
 
     if train_config['cuda']:
         model = model.cuda()
@@ -107,18 +113,21 @@ def train(config, logger):
 
     # resume
     if train_config['resume']:
-        checkpoint_path = '{}.pth'.format(train_config['checkpoint'])
+        checkpoint_path = 'detector_{}.pth'.format(train_config['checkpoint'])
         logger.info(
             'resume from checkpoint detector_{}'.format(checkpoint_path))
         params_dict = {
             'model': model,
             'optimizer': optimizer,
             'scheduler': scheduler,
-            'num_iters': None
+            'start_iters': None
         }
 
         saver.load(params_dict, checkpoint_path)
-        train_config['num_iters'] = params_dict['num_iters']
+        # train_config['num_iters'] = params_dict['num_iters']
+        train_config['start_iters'] = params_dict['start_iters']
+    else:
+        train_config['start_iters'] = 1
 
     # build dataloader after resume(may be or not)
     # dataloader = dataloaders.build(data_config)
@@ -135,6 +144,7 @@ def train(config, logger):
     summary_path = os.path.join(output_dir, './summary')
     logger.info('setup summary_dir: {}'.format(summary_path))
     summary_writer = SummaryWriter(summary_path)
+    os.chmod(summary_path, 0o777)
 
     logger.info('setup trainer')
     trainer = Trainer(train_config, logger)
@@ -164,6 +174,7 @@ def generate_config(args, logger):
                               model_config['type'], data_config['name'])
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+        os.chmod(output_dir, 0o777)
         logger.info('create new directory {}'.format(output_dir))
     else:
         logger.info('output_dir is already exist')
@@ -192,6 +203,10 @@ def generate_config(args, logger):
     train_config['lr'] = args.lr
 
     train_config['checkpoint'] = args.checkpoint
+
+    if args.pretrained_path is not None:
+        model_config['feature_extractor_config'][
+            'pretrained_path'] = args.pretrained_path
 
     return config
 

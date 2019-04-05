@@ -32,4 +32,6 @@ KEY_CLASSES = 'classes'
 KEY_KEYPOINTS = 'keypoints'
 
 # key of stats
-KEY_STATS_NUM_INSTANCES = 'num_stats_instances'
+KEY_STATS_RECALL = 'stats_recall'
+KEY_STATS_PRECISION = 'stats_precision'
+KEY_STATS_THRESH_RECALL = 'stats_thresh_recall'
