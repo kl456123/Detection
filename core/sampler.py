@@ -22,10 +22,7 @@ class Sampler(ABC):
                   indicator=None):
         pass
 
-    def subsample_batch(self,
-                        pos_indicator,
-                        criterion=None,
-                        indicator=None):
+    def subsample_batch(self, pos_indicator, criterion=None, indicator=None):
         """
             batch version of subsample
         """
@@ -44,13 +41,19 @@ class Sampler(ABC):
         else:
             criterion = criterion.detach()
 
+        # assert self.num_samples % batch_size == 0, 'can not distribute samples evenly'
+        if not self.num_samples % batch_size == 0:
+            print('can not distribute samples evenly')
         num_samples_per_img = self.num_samples // batch_size
+        num_samples = [num_samples_per_img for _ in range(batch_size)]
+        num_remain = self.num_samples - batch_size * num_samples_per_img
+        num_samples[0] = num_samples_per_img + num_remain
 
         sample_mask = []
         for i in range(batch_size):
             sample_mask.append(
                 self.subsample(
-                    num_samples_per_img,
+                    num_samples[i],
                     pos_indicator[i],
                     criterion=criterion[i],
                     indicator=indicator[i]))

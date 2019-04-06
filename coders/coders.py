@@ -93,3 +93,46 @@ class Box2DTargetAssigner(TargetAssigner):
         reg_weights = super().assign_weight(cls, match)
         reg_weights[match == -1] = 0
         return reg_weights
+
+
+@TARGET_ASSIGNERS.register(constants.KEY_ORIENTS)
+class OrientsTargetAssigner(TargetAssigner):
+    @classmethod
+    def assign_target(cls, *args, **kwargs):
+        match = args[0]
+        gt = args[1]
+        assigned_gt = cls.generate_assigned_label(cls, kwargs['ignored_match'],
+                                                  gt)
+        assigned_gt[match == -1] = 0
+
+        return assigned_gt
+
+    @classmethod
+    def assign_weight(cls, *args, **kwargs):
+        match = args[0]
+        reg_weights = super().assign_weight(cls, match)
+        reg_weights[match == -1] = 0
+        return reg_weights
+
+
+@TARGET_ASSIGNERS.register(constants.KEY_DIMS)
+class DimsTargetAssigner(TargetAssigner):
+    @classmethod
+    def assign_target(cls, *args, **kwargs):
+        match = args[0]
+        gt = args[1]
+        assigned_gt = cls.generate_assigned_label(cls, kwargs['ignored_match'],
+                                                  gt)
+        # prepare coder
+        coder = bbox_coders.build({'type': constants.KEY_DIMS})
+        reg_targets_batch = coder.encode_batch(assigned_gt)
+        reg_targets_batch[match == -1] = 0
+        # no need grad_fn
+        return reg_targets_batch
+
+    @classmethod
+    def assign_weight(cls, *args, **kwargs):
+        match = args[0]
+        reg_weights = super().assign_weight(cls, match)
+        reg_weights[match == -1] = 0
+        return reg_weights

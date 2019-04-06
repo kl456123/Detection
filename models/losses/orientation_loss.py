@@ -1,0 +1,34 @@
+# -*- coding: utf-8 -*-
+
+import torch.nn as nn
+import torch
+
+
+class OrientationLoss(nn.Module):
+    def __init__(self, split_loss=False):
+        super().__init__()
+        self.cls_loss = nn.CrossEntropyLoss(reduce=False, ignore_index=-1)
+        self.reg_loss = nn.MSELoss(reduce=False)
+        self.split_loss = split_loss
+
+    def forward(self, preds, targets):
+        """
+        Args:
+            preds: shape()
+            targets: shape(N, 3), (cls_orient(1), reg_orient(2),h_2d(1),c_2d(2))
+        """
+
+        # cls loss
+        # import ipdb
+        # ipdb.set_trace()
+        cls_orient = targets[:, :, 0].long()
+        cls_preds = preds[:, :, :2]
+        cls_loss = self.cls_loss(cls_preds.view(-1, 2),
+                                 cls_orient.view(-1)).view_as(cls_orient)
+
+        # reg loss
+        reg_orient = torch.cat([targets[:, :, 1:3]], dim=-1)
+        reg_preds = torch.cat([preds[:, :, 2:4]], dim=-1)
+        reg_loss = self.reg_loss(reg_preds, reg_orient)
+        orinet_loss = torch.cat([cls_loss.unsqueeze(-1), reg_loss], dim=-1)
+        return orinet_loss

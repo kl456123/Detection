@@ -32,7 +32,7 @@ class Trainer(object):
         self.logger.info('Start training')
         self.logger.info('batch size: {}'.format(batch_size))
         # start from 1
-        start_iters = min(1, self.start_iters // batch_size)
+        start_iters = max(1, self.start_iters // batch_size)
         for step, data in enumerate(data_loader, start_iters):
             # truly step
             step = step * batch_size

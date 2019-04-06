@@ -12,6 +12,7 @@ from core import constants
 
 from models.losses import common_loss
 from models.losses.focal_loss import FocalLoss
+from models.losses.orientation_loss import OrientationLoss
 
 from utils.registry import DETECTORS
 from utils import box_ops
@@ -25,8 +26,8 @@ import bbox_coders
 from core.utils.analyzer import Analyzer
 
 
-@DETECTORS.register('faster_rcnn')
-class FasterRCNN(Model):
+@DETECTORS.register('mono_3d')
+class Mono3D(Model):
     def forward(self, feed_dict):
         # import ipdb
         # ipdb.set_trace()
@@ -55,6 +56,10 @@ class FasterRCNN(Model):
                                                            KEY_LABEL_CLASSES]
                 gt_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
                                                             KEY_LABEL_BOXES_2D]
+                gt_dict[constants.KEY_ORIENTS] = feed_dict[constants.
+                                                           KEY_LABEL_ORIENTS]
+                gt_dict[constants.KEY_DIMS] = feed_dict[
+                    constants.KEY_LABEL_BOXES_3D][:, :, 3:6]
 
                 proposals_dict, loss_units = self.target_generators[
                     i].generate_targets(proposals_dict, gt_dict,
@@ -72,6 +77,8 @@ class FasterRCNN(Model):
 
             rcnn_bbox_preds = self.rcnn_bbox_preds[i](pooled_feat)
             rcnn_cls_scores = self.rcnn_cls_preds[i](pooled_feat)
+            rcnn_orient_preds = self.rcnn_orient_preds[i](pooled_feat)
+            rcnn_dim_preds = self.rcnn_dim_preds[i](pooled_feat)
 
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -93,25 +100,36 @@ class FasterRCNN(Model):
                         rcnn_cls_probs.argmax(dim=-1).view(-1))
 
             rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
+            rcnn_orient_preds = rcnn_orient_preds.view(batch_size, -1, 4)
+            rcnn_dim_preds = rcnn_dim_preds.view(batch_size, -1, 3)
 
             if self.training:
                 loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
                 loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
+                loss_units[constants.KEY_ORIENTS]['pred'] = rcnn_orient_preds
+                loss_units[constants.KEY_DIMS]['pred'] = rcnn_dim_preds
                 # import ipdb
                 # ipdb.set_trace()
                 multi_stage_loss_units.extend([
                     loss_units[constants.KEY_CLASSES],
-                    loss_units[constants.KEY_BOXES_2D]
+                    loss_units[constants.KEY_BOXES_2D],
+                    loss_units[constants.KEY_ORIENTS],
+                    loss_units[constants.KEY_DIMS]
                 ])
 
             # decode for next stage
             coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
             proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
+            coder = bbox_coders.build({'type': constants.KEY_DIMS})
+            rcnn_dim_preds = coder.decode_batch(rcnn_dim_preds)
+            # coder = bbox_coders.build({'type': constants.KEY_ORIENTS})
+            # rcnn_orient_preds = coder.decode_batch(rcnn_orient_preds).detach()
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
         else:
             prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
+            prediction_dict[constants.KEY_ORIENTS] = rcnn_orient_preds
 
             image_info = feed_dict[constants.KEY_IMAGE_INFO]
             proposals[:, :, ::2] = proposals[:, :, ::
@@ -164,6 +182,11 @@ class FasterRCNN(Model):
             rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
         self.rcnn_bbox_preds = nn.ModuleList(
             [rcnn_bbox_pred for _ in range(self.num_stages)])
+        self.rcnn_orient_preds = nn.ModuleList(
+            [nn.Linear(2048, 4) for _ in range(self.num_stages)])
+
+        self.rcnn_dim_preds = nn.ModuleList(
+            [nn.Linear(2048, 3) for _ in range(self.num_stages)])
 
         # loss module
         # if self.use_focal_loss:
@@ -172,6 +195,8 @@ class FasterRCNN(Model):
         self.rcnn_cls_loss = nn.CrossEntropyLoss(reduce=False)
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
+
+        self.rcnn_orient_loss = OrientationLoss()
 
     def init_param(self, model_config):
         classes = model_config['classes']
@@ -212,16 +237,23 @@ class FasterRCNN(Model):
 
         rcnn_cls_loss = 0
         rcnn_reg_loss = 0
-        for cls_target in targets[::2]:
+        rcnn_orient_loss = 0
+        for cls_target in targets[::3]:
             rcnn_cls_loss = rcnn_cls_loss + common_loss.calc_loss(
                 self.rcnn_cls_loss, cls_target)
-        for reg_target in targets[1::2]:
+        for reg_target in targets[1::3]:
             rcnn_reg_loss = rcnn_reg_loss + common_loss.calc_loss(
                 self.rcnn_bbox_loss, reg_target)
+        for orient_target in targets[2::3]:
+            # import ipdb
+            # ipdb.set_trace()
+            rcnn_orient_loss = rcnn_orient_loss + common_loss.calc_loss(
+                self.rcnn_orient_loss, orient_target)
 
         loss_dict.update({
             'rcnn_cls_loss': rcnn_cls_loss,
-            'rcnn_reg_loss': rcnn_reg_loss
+            'rcnn_reg_loss': rcnn_reg_loss,
+            'rcnn_orient_loss': rcnn_orient_loss
         })
 
         return loss_dict

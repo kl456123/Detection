@@ -116,11 +116,13 @@ class TargetGenerator(object):
 
         # subsample from all
         # shape (N,M)
+        assert indicator[indicator].numel(
+        ) >= self.sampler.num_samples, 'no enough samples before subsample'
         batch_sampled_mask = self.sampler.subsample_batch(
             pos_indicator, indicator=indicator, criterion=cls_criterion)
 
         assert batch_sampled_mask[batch_sampled_mask].numel(
-        ) == self.sampler.num_samples, 'not enough samples'
+        ) == self.sampler.num_samples, 'not enough samples after subsample'
 
         # dict
         proposals_dict = batch_ops.filter_tensor_container(proposals_dict,

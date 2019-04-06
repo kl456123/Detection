@@ -109,11 +109,12 @@ class Stats(object):
 
     def get_summary_dict(self):
         summary_dict = {}
-        for stat in self.stats:
+        for idx, stat in enumerate(self.stats):
             for key in stat:
                 value = stat[key]
                 # tensor here
-                summary_dict[key] = value[0].float() / value[1].float()
+                summary_dict[key + '_' + str(idx)] = value[0].float() / value[
+                    1].float()
         return summary_dict
 
     def __repr__(self):

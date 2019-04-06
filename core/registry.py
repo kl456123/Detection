@@ -22,6 +22,6 @@ class Registry(dict):
     @staticmethod
     def _register_generic(module_dict, module_name, module):
         if module_name in module_dict:
-            if module is not module_dict[module_name]:
-                raise RuntimeError('repeat register the same module')
+            if type(module) is not type(module_dict[module_name]):
+                raise RuntimeError('repeat register the same name module')
         module_dict[module_name] = module

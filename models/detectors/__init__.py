@@ -11,7 +11,7 @@ def build(config):
     return _build(config, DETECTORS)
 
 
-include = ['faster_rcnn_model', 'rpn_model']
+include = ['faster_rcnn_model', 'rpn_model', 'mono_3d_model']
 # import all for register all modules into registry dict
 import_dir(os.path.dirname(__file__), include=include)
 

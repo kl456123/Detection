@@ -173,7 +173,7 @@ rm results/data/*
     # --checkepoch 18
 
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 16000 \
+    --checkpoint 8000 \
     --net faster_rcnn \
     --load_dir /data/object/liangxiong/coco_pretrained \
     --dataset coco
