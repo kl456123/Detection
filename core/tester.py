@@ -32,6 +32,24 @@ class Tester(object):
         label_name = sample_name + '.txt'
         return os.path.join(self.eval_out, label_name)
 
+    def save_mono_3d_dets(self, dets, label_path):
+        res_str = []
+        kitti_template = '{} -1 -1 -10 {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.8f}'
+        # kitti_template = '{} -1 -1 -10 {:.3f} {:.3f} {:.3f} {:.3f} -1 -1 -1 -1000 -1000 -1000 -10 {:.8f}'
+        with open(label_path, 'w') as f:
+            for cls_ind, dets_per_classes in enumerate(dets):
+                for det in dets_per_classes:
+                    xmin, ymin, xmax, ymax, cf, l, w, h, ry, x, y, z = det
+                    res_str.append(
+                        kitti_template.format(self.classes[cls_ind], xmin,
+                                              ymin, xmax, ymax, cf))
+                    # xmin, ymin, xmax, ymax, cf, h, w, l, x, y, z, alpha = det
+                    # res_str.append(
+                # kitti_template.format(self.classes[cls_ind], xmin,
+                # ymin, xmax, ymax, h, w, l, x, y,
+                # z, alpha, cf))
+            f.write('\n'.join(res_str))
+
     def save_dets(self, dets, label_path):
         res_str = []
         # kitti_template = '{} -1 -1 -10 {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.8f}'
@@ -79,6 +97,8 @@ class Tester(object):
 
             scores = prediction[constants.KEY_CLASSES]
             boxes_2d = prediction[constants.KEY_BOXES_2D]
+            dims = prediction_dict[constants.KEY_DIMS]
+            orients = prediction_dict[constants.KEY_ORIENTS]
             # import ipdb
             # ipdb.set_trace()
 
@@ -87,6 +107,8 @@ class Tester(object):
             for batch_ind in range(batch_size):
                 boxes_2d_per_img = boxes_2d[batch_ind]
                 scores_per_img = scores[batch_ind]
+                dims_per_img  dims[batch_ind]
+                orients_per_img = dims[batch_ind]
                 for class_ind in range(1, self.n_classes):
                     # cls thresh
                     inds = torch.nonzero(
@@ -95,22 +117,26 @@ class Tester(object):
                     if inds.numel() > 0:
                         # if self.class_agnostic:
                         threshed_boxes_2d_per_img = boxes_2d_per_img[inds, :]
+                        dims_per_img = dims_per_img[inds, :]
+                        orients_per_img = orients_per_img[inds, :]
                         # else:
                         # threshed_boxes_2d_per_img = boxes_2d_per_img[
                         # inds, class_ind * 4:class_ind * 4 + 4]
                         # concat boxes and scores
                         threshed_dets_per_img = torch.cat([
                             threshed_boxes_2d_per_img,
-                            threshed_scores_per_img.unsqueeze(-1)
+                            threshed_scores_per_img.unsqueeze(-1),
+                            dims_per_img,
+                            orients_per_img
                         ],
-                                                          dim=-1)
+                            dim=-1)
 
                         # sort by scores
                         _, order = torch.sort(threshed_scores_per_img, 0, True)
                         threshed_dets_per_img = threshed_dets_per_img[order]
 
                         # nms
-                        keep = nms(threshed_dets_per_img,
+                        keep = nms(threshed_dets_per_img[:, :5],
                                    self.nms).view(-1).long()
                         nms_dets_per_img = threshed_dets_per_img[keep]
 
@@ -118,7 +144,7 @@ class Tester(object):
                     else:
                         dets.append([])
                 label_path = self._generate_label_path(image_path[batch_ind])
-                self.save_dets(dets, label_path)
+                self.save_mono_3d_dets(dets, label_path)
                 sys.stdout.write('\r{}/{},duration: {}'.format(
                     step + 1, num_samples, duration_time))
                 sys.stdout.flush()
