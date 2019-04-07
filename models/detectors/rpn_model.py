@@ -105,8 +105,7 @@ class RPNModel(Model):
         rpn_bbox_preds = rpn_bbox_preds.view(batch_size, -1, 4)
 
         coders = bbox_coders.build({'type': constants.KEY_BOXES_2D})
-        proposals = coders.decode_batch(rpn_bbox_preds,
-                                                                anchors)
+        proposals = coders.decode_batch(rpn_bbox_preds, anchors)
 
         # filer and clip
         proposals = box_ops.clip_boxes(proposals, im_info)
@@ -264,15 +263,22 @@ class RPNModel(Model):
 
         gt_dict = {}
         gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.KEY_LABEL_BOXES_2D]
+        gt_dict[constants.KEY_CLASSES] = None
+        gt_dict[constants.KEY_BOXES_2D] = None
+
+        auxiliary_dict = {}
+        auxiliary_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
+                                                           KEY_LABEL_BOXES_2D]
         gt_labels = feed_dict[constants.KEY_LABEL_CLASSES]
-        gt_dict[constants.KEY_CLASSES] = torch.ones_like(gt_labels)
-        gt_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
-                                                    KEY_LABEL_BOXES_2D]
+        auxiliary_dict[constants.KEY_CLASSES] = torch.ones_like(gt_labels)
+        auxiliary_dict[constants.KEY_NUM_INSTANCES] = feed_dict[
+            constants.KEY_NUM_INSTANCES]
+        auxiliary_dict[constants.KEY_PROPOSALS] = anchors
 
         # import ipdb
         # ipdb.set_trace()
         _, targets = self.target_generators.generate_targets(
-            anchors_dict, gt_dict, feed_dict[constants.KEY_NUM_INSTANCES])
+            anchors_dict, gt_dict, auxiliary_dict)
 
         cls_target = targets[constants.KEY_CLASSES]
         reg_target = targets[constants.KEY_BOXES_2D]

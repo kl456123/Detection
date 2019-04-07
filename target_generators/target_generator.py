@@ -43,7 +43,7 @@ class TargetGenerator(object):
     def generate_targets(self,
                          proposals_dict,
                          gt_dict,
-                         num_instances,
+                         auxiliary_dict,
                          device='cuda'):
         """
             use gt to encode preds for better predictable
@@ -69,6 +69,7 @@ class TargetGenerator(object):
             device)
 
         # get recall stats
+        num_instances = auxiliary_dict[constants.KEY_NUM_INSTANCES]
         fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
         self.stats.update(Analyzer.analyze_recall(fake_match, num_instances))
 
@@ -84,18 +85,19 @@ class TargetGenerator(object):
                 continue
             target_assigner_config = {'type': key}
             target_assigner = coders.build(target_assigner_config)
-            target_args = [
-                match, gt_dict[key], proposals_dict[constants.KEY_PRIMARY]
-            ]
+            # some match results used for encoding
             kwargs = {
-                'bg_thresh': self.bg_thresh,
+                constants.KEY_BG_THRESH: self.bg_thresh,
                 # no any ignored case will be assigned
-                'ignored_match': ignored_match
+                constants.KEY_MATCH: match,
+                constants.KEY_IGNORED_MATCH: ignored_match,
+                constants.KEY_ASSIGNED_OVERLAPS: assigned_overlaps_batch
             }
-            weight_args = [match, assigned_overlaps_batch]
+            kwargs.update(auxiliary_dict)
+            # weight_args = [match, assigned_overlaps_batch]
 
-            weight = target_assigner.assign_weight(*weight_args, **kwargs)
-            target = target_assigner.assign_target(*target_args, **kwargs)
+            weight = target_assigner.assign_weight(**kwargs)
+            target = target_assigner.assign_target(**kwargs)
             loss_units[key] = {
                 'weight': weight,
                 'target': target,

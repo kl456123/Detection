@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import torch
+from core.utils import format_checker
 
 
 ##########################
@@ -23,18 +24,6 @@ def ry_to_rotation_matix(rotation_y):
         np.cos(rotation_y), zeros, np.sin(rotation_y), zeros, ones, zeros,
         -np.sin(rotation_y), zeros, np.cos(rotation_y)
     ]).reshape(-1, 3, 3)
-    return rotation_matrix
-
-
-def torch_ry_to_rotation_matix(rotation_y):
-    zeros = torch.zeros_like(rotation_y).type_as(rotation_y)
-    ones = torch.ones_like(rotation_y).type_as(rotation_y)
-    rotation_matrix = torch.stack(
-        [
-            torch.cos(rotation_y), zeros, torch.sin(rotation_y), zeros, ones,
-            zeros, -torch.sin(rotation_y), zeros, torch.cos(rotation_y)
-        ],
-        dim=-1).reshape(-1, 3, 3)
     return rotation_matrix
 
 
@@ -145,8 +134,82 @@ def torch_boxes_3d_to_corners_3d(boxes):
     box_points_coords = torch.stack((x_corners, y_corners, z_corners), dim=0)
     # rotate and translate
     # shape(N, 3, 8)
-    corners_3d = torch.bmm(rotation_matrix,
-                           box_points_coords.transpose(2, 0, 1))
+    corners_3d = torch.bmm(rotation_matrix, box_points_coords.permute(2, 0, 1))
     corners_3d = corners_3d + location.unsqueeze(-1)
     # shape(N, 8, 3)
     return corners_3d.permute(0, 2, 1)
+
+
+def torch_ry_to_rotation_matix(rotation_y):
+    zeros = torch.zeros_like(rotation_y)
+    ones = torch.ones_like(rotation_y)
+    rotation_matrix = torch.stack(
+        [
+            torch.cos(rotation_y), zeros, torch.sin(rotation_y), zeros, ones,
+            zeros, -torch.sin(rotation_y), zeros, torch.cos(rotation_y)
+        ],
+        dim=-1).reshape(-1, 3, 3)
+    return rotation_matrix
+
+
+def torch_corners_2d_to_boxes_2d(corners_2d):
+    """
+    Find the closure
+    Args:
+        corners_2d: shape(N, 8, 2)
+    """
+    xmin = corners_2d[:, :, 0].min(dim=-1)
+    xmax = corners_2d[:, :, 0].max(dim=-1)
+    ymin = corners_2d[:, :, 1].min(dim=-1)
+    ymax = corners_2d[:, :, 1].max(dim=-1)
+
+    return torch.stack([xmin, ymin, xmax, ymax], dim=-1)
+
+
+def torch_boxes_3d_to_corners_2d(boxes, p2):
+    """
+    Args:
+    boxes: shape(N, 7)
+    corners_2d: shape(N, )
+    """
+    corners_3d = torch_boxes_3d_to_corners_3d(boxes)
+    corners_2d = torch_points_3d_to_points_2d(corners_3d.reshape((-1, 3)),
+                                              p2).reshape(-1, 8, 2)
+    return corners_2d
+
+
+def torch_points_3d_to_points_2d(points_3d, p2):
+    """
+    Args:
+        points_3d: shape(N, 3)
+        p2: shape(3,4)
+    Returns:
+        points_2d: shape(N, 2)
+    """
+
+    # import ipdb
+    # ipdb.set_trace()
+    points_3d_homo = torch.cat((points_3d, torch.ones_like(points_3d[:, -1:])),
+                               dim=-1)
+    points_2d_homo = torch.matmul(p2, points_3d_homo.transpose(
+        0, 1)).transpose(0, 1)
+    points_2d_homo = points_2d_homo / points_2d_homo[:, -1:]
+    return points_2d_homo[:, :2]
+
+
+def torch_xyxy_to_xywh(boxes):
+    format_checker.check_tensor_shape(boxes, [None, None, 4])
+    xymin = boxes[:, :, :2]
+    xymax = boxes[:, :, 2:4]
+    xy = (xymin + xymax) / 2
+    wh = xymax - xymin + 1
+    return torch.cat([xy, wh], dim=-1)
+
+
+def torch_xywh_to_xyxy(boxes):
+    format_checker.check_tensor_shape(boxes, [None, None, 4])
+    xy = boxes[:, :, :2]
+    wh = boxes[:, :, 2:4]
+    xymin = xy - wh / 2
+    xymax = xy + wh / 2
+    return torch.cat([xymin, xymax], dim=-1)

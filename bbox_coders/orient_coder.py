@@ -9,8 +9,8 @@ import torch
 @BBOX_CODERS.register(constants.KEY_ORIENTS)
 class OrientsCoder(object):
     @staticmethod
-    def encode_batch(label_boxes_3d, p2):
-        label_corners_2d = geometry_utils.boxes_3d_to_corners_2d(
+    def encode(label_boxes_3d, proposals, p2):
+        label_corners_2d = geometry_utils.torch_boxes_3d_to_corners_2d(
             label_boxes_3d, p2)
 
         # shape(N, 2, 2)
@@ -19,8 +19,18 @@ class OrientsCoder(object):
         # label_boxes_2d_proj = geometry_utils.corners_2d_to_boxes_2d(
         # label_corners_2d)
 
-        label_orients = OrientsCoder._generate_orients(center_side)
+        label_orients = OrientsCoder._generate_orients(center_side, proposals)
         return label_orients
+
+    @staticmethod
+    def encode_batch(label_boxes_3d, proposals, p2):
+        batch_size = label_boxes_3d.shape[0]
+        orients_batch = []
+        for batch_ind in range(batch_size):
+            orients_batch.append(
+                OrientsCoder.encode(label_boxes_3d[batch_ind],
+                                    proposals[batch_ind], p2[batch_ind]))
+        return torch.stack(orients_batch, dim=0)
 
     @staticmethod
     def decode_batch(orients, p2):
@@ -39,12 +49,15 @@ class OrientsCoder(object):
         """
         direction = center_side[:, 0] - center_side[:, 1]
         cond = (direction[:, 0] * direction[:, 1]) == 0
-        cls_orients = torch.zeros_like(cond).type_as(center_side)
+        cls_orients = torch.zeros_like(cond).float()
         cls_orients[cond] = -1
         cls_orients[~cond] = (
             (direction[~cond, 1] / direction[~cond, 0]) > 0).float()
 
         reg_orients = torch.abs(direction)
+        proposals_xywh = geometry_utils.torch_xyxy_to_xywh(
+            proposals.unsqueeze(0)).squeeze(0)
+        reg_orients = reg_orients / proposals_xywh[:, 2:]
         # encode
 
         return torch.cat([cls_orients.unsqueeze(-1), reg_orients], dim=-1)

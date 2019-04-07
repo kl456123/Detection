@@ -47,23 +47,38 @@ class Mono3D(Model):
         for i in range(self.num_stages):
 
             if self.training:
+                # proposals_dict
                 proposals_dict = {}
                 proposals_dict[constants.KEY_PRIMARY] = proposals
+
+                # gt_dict
                 gt_dict = {}
                 gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
                                                            KEY_LABEL_BOXES_2D]
-                gt_dict[constants.KEY_CLASSES] = feed_dict[constants.
-                                                           KEY_LABEL_CLASSES]
-                gt_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
-                                                            KEY_LABEL_BOXES_2D]
-                gt_dict[constants.KEY_ORIENTS] = feed_dict[constants.
-                                                           KEY_LABEL_ORIENTS]
-                gt_dict[constants.KEY_DIMS] = feed_dict[
-                    constants.KEY_LABEL_BOXES_3D][:, :, 3:6]
+                gt_dict[constants.KEY_CLASSES] = None
+                gt_dict[constants.KEY_BOXES_2D] = None
+                gt_dict[constants.KEY_ORIENTS] = None
+                gt_dict[constants.KEY_DIMS] = None
+
+                # auxiliary_dict(used for encoding)
+                auxiliary_dict = {}
+                auxiliary_dict[constants.KEY_STEREO_CALIB_P2] = feed_dict[
+                    constants.KEY_STEREO_CALIB_P2]
+                auxiliary_dict[constants.KEY_BOXES_2D] = feed_dict[
+                    constants.KEY_LABEL_BOXES_2D]
+                auxiliary_dict[constants.KEY_CLASSES] = feed_dict[
+                    constants.KEY_LABEL_CLASSES]
+                auxiliary_dict[constants.KEY_BOXES_3D] = feed_dict[
+                    constants.KEY_LABEL_BOXES_3D]
+                auxiliary_dict[constants.KEY_NUM_INSTANCES] = feed_dict[
+                    constants.KEY_NUM_INSTANCES]
+                auxiliary_dict[constants.KEY_PROPOSALS] = proposals
+                auxiliary_dict[constants.KEY_MEAN_DIMS] = feed_dict[
+                    constants.KEY_MEAN_DIMS]
 
                 proposals_dict, loss_units = self.target_generators[
                     i].generate_targets(proposals_dict, gt_dict,
-                                        feed_dict[constants.KEY_NUM_INSTANCES])
+                                        auxiliary_dict)
 
                 # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
                 proposals = proposals_dict[constants.KEY_PRIMARY]
@@ -121,7 +136,7 @@ class Mono3D(Model):
             coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
             proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
             coder = bbox_coders.build({'type': constants.KEY_DIMS})
-            rcnn_dim_preds = coder.decode_batch(rcnn_dim_preds)
+            # rcnn_dim_preds = coder.decode_batch(rcnn_dim_preds)
             # coder = bbox_coders.build({'type': constants.KEY_ORIENTS})
             # rcnn_orient_preds = coder.decode_batch(rcnn_orient_preds).detach()
 
@@ -238,22 +253,25 @@ class Mono3D(Model):
         rcnn_cls_loss = 0
         rcnn_reg_loss = 0
         rcnn_orient_loss = 0
-        for cls_target in targets[::3]:
+        rcnn_dim_loss = 0
+        for cls_target in targets[::4]:
             rcnn_cls_loss = rcnn_cls_loss + common_loss.calc_loss(
                 self.rcnn_cls_loss, cls_target)
-        for reg_target in targets[1::3]:
+        for reg_target in targets[1::4]:
             rcnn_reg_loss = rcnn_reg_loss + common_loss.calc_loss(
                 self.rcnn_bbox_loss, reg_target)
-        for orient_target in targets[2::3]:
-            # import ipdb
-            # ipdb.set_trace()
+        for orient_target in targets[2::4]:
             rcnn_orient_loss = rcnn_orient_loss + common_loss.calc_loss(
                 self.rcnn_orient_loss, orient_target)
+        for dim_target in targets[3::4]:
+            rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
+                self.rcnn_bbox_loss, dim_target)
 
         loss_dict.update({
             'rcnn_cls_loss': rcnn_cls_loss,
             'rcnn_reg_loss': rcnn_reg_loss,
-            'rcnn_orient_loss': rcnn_orient_loss
+            'rcnn_orient_loss': rcnn_orient_loss,
+            'rcnn_dim_loss': rcnn_dim_loss
         })
 
         return loss_dict

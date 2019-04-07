@@ -38,3 +38,12 @@ KEY_DIMS = 'dims'
 KEY_STATS_RECALL = 'stats_recall'
 KEY_STATS_PRECISION = 'stats_precision'
 KEY_STATS_THRESH_RECALL = 'stats_thresh_recall'
+
+
+# auxiliary dict
+KEY_PROPOSALS = 'proposals'
+KEY_MATCH = 'match'
+KEY_IGNORED_MATCH = 'ignored_match'
+KEY_BG_THRESH = 'bg_thresh'
+KEY_ASSIGNED_OVERLAPS = 'assigned_overlaps'
+KEY_MEAN_DIMS = 'mean_dims'

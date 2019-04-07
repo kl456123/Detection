@@ -5,7 +5,7 @@ from core.utils.common import build_class as _build
 import os
 from utils.registry import BBOX_CODERS
 
-include = ['center_coder', 'mean_coder']
+include = ['center_coder', 'mean_coder', 'orient_coder']
 
 import_dir(os.path.dirname(__file__), include=include)
 

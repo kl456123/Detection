@@ -186,3 +186,13 @@ def check_tensor(tensor):
 
 def check_np(tensor):
     assert isinstance(tensor, np.ndarray)
+
+
+def check_tensor_shape(tensor, shape):
+    """
+    Note that None dim is ignored
+    """
+    check_tensor_dims(tensor, len(shape))
+    for dim_ind, dim in enumerate(shape):
+        if dim is not None:
+            assert tensor.shape[dim_ind] == dim
