@@ -23,7 +23,7 @@ from utils import pc_ops
 
 
 class PointCloudKittiDataset(DetDataset):
-    OBJ_CLASSES = ['Car']
+    # OBJ_CLASSES = ['Car']
 
     def __init__(self, dataset_config, transforms=None, training=True):
         super(PointCloudKittiDataset, self).__init__(training)
@@ -41,7 +41,7 @@ class PointCloudKittiDataset(DetDataset):
         # dataset_config['bev_generator_config'])
         self.bev_generator = BevSlices(dataset_config['bev_generator_config'])
 
-        self.classes = dataset_config['classes']
+        self.classes = ['bg'] + dataset_config['classes']
 
         self.loaded_sample_names = self.load_sample_names()
 
@@ -146,11 +146,11 @@ class PointCloudKittiDataset(DetDataset):
         # if class_type == 'Car':
         # return 0
 
-        return self.OBJ_CLASSES.index(class_type)
+        return self.classes.index(class_type)
 
     def load_sample_names(self):
         set_file = os.path.join(self._root_path, self._dataset_file)
-        # set_file = './demo.txt'
+        #  set_file = './train.txt'
         with open(set_file) as f:
             sample_names = f.read().splitlines()
         return np.array(sample_names)
@@ -259,25 +259,26 @@ class PointCloudKittiDataset(DetDataset):
         transform_sample['img_name'] = img_path
         transform_sample['img_orig'] = image_input.astype(np.float32)
         transform_sample['im_info'] = [1, 1, 1]
-        transform_sample['image_shape'] = image_shape
-        transform_sample['img_anchors_gt'] = img_anchors_gt.astype(np.float32)
+        # transform_sample['image_shape'] = image_shape
+        transform_sample['img_anchors_gt_norm'] = img_anchors_gt_norm.astype(
+            np.float32)
 
         # anchors info
-        transform_sample['bev_anchors'] = bev_anchors.astype(np.float32)
-        transform_sample['img_anchors'] = img_anchors.astype(np.float32)
+        # transform_sample['bev_anchors'] = bev_anchors.astype(np.float32)
+        # transform_sample['img_anchors'] = img_anchors.astype(np.float32)
         transform_sample['bev_anchors_norm'] = bev_anchors_norm.astype(
             np.float32)
         transform_sample['img_anchors_norm'] = img_anchors_norm.astype(
             np.float32)
         transform_sample['bev_anchors_gt_norm'] = bev_anchors_gt_norm.astype(
             np.float32)
-        transform_sample['bev_anchors_gt'] = bev_anchors_gt.astype(np.float32)
+        # transform_sample['bev_anchors_gt'] = bev_anchors_gt.astype(np.float32)
         transform_sample['anchors'] = anchors_to_use.astype(np.float32)
 
-        transform_sample['image_shape'] = np.asarray(image_shape).astype(
-            np.float32)
-        transform_sample['bev_shape'] = np.asarray(bev_shape).astype(
-            np.float32)
+        transform_sample['origin_image_shape'] = np.asarray(
+            image_shape).astype(np.float32)
+        # transform_sample['bev_shape'] = np.asarray(bev_shape).astype(
+        # np.float32)
 
         return transform_sample
 
@@ -296,18 +297,34 @@ class PointCloudKittiDataset(DetDataset):
 
 if __name__ == '__main__':
     dataset_config = {
-        'classes': ['Car'],
-        'dataset_file': './train.txt',
-        'bev_generator_config': {
-            'height_lo': -0.3,
-            'height_hi': 3.7,
-            'num_slices': 5,
-            'voxel_size': 0.5
+        "anchor_generator_config": {
+            "area_extents": [[-40, 40], [-5, 3], [0, 70.4]],
+            "anchor_offset": [0, 0],
+            "anchor_stride": [0.5, 0.5],
+            "anchor_size": [[3.4, 1.7, 1.5]]
         },
-        'root_path': '/data/object/training',
-        'area_extents': [[-40, 40], [-5, 3], [0, 70]]
+        "cache_bev": False,
+        "dataset_file": "train.txt",
+        "root_path": "/data/object/training",
+        "classes": ["Car"],
+        "bev_generator_config": {
+            "height_lo": -0.2,
+            "height_hi": 2.3,
+            "num_slices": 5,
+            "voxel_size": 0.1
+        },
+        "area_extents": [[-40, 40], [-5, 3], [0, 70.4]]
     }
     dataset = PointCloudKittiDataset(dataset_config)
-    import ipdb
-    ipdb.set_trace()
-    sample = dataset[0]
+    # import ipdb
+    # ipdb.set_trace()
+    # sample = dataset[0]
+    import sys
+    num = len(dataset)
+    for i in range(num):
+        sample = dataset[i]
+        if sample['img_anchors_norm'].shape[0] == 0:
+            import ipdb
+            ipdb.set_trace()
+        sys.stdout.write('\r{}/{}'.format(i + 1, num))
+        sys.stdout.flush()

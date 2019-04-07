@@ -228,7 +228,7 @@ class RandomSampleCrop(object):
                 # print('before croped shape: ',image.size)
                 # print('after croped shape: ',current_image.shape)
 
-                sample['img'] = Image.fromarray(current_image)
+                sample['img'] = Image.fromarray(current_image.astype(np.unit8))
                 sample['bbox'] = current_boxes
                 sample['label'] = current_labels
 

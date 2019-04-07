@@ -112,6 +112,7 @@ def test(eval_config, data_loader, model):
             [cls_boxes, predictions_and_scores], axis=-1)
 
         thresh = eval_config['thresh']
+        #  thresh = 0.0
         final_dets = final_dets[final_dets[:, -1] > thresh]
 
         save_dets(final_dets, img_file[0], 'kitti', eval_config['eval_out'])

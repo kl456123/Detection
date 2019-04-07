@@ -119,7 +119,7 @@ CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     --net avod_real \
     --out_path /data/object/liangxiong/avod_real \
     --config configs/avod_config.json
-# --checkepoch 1 \
+# --checkepoch 7 \
 # --checkpoint 3257 \
 # --r True
 

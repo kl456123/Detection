@@ -139,6 +139,7 @@
         }
     },
     "model_config": {
+        "use_img_filter":true,
         "nms_thresh":0.01,
         "path_drop_probabilities":[1.0,1.0],
         "area_extents": [[-40, 40], [-5, 3], [0, 70.4]],
@@ -165,6 +166,7 @@
                 "Car"
             ],
             "img_channels": 3,
+            "job_pretrained_model": "/node01/jobs/io/pretrained/resnet18-7591854d.pth",
             "pretrained_model": "data/pretrained_model/resnet50-19c8e357.pth",
             "pretrained": true,
             "use_cascade": true
@@ -178,7 +180,7 @@
             "img_filter_topN": 8000,
             "use_empty_filter":true,
             "img_filter_iou_thresh":0.1,
-            "enable_img_filter":true,
+            "use_img_filter":true,
             "voxel_size":0.1,
             "anchor_predictor_config":{
                 "ndin":2,
@@ -281,16 +283,16 @@
         "mGPUs": true,
         "max_epochs": 1000,
         "optimizer_config": {
-            "lr": 0.0005,
+            "lr": 0.001,
             "momentum": 0.9,
-            "type": "adam",
+            "type": "sgd",
             "weight_decay":0
         },
         "rng_seed": 3,
         "scheduler_config": {
             "last_epoch": -1,
-            "lr_decay_gamma": 0.8,
-            "lr_decay_step": 15,
+            "lr_decay_gamma": 0.1,
+            "lr_decay_step": 20,
             "type": "step"
         },
         "start_epoch": 1

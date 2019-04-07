@@ -31,6 +31,13 @@ def print_loss(loss_dict):
         sys.stdout.write("\n")
 
 
+def print_memory_usage():
+    import gc
+    for obj in gc.get_objects():
+        if torch.is_tensor(obj):
+            print(type(obj), obj.size())
+
+
 def train(train_config, data_loader, model, optimizer, scheduler, saver,
           summary_writer):
     start_epoch = train_config['start_epoch']
@@ -74,7 +81,12 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             # with profiler.emit_nvtx(use_cuda=True):
             profiler = model.profiler
             profiler.start('9')
-            prediction = model(data)
+            try:
+                prediction = model(data)
+            except:
+                import ipdb
+                ipdb.set_trace()
+                print_memory_usage()
             profiler.end('9')
             loss_dict = model.loss(prediction, data)
 
@@ -100,7 +112,12 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
             # backward
             optimizer.zero_grad()
             profiler.start('10')
-            loss.backward()
+            try:
+                loss.backward()
+            except:
+                import ipdb
+                ipdb.set_trace()
+                print_memory_usage()
             profiler.end('10')
 
             # print(prof)
@@ -210,6 +227,10 @@ def train(train_config, data_loader, model, optimizer, scheduler, saver,
                     "\t\t\tcls_orient_2s_tp_num/cls_orient_2s_all_num({}/{}/{:.4f}): ".
                     format(cls_orient_2s_tp_num, cls_orient_2s_all_num,
                            cls_orient_2s_tp_num / cls_orient_2s_all_num))
+                num_anchors = data['anchors'].shape[0]
+                num_proposals = prediction['proposals_batch'].shape[0]
+                print("\t\t\tnum_anchors: {} num_proposals: {}".format(
+                    num_anchors, num_proposals))
                 # reset
                 matched = 0
                 num_gt = 0

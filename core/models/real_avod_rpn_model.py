@@ -12,7 +12,8 @@ from core.model import Model
 from core.models.feature_extractors.vgg_fpn import VGGFPN
 from core.voxel_generator import VoxelGenerator
 from core.avod_rpn_target_assigner import TargetAssigner
-from core.models.focal_loss import FocalLoss
+# from core.models.focal_loss import FocalLoss
+from utils.focal_loss import FocalLoss
 from core.samplers.balanced_sampler import BalancedSampler
 from core.profiler import Profiler
 from core.models.feature_extractors.pvanet import ConvBnAct
@@ -50,8 +51,8 @@ class RPNModel(Model):
         img_feat_maps = self.img_feature_extractor.forward(feed_dict['img'])
         bev_feat_maps = self.bev_feature_extractor.forward(
             feed_dict['bev_input'])
-        feed_dict['bev_feat_maps'] = bev_feat_maps
-        feed_dict['img_feat_maps'] = img_feat_maps
+        # feed_dict['bev_feat_maps'] = bev_feat_maps
+        # feed_dict['img_feat_maps'] = img_feat_maps
 
         # bottleneck
         img_bottle_neck = self.img_bottle_neck(img_feat_maps)
@@ -61,14 +62,17 @@ class RPNModel(Model):
         bev_proposal_input = bev_bottle_neck
 
         anchors = feed_dict['anchors']
-        print('rpn anchors: ', anchors.shape[0])
+        # print('rpn anchors: ', anchors.shape[0])
 
-        img_anchors = feed_dict['img_anchors']
+        img_anchors_norm = feed_dict['img_anchors_norm']
         bev_anchors_norm = feed_dict['bev_anchors_norm']
         # self.bev_shape = bev_proposal_input.shape[-2:]
-        bev_shape = feed_dict['bev_shape'][0]
+        # bev_shape = feed_dict['bev_shape'][0]
 
-        bev_anchors = self.anchors_norm2_anchors(bev_anchors_norm, bev_shape)
+        bev_anchors = self.anchors_norm2_anchors(bev_anchors_norm,
+                                                 self.bev_shape)
+        img_anchors = self.anchors_norm2_anchors(img_anchors_norm,
+                                                 self.img_shape)
         anchor_indexes = torch.zeros_like(img_anchors[:, :1])
         img_rois = torch.cat([anchor_indexes, img_anchors], dim=-1)
         bev_rois = torch.cat([anchor_indexes, bev_anchors], dim=-1)
@@ -85,8 +89,8 @@ class RPNModel(Model):
         rpn_cls_probs = F.softmax(rpn_cls_scores, dim=-1)
 
         # 3d nms problem is reduced to 2d nms in bev
-        proposals_batch = self.generate_proposal(rpn_cls_probs, anchors,
-                                                 rpn_bbox_preds, bev_shape)
+        proposals_batch = self.generate_proposal(
+            rpn_cls_probs, anchors, rpn_bbox_preds, self.bev_shape)
         # if self.training:
         # label_anchors = feed_dict['label_anchors']
         # proposals_batch = self.append_gt(proposals_batch, label_anchors)
@@ -98,7 +102,9 @@ class RPNModel(Model):
             # used for loss
             'rpn_bbox_preds': rpn_bbox_preds,
             'rpn_cls_probs': rpn_cls_probs,
-            'bev_bboxes_norm': bev_anchors_norm
+            'bev_bboxes_norm': bev_anchors_norm,
+            'img_feat_maps': img_feat_maps,
+            'bev_feat_maps': bev_feat_maps
         }
 
         return predict_dict
@@ -116,32 +122,55 @@ class RPNModel(Model):
         return img_bbox_filter
 
     def preprocess(self, feed_dict):
-        img_anchors = feed_dict['img_anchors']
-        img_anchors_gt = feed_dict['img_anchors_gt']
-
-        # img_bbox filter
-        img_bbox_filter = self.create_img_bbox_filter(img_anchors,
-                                                      img_anchors_gt)
+        # import ipdb
+        # ipdb.set_trace()
+        img_anchors_norm = feed_dict['img_anchors_norm']
+        img_anchors_gt_norm = feed_dict['img_anchors_gt_norm']
+        img_anchors = self.anchors_norm2_anchors(img_anchors_norm,
+                                                 self.img_shape)
+        img_anchors_gt = self.anchors_norm2_anchors(img_anchors_gt_norm,
+                                                    self.img_shape)
 
         # area filter(ignore too large bboxes in image)
         img_norm_area = (img_anchors[:, :, 2] - img_anchors[:, :, 0]) * (
             img_anchors[:, :, 3] - img_anchors[:, :, 1])
-        img_norm_area_filter = img_norm_area < 1280 * 384 * 0.5
+        img_norm_area_filter = img_norm_area > 0
+
+        if self.use_img_filter:
+            # img_bbox filter
+            img_bbox_filter = self.create_img_bbox_filter(img_anchors,
+                                                          img_anchors_gt)
+        else:
+            img_bbox_filter = torch.ones_like(img_norm_area_filter).type_as(
+                img_norm_area_filter)
 
         final_bbox_filter = img_bbox_filter & img_norm_area_filter
 
+        # import ipdb
+        # ipdb.set_trace()
         # make sure no empty anchors
-        if torch.nonzero(final_bbox_filter).numel() == 0:
-            final_bbox_filter[:2000] = 1
+        # num_remain = final_bbox_filter.shape[-1]
+        num_remain = torch.nonzero(final_bbox_filter[0]).numel()
+        if num_remain == 0:
+            final_bbox_filter[0, :2000] = 1
 
-        bev_anchors = feed_dict['bev_anchors']
+        # to prevent out of memory
+        # if self.img_filter_topN > 0:
+        # final_bbox_filter[0, self.img_filter_topN:] = 0
+
+        # import ipdb
+        # ipdb.set_trace()
+        # final_bbox_filter[0, 300:] = 0
+        # final_bbox_filter[0, :300] = 1
+
+        # bev_anchors = feed_dict['bev_anchors']
         bev_anchors_norm = feed_dict['bev_anchors_norm']
         anchors = feed_dict['anchors']
 
         feed_dict['anchors'] = anchors[final_bbox_filter]
         feed_dict['bev_anchors_norm'] = bev_anchors_norm[final_bbox_filter]
-        feed_dict['bev_anchors'] = bev_anchors[final_bbox_filter]
-        feed_dict['img_anchors'] = img_anchors[final_bbox_filter]
+        # feed_dict['bev_anchors'] = bev_anchors[final_bbox_filter]
+        feed_dict['img_anchors_norm'] = img_anchors_norm[final_bbox_filter]
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           bev_shape):
@@ -178,7 +207,7 @@ class RPNModel(Model):
             bev_proposal_boxes_norm).type_as(regressed_anchors)
 
         bev_proposal_boxes = self.anchors_norm2_anchors(
-            bev_proposal_boxes_norm, bev_shape)
+            bev_proposal_boxes_norm, self.bev_shape)
         bev_proposal_boxes = torch.round(bev_proposal_boxes)
 
         # nms
@@ -198,7 +227,9 @@ class RPNModel(Model):
         return 1, 1
 
     def init_param(self, model_config):
-        self.enable_img_filter = model_config['enable_img_filter']
+        self.bev_shape = [704, 800]
+        self.img_shape = [360, 1200]
+        self.use_img_filter = model_config['use_img_filter']
         self.truncated = model_config['truncated']
         self.img_filter_topN = model_config['img_filter_topN']
         self.use_empty_filter = model_config.get('use_empty_filter')
@@ -288,8 +319,9 @@ class RPNModel(Model):
         # loss
         self.rpn_bbox_loss = nn.SmoothL1Loss(reduce=False)
         if self.use_focal_loss:
-            self.rpn_cls_loss = FocalLoss(
-                self.n_classes, alpha=0.25, gamma=2, auto_alpha=False)
+            # self.rpn_cls_loss = FocalLoss(
+            # self.n_classes, alpha=0.25, gamma=2, auto_alpha=False)
+            self.rpn_cls_loss = FocalLoss(self.n_classes)
         else:
             self.rpn_cls_loss = nn.CrossEntropyLoss(reduce=False)
 
@@ -334,11 +366,11 @@ class RPNModel(Model):
 
         bev_anchors_gt_norm = feed_dict['bev_anchors_gt_norm']
         bev_anchors_norm = feed_dict['bev_anchors_norm']
-        bev_shape = feed_dict['bev_feat_maps'].shape[-2:]
+        # bev_shape = feed_dict['bev_feat_maps'].shape[-2:]
         bev_anchors = self.anchors_norm2_anchors(bev_anchors_norm,
-                                                 bev_shape).unsqueeze(0)
+                                                 self.bev_shape).unsqueeze(0)
         bev_anchors_gt = self.anchors_norm2_anchors(bev_anchors_gt_norm,
-                                                    bev_shape)
+                                                    self.bev_shape)
 
         #################################
         # target assigner

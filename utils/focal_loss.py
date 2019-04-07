@@ -3,7 +3,6 @@
 # Author: YangMaoke, DuanZhixiang({maokeyang, zhixiangduan}@deepmotion.ai)
 # Focal loss
 
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -49,11 +48,11 @@ class FocalLoss(nn.Module):
         t = one_hot_embeding(y.data.cpu(), self.num_classes)
         t = Variable(t).cuda()  # [N, 20]
 
-        logit = F.softmax(x)
-        logit = logit.clamp(1e-7, 1.-1e-7)
+        logit = F.softmax(x, dim=-1)
+        logit = logit.clamp(1e-7, 1. - 1e-7)
         conf_loss_tmp = -1 * t.float() * torch.log(logit)
-        conf_loss_tmp = alpha * conf_loss_tmp * (1-logit)**gamma
-        conf_loss = conf_loss_tmp.sum()
+        conf_loss_tmp = alpha * conf_loss_tmp * (1 - logit)**gamma
+        conf_loss = conf_loss_tmp.sum(dim=-1)
 
         return conf_loss
 
@@ -70,18 +69,18 @@ class FocalLoss(nn.Module):
 
         """
 
-        pos = (cls_targets == 1)  # [N,#anchors]
-        num_pos = pos.data.long().sum()
+        # pos = (cls_targets == 1)  # [N,#anchors]
+        # num_pos = pos.data.long().sum()
 
         pos_neg = cls_targets > -1  # exclude ignored anchors
         masked_cls_preds = cls_preds.view(-1, self.num_classes)
         cls_loss = self.focal_loss(masked_cls_preds, cls_targets[pos_neg])
-        num_pos_neg = pos_neg.data.long().sum()
+        # num_pos_neg = pos_neg.data.long().sum()
 
-        num_pos_neg = max(1.0, num_pos_neg)
-        num_pos = max(1.0, num_pos)
-        if is_print:
-            print(('cls_loss: %.3f' % (cls_loss.data[0] / num_pos)))
-        loss = cls_loss / num_pos.type_as(cls_loss)
+        # num_pos_neg = max(1.0, num_pos_neg)
+        # num_pos = max(1.0, num_pos)
+        # if is_print:
+        # print(('cls_loss: %.3f' % (cls_loss.data[0] / num_pos)))
+        # loss = cls_loss / num_pos.type_as(cls_loss)
 
-        return loss
+        return cls_loss
