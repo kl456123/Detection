@@ -173,7 +173,7 @@ rm results/data/*
     # --checkepoch 18
 
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 4000 \
+    --checkpoint 120000 \
     --net mono_3d \
     --load_dir /data/object/liangxiong/mono_3d \
     --dataset kitti

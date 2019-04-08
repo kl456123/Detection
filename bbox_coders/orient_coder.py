@@ -4,6 +4,7 @@ from utils.registry import BBOX_CODERS
 from core import constants
 from utils import geometry_utils
 import torch
+import torch.nn.functional as F
 
 
 @BBOX_CODERS.register(constants.KEY_ORIENTS)
@@ -33,12 +34,78 @@ class OrientsCoder(object):
         return torch.stack(orients_batch, dim=0)
 
     @staticmethod
-    def decode_batch(orients, p2):
-        pass
+    def decode_batch(orients, rpn_proposals, rcnn_proposals, p2):
+        """
+        Args:
+            orients: shape(N, )
+        """
+
+        assert orients.shape[-1] == 4
+        cls_orients = orients[:, :, :2]
+        reg_orients = orients[:, :, 2:]
+        cls_orients = F.softmax(cls_orients, dim=-1)
+        _, cls_orients_argmax = torch.max(cls_orients, keepdim=True, dim=-1)
+
+        rpn_proposals_xywh = geometry_utils.torch_xyxy_to_xywh(rpn_proposals)
+        reg_orients = reg_orients * rpn_proposals_xywh[:, :, 2:]
+
+        orients = torch.cat(
+            [cls_orients_argmax.type_as(reg_orients), reg_orients], dim=-1)
+
+        side_points = OrientsCoder._generate_side_points(rcnn_proposals,
+                                                         orients)
+
+        ry = geometry_utils.torch_pts_2d_to_dir_3d(side_points, p2)
+
+        return ry
 
     @staticmethod
     def _decode_reg_orients(reg_orient):
         pass
+
+    @staticmethod
+    def _generate_side_points(dets_2d, orient):
+        """
+        Generate side points to calculate orientation
+        Args:
+            dets_2d: shape(N,4) detected box
+            orient: shape(N,3) cls_orient and reg_orient
+        Returns:
+            side_points: shape(N,4)
+        """
+        assert orient.shape[-1] == 3
+        cls_orient_argmax = orient[:, :, 0].long()
+
+        reg_orient = orient[:, :, 1:3]
+
+        side_points = torch.zeros(
+            (orient.shape[0], orient.shape[1], 4)).type_as(orient)
+
+        # cls_orient_argmax = np.argmax(cls_orient, axis=-1)
+
+        row_inds = torch.arange(0, cls_orient_argmax.shape[1]).long()
+
+        # two points
+        selected_x = torch.stack([dets_2d[:, :, 2], dets_2d[:, :, 0]], dim=-1)
+        # side point
+        side_points[:, :, 3] = dets_2d[:, :, 3] - reg_orient[:, :, 1]
+
+        side_points[:, :, 2] = selected_x.view(
+            -1, 2)[row_inds.view(-1), cls_orient_argmax.view(-1)].view_as(
+                cls_orient_argmax)
+
+        # bottom point
+        selected_x = torch.stack(
+            [
+                dets_2d[:, :, 2] - reg_orient[:, :, 0],
+                dets_2d[:, :, 0] + reg_orient[:, :, 0]
+            ],
+            dim=-1)
+        side_points[:, :, 1] = dets_2d[:, :, 3]
+        side_points[:, :, 0] = selected_x.view(
+            -1, 2)[row_inds.view(-1), cls_orient_argmax.view(-1)].view_as(
+                cls_orient_argmax)
+        return side_points
 
     @staticmethod
     def _generate_orients(center_side, proposals):

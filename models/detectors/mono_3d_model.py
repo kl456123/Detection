@@ -137,10 +137,13 @@ class Mono3D(Model):
             proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
             coder = bbox_coders.build({'type': constants.KEY_DIMS})
             rcnn_dim_preds = coder.decode_batch(
-                rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS], rcnn_cls_probs).detach()
+                rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
+                rcnn_cls_probs).detach()
             coder = bbox_coders.build({'type': constants.KEY_ORIENTS})
+            # use rpn proposals to decode
             rcnn_orient_preds = coder.decode_batch(
-                rcnn_orient_preds, feed_dict[constants.KEY_STEREO_CALIB_P2]).detach()
+                rcnn_orient_preds, prediction_dict['proposals'], proposals,
+                feed_dict[constants.KEY_STEREO_CALIB_P2]).detach()
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
