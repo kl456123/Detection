@@ -34,6 +34,7 @@ def expand_anchors(anchors, feat_size=(24, 79), feat_stride=16):
 def visualize_bbox(img,
                    bboxes,
                    gt_bboxes=[],
+                   class_names=[],
                    size=None,
                    save=False,
                    title='test',
@@ -90,9 +91,10 @@ def visualize_bbox(img,
                 color=(55, 255, 155),
                 thickness=2)
             if len(box) == 5:
+                text = class_names[i] + ' ' + str(box[4])
                 cv2.putText(
                     img,
-                    str(box[4]), (int(box[0]), int(box[1])),
+                    text, (int(box[0]), int(box[1])),
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                     fontScale=0.5,
                     color=(0, 255, 0))
@@ -149,11 +151,12 @@ def read_kitti(label_file, classes=['Car'], pred=True, use_3d=False):
         lines = f.readlines()
 
     boxes = []
+    class_names = []
     for line in lines:
         obj = line.strip().split(' ')
         obj_name = obj[0]
-        if obj_name not in classes:
-            continue
+        #  if obj_name not in classes:
+        #  continue
         xmin = int(float(obj[4]))
         ymin = int(float(obj[5]))
         xmax = int(float(obj[6]))
@@ -169,7 +172,8 @@ def read_kitti(label_file, classes=['Car'], pred=True, use_3d=False):
             boxes.append([xmin, ymin, xmax, ymax, h, w, l, conf])
         else:
             boxes.append([xmin, ymin, xmax, ymax, conf])
-    return np.asarray(boxes)
+        class_names.append(obj_name)
+    return np.asarray(boxes), class_names
 
 
 def save_pkl(pkl_data, pkl_path):
@@ -270,14 +274,23 @@ if __name__ == '__main__':
 
     # read from kitti result file
     if args.label is not None:
-        gt_boxes = read_kitti(args.label)
+        gt_boxes, class_names = read_kitti(args.label)
     else:
         gt_boxes = []
-    boxes = read_kitti(args.kitti)
+        class_names = []
+    #  import ipdb
+    #  ipdb.set_trace()
+    boxes, class_names = read_kitti(args.kitti)
 
     if args.keypoint is not None:
         keypoints = read_keypoints(args.keypoint)
     else:
         keypoints = None
     visualize_bbox(
-        img, boxes, gt_boxes, save=True, title=args.title, keypoints=keypoints)
+        img,
+        boxes,
+        gt_boxes,
+        class_names,
+        save=True,
+        title=args.title,
+        keypoints=keypoints)

@@ -235,16 +235,14 @@ class Mono3DBetterFasterRCNN(Model):
 
         # shape(N,7)
         gt_boxes_3d = feed_dict['gt_boxes_3d']
+        used =  feed_dict['used']
 
-        #  encoded_side_points = feed_dict['encoded_side_points']
-        #  gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], encoded_side_points],
-        #  dim=-1)
         # orient
         cls_orient = torch.unsqueeze(feed_dict['cls_orient'], dim=-1).float()
         reg_orient = feed_dict['reg_orient']
         orient = torch.cat([cls_orient, reg_orient], dim=-1)
 
-        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], orient], dim=-1)
+        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], orient, used], dim=-1)
 
         ##########################
         # assigner

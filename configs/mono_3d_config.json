@@ -55,7 +55,6 @@
         "bbox_reg": true,
         "class_agnostic": true,
         "classes": [
-            "bg",
             "Car"
         ],
         "eval_out": "./results/data",
@@ -97,7 +96,6 @@
         "use_self_attention":false,
         "class_agnostic": true,
         "classes": [
-            "bg",
             "Car"
         ],
         "crop_resize_with_max_pool": false,
@@ -105,7 +103,6 @@
             "pooling_size":7,
             "class_agnostic": true,
             "classes": [
-                "bg",
                 "Car"
             ],
             "img_channels": 3,
@@ -113,7 +110,6 @@
             "pretrained": true,
             "use_cascade": true
         },
-        "num_classes": 2,
         "pooling_mode": "align",
         "pooling_size": 7,
         "rcnn_batch_size": 512,
@@ -178,8 +174,8 @@
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh": 0.5,
-            "bg_thresh":0.5,
+            "fg_thresh": 0.3,
+            "bg_thresh":0.3,
             "coder_config": {
                 "type":"center",
                 "bbox_inside_weights": [
@@ -217,7 +213,7 @@
         ],
         "disp_interval": 100,
         "mGPUs": true,
-        "max_epochs": 1000,
+        "max_epochs": 100,
         "optimizer_config": {
             "lr": 0.001,
             "momentum": 0.9,
@@ -227,7 +223,7 @@
         "scheduler_config": {
             "last_step": -1,
             "lr_decay_gamma": 0.1,
-            "lr_decay_step": 4000,
+            "lr_decay_step": 50000,
             "type": "step"
         },
         "start_epoch": 1

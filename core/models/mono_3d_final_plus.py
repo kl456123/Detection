@@ -14,8 +14,7 @@ from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.psroi_pooling.modules.psroi_pool import PSRoIPool
 
 from core.filler import Filler
-from core.mono_3d_target_assigner import TargetAssigner as Mono3DTargetAssigner
-from core.target_assigner import TargetAssigner
+from core.mono_3d_target_assigner import TargetAssigner
 from core.samplers.hard_negative_sampler import HardNegativeSampler
 from core.samplers.balanced_sampler import BalancedSampler
 from core.models.feature_extractors.resnet import ResNetFeatureExtractor
@@ -25,11 +24,10 @@ from utils.visualizer import FeatVisualizer
 
 import functools
 
-import numpy as np
-
 
 class Mono3DFinalPlusFasterRCNN(Model):
     def forward(self, feed_dict):
+        self.target_assigner.bbox_coder_3d.mean_dims = feed_dict['mean_dims']
         prediction_dict = {}
 
         # base model
@@ -51,22 +49,11 @@ class Mono3DFinalPlusFasterRCNN(Model):
         second_pooled_feat = self.feature_extractor.second_stage_feature(
             pooled_feat)
 
-        # rcnn_cls_scores = rcnn_cls_scores_map.mean(3).mean(2)
-        # saliency_map = F.softmax(rcnn_cls_scores_map, dim=1)
         second_pooled_feat = second_pooled_feat.mean(3).mean(2)
-        rcnn_cls_scores = self.rcnn_cls_pred(second_pooled_feat)
-        rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
-        # reduced_pooled_feat = second_pooled_feat.mean(3).mean(2)
-
-        rcnn_bbox_preds = self.rcnn_bbox_pred(second_pooled_feat)
-        # rcnn_cls_scores = self.rcnn_cls_pred(pooled_feat)
-
-        third_pooled_feat = self.feature_extractor.third_stage_feature(
-            pooled_feat)
-        third_pooled_feat = third_pooled_feat.mean(3).mean(2)
-
-        rcnn_3d = self.rcnn_3d_pred(third_pooled_feat)
+        rcnn_cls_scores = self.rcnn_cls_preds(second_pooled_feat)
+        rcnn_bbox_preds = self.rcnn_bbox_preds(second_pooled_feat)
+        rcnn_3d = self.rcnn_3d_pred(second_pooled_feat)
 
         rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -86,7 +73,8 @@ class Mono3DFinalPlusFasterRCNN(Model):
         prediction_dict['rcnn_3d'] = rcnn_3d
 
         if not self.training:
-            rcnn_3d = self.mono_3d_target_assigner.bbox_coder_3d.decode_batch_bbox(
+            _, pred_labels = rcnn_cls_probs.max(dim=-1)
+            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
                 rcnn_3d, rois_batch[0, :, 1:])
 
             prediction_dict['rcnn_3d'] = rcnn_3d
@@ -95,25 +83,14 @@ class Mono3DFinalPlusFasterRCNN(Model):
 
     def pre_forward(self):
         pass
-        # params
-        # if self.train_3d and self.training and not self.train_2d:
-
-    # self.freeze_modules()
-    # for parameter in self.feature_extractor.third_stage_feature.parameters(
-    # ):
-    # parameter.requires_grad = True
-    # for param in self.rcnn_3d_pred.parameters():
-    # param.requires_grad = True
-    # self.freeze_bn(self)
-    # self.unfreeze_bn(self.feature_extractor.third_stage_feature)
 
     def init_weights(self):
         # submodule init weights
         self.feature_extractor.init_weights()
         self.rpn_model.init_weights()
 
-        Filler.normal_init(self.rcnn_cls_pred, 0, 0.01, self.truncated)
-        Filler.normal_init(self.rcnn_bbox_pred, 0, 0.001, self.truncated)
+        Filler.normal_init(self.rcnn_cls_preds, 0, 0.01, self.truncated)
+        Filler.normal_init(self.rcnn_bbox_preds, 0, 0.001, self.truncated)
 
     def init_modules(self):
         self.feature_extractor = ResNetFeatureExtractor(
@@ -129,19 +106,19 @@ class Mono3DFinalPlusFasterRCNN(Model):
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
         # self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
-        self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
+        self.rcnn_cls_preds = nn.Linear(2048, self.n_classes)
         if self.reduce:
             in_channels = 2048
         else:
             in_channels = 2048 * 4 * 4
         if self.class_agnostic:
-            self.rcnn_bbox_pred = nn.Linear(in_channels, 4)
+            self.rcnn_bbox_preds = nn.Linear(in_channels, 4)
         else:
-            self.rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
+            self.rcnn_bbox_preds = nn.Linear(in_channels, 4 * self.n_classes)
 
         # loss module
         if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(2)
+            self.rcnn_cls_loss = FocalLoss(self.n_classes)
         else:
             self.rcnn_cls_loss = functools.partial(
                 F.cross_entropy, reduce=False)
@@ -149,17 +126,21 @@ class Mono3DFinalPlusFasterRCNN(Model):
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
         # self.rcnn_3d_pred = nn.Linear(c, 3 + 4 + 11 + 2 + 1)
-        self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 + 4)
+        if self.class_agnostic_3d:
+            self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4)
+        else:
+            self.rcnn_3d_pred = nn.Linear(in_channels, 3 * self.n_classes + 4)
 
         self.rcnn_3d_loss = OrientationLoss(split_loss=True)
 
     def init_param(self, model_config):
         classes = model_config['classes']
         self.classes = classes
-        self.n_classes = len(classes)
+        self.n_classes = len(classes) + 1
         self.class_agnostic = model_config['class_agnostic']
         self.pooling_size = model_config['pooling_size']
         self.pooling_mode = model_config['pooling_mode']
+        self.class_agnostic_3d = model_config['class_agnostic_3d']
         self.crop_resize_with_max_pool = model_config[
             'crop_resize_with_max_pool']
         self.truncated = model_config['truncated']
@@ -190,9 +171,6 @@ class Mono3DFinalPlusFasterRCNN(Model):
         # model_config['target_assigner_config']['fg_thresh'] = fg_thresh
 
         # assigner
-        self.mono_3d_target_assigner = Mono3DTargetAssigner(
-            model_config['target_assigner_config'])
-
         self.target_assigner = TargetAssigner(
             model_config['target_assigner_config'])
 
@@ -203,7 +181,7 @@ class Mono3DFinalPlusFasterRCNN(Model):
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']
         gt_boxes = feed_dict['gt_boxes']
-        gt_boxes_proj = feed_dict['gt_boxes_proj']
+        # gt_boxes_proj = feed_dict['gt_boxes_proj']
         gt_labels = feed_dict['gt_labels']
 
         # shape(N,7)
@@ -214,15 +192,14 @@ class Mono3DFinalPlusFasterRCNN(Model):
         reg_orient = feed_dict['reg_orient']
         orient = torch.cat([cls_orient, reg_orient], dim=-1)
 
-        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], orient, gt_boxes_proj],
-                                dim=-1)
+        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], orient], dim=-1)
 
         ##########################
         # assigner
         ##########################
         rcnn_cls_targets, rcnn_reg_targets,\
             rcnn_cls_weights, rcnn_reg_weights,\
-            rcnn_reg_targets_3d, rcnn_reg_weights_3d = self.mono_3d_target_assigner.assign(
+            rcnn_reg_targets_3d, rcnn_reg_weights_3d = self.target_assigner.assign(
             rois_batch[:, :, 1:], gt_boxes, gt_boxes_3d, gt_labels)
 
         ##########################
@@ -267,6 +244,21 @@ class Mono3DFinalPlusFasterRCNN(Model):
         prediction_dict['rois_batch'] = rois_batch[batch_sampled_mask].view(
             rois_batch.shape[0], -1, 5)
 
+    def squeeze_bbox_preds(self, rcnn_bbox_preds, rcnn_cls_targets, out_c=4):
+        """
+        squeeze rcnn_bbox_preds from shape (N, 4 * num_classes) to shape (N, 4)
+        Args:
+            rcnn_bbox_preds: shape(N, num_classes, 4)
+            rcnn_cls_targets: shape(N, 1)
+        """
+        rcnn_bbox_preds = rcnn_bbox_preds.view(-1, self.n_classes, out_c)
+        batch_size = rcnn_bbox_preds.shape[0]
+        offset = torch.arange(0, batch_size) * rcnn_bbox_preds.size(1)
+        rcnn_cls_targets = rcnn_cls_targets + offset.type_as(rcnn_cls_targets)
+        rcnn_bbox_preds = rcnn_bbox_preds.contiguous().view(
+            -1, out_c)[rcnn_cls_targets]
+        return rcnn_bbox_preds
+
     def loss(self, prediction_dict, feed_dict):
         """
         assign proposals label and subsample from them
@@ -295,6 +287,10 @@ class Mono3DFinalPlusFasterRCNN(Model):
 
         # bounding box regression L1 loss
         rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']
+        #
+        if not self.class_agnostic:
+            rcnn_bbox_preds = self.squeeze_bbox_preds(rcnn_bbox_preds,
+                                                      rcnn_cls_targets)
         rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
                                              rcnn_reg_targets).sum(dim=-1)
         rcnn_bbox_loss *= rcnn_reg_weights
@@ -311,9 +307,14 @@ class Mono3DFinalPlusFasterRCNN(Model):
         rcnn_reg_targets_3d = prediction_dict['rcnn_reg_targets_3d']
         rcnn_3d = prediction_dict['rcnn_3d']
 
+        if not self.class_agnostic_3d:
+            dims_pred = rcnn_3d[:, :3 * self.n_classes]
+            dims_pred = self.squeeze_bbox_preds(dims_pred, rcnn_cls_targets, 3)
+        else:
+            dims_pred = rcnn_3d[:, :3]
         # dims
         rcnn_3d_loss_dims = self.rcnn_bbox_loss(
-            rcnn_3d[:, :3], rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
+            dims_pred, rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
 
         # angles
         res = self.rcnn_3d_loss(rcnn_3d[:, 3:7], rcnn_reg_targets_3d[:, 3:6])
@@ -327,12 +328,6 @@ class Mono3DFinalPlusFasterRCNN(Model):
 
         loss_dict['rcnn_3d_loss'] = rcnn_3d_loss
 
-        # 2d proj
-        box_2d_proj_loss = self.rcnn_bbox_loss(rcnn_3d[:, 7:],
-                                               rcnn_reg_targets_3d[:, 6:])
-        box_2d_proj_loss = box_2d_proj_loss.sum(dim=-1) * rcnn_reg_weights_3d
-        loss_dict['box_2d_proj_loss'] = box_2d_proj_loss.sum(dim=-1)
-
         # stats of orients
         cls_orient_preds = rcnn_3d[:, 3:5]
         cls_orient = rcnn_reg_targets_3d[:, 3]
@@ -344,21 +339,8 @@ class Mono3DFinalPlusFasterRCNN(Model):
         orient_tp_num = orient_tp_mask.int().sum().item()
         orient_all_num = orient_tp_mask.numel()
 
-        gt_boxes_proj = feed_dict['gt_boxes_proj']
+        # gt_boxes_proj = feed_dict['gt_boxes_proj']
 
-        # import ipdb
-        # ipdb.set_trace()
-        rois_batch = prediction_dict['rois_batch']
-        bboxes = self.target_assigner.bbox_coder.decode_batch(
-            rcnn_3d[:, -4:].view(1, -1, 4), rois_batch[:, :, 1:5])
-        self.target_assigner.assign(bboxes, gt_boxes_proj, eval_thresh=0.7)
-        # fake_match = self.target_assigner.analyzer.match
-        # self.target_assigner.analyzer.analyze_ap(fake_match)
-
-        # store all stats in target assigner
-        orient_tp_num3 = self.target_assigner.stat['matched']
-        orient_all_num3 = self.target_assigner.stat['num_gt']
-        self.target_assigner.stat.update(self.mono_3d_target_assigner.stat)
         self.target_assigner.stat.update({
             # 'angle_num_tp': torch.tensor(0),
             # 'angle_num_all': 1,
@@ -366,11 +348,11 @@ class Mono3DFinalPlusFasterRCNN(Model):
             # stats of orient
             'orient_tp_num': orient_tp_num,
             # 'orient_tp_num2': orient_tp_num2,
-            'orient_tp_num3': orient_tp_num3,
+            #  'orient_tp_num3': orient_tp_num3,
             # 'orient_all_num3': orient_all_num3,
             # 'orient_pr': orient_pr,
             'orient_all_num': orient_all_num,
-            'orient_all_num3': orient_all_num3,
+            #  'orient_all_num3': orient_all_num3,
             # 'orient_tp_num4': orient_tp_num4,
             # 'orient_all_num4': orient_all_num4,
             #  'cls_orient_2s_all_num': depth_ind_all_num,

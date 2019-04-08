@@ -357,6 +357,74 @@ class RandomHorizontalFlip(object):
         return sample
 
 
+class Resize2(object):
+    """random Rescale the input PIL.Image to the given size.
+
+    Args:
+    size (sequence or int): Desired output size. If size is a sequence like
+    (w, h), output size will be matched to this. If size is an int,
+    smaller edge of the image will be matched to this number.
+    i.e, if height > width, then image will be rescaled to
+    (size * height / width, size)
+    interpolation (int, optional): Desired interpolation. Default is
+    ``PIL.Image.BILINEAR``
+    """
+
+    def __init__(self, size, interpolation=Image.BICUBIC):
+        # assert isinstance(_size, int)
+        self.target_size = size
+        self.interpolation = interpolation
+
+    def __call__(self, sample):
+        """
+        Args:
+        img (PIL.Image): Image to be scaled.
+
+        Returns:
+        PIL.Image: Rescaled image.
+        """
+        img = sample['img']
+        w, h = img.size
+
+        target_shape = (int(self.target_size[1]), int(self.target_size[0]))
+
+        im_scale = [self.target_size[0] / h, self.target_size[1] / w]
+
+        sample['img'] = img.resize(target_shape, self.interpolation)
+        sample['im_scale'] = im_scale
+
+        if sample.get('bbox') is not None:
+            bbox = sample['bbox']
+            bbox[:, 2] /= w
+            bbox[:, 0] /= w
+            bbox[:, 1] /= h
+            bbox[:, 3] /= h
+
+            bbox[:, 2] *= target_shape[0]
+            bbox[:, 0] *= target_shape[0]
+            bbox[:, 1] *= target_shape[1]
+            bbox[:, 3] *= target_shape[1]
+            sample['bbox'] = bbox
+
+        if sample.get('p2') is not None:
+            K = sample['K']
+            T = sample['T']
+
+            K[0, :] = K[0, :] * im_scale[1]
+            K[1, :] = K[1, :] * im_scale[0]
+            K[2, 2] = 1
+            KT = np.dot(K, T)
+
+            p2 = np.zeros((3, 4))
+            # assign back
+            p2[:3, :3] = K
+            p2[:, 3] = KT
+            sample['p2'] = p2
+            sample['K'] = K
+
+        return sample
+
+
 class Resize(object):
     """random Rescale the input PIL.Image to the given size.
 
@@ -628,6 +696,8 @@ class Boxes3DTo2D(object):
             # 2d box proj
             box_2d_proj = np.asarray([xmin, ymin, xmax, ymax])
             boxes_2d_proj.append(box_2d_proj)
+            # import ipdb
+            # ipdb.set_trace()
 
             # generate new feature to predict
             # (length of l,h,w in image)

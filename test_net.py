@@ -14,11 +14,8 @@ import time
 import json
 
 from builder import dataloader_builder
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
 from core.saver import Saver
 from core import tester
-from builder.dataloader_builders.kitti_mono_3d_dataloader_builder import Mono3DKittiDataLoaderBuilder
 from builder import model_builder
 
 
@@ -215,7 +212,7 @@ if __name__ == '__main__':
     start = time.time()
 
     vis = args.vis
-    data_loader = dataloader_builder.build(data_config, training=True)
+    data_loader = dataloader_builder.build(data_config, training=False)
 
     #  data_loader = data_loader_builder.build()
 

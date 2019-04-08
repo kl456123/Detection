@@ -15,13 +15,15 @@ sys.path.append('.')
 fv_dir = 'results/fv'
 bev_dir = 'results/bev'
 
+class_names = ['Car', 'Van', 'Truck', 'Pedestrian', 'Cyclist', 'Tram']
+
 
 def parse_kitti_3d(label_path):
     lines = [line.rstrip() for line in open(label_path)]
     objs = [Object3d(line) for line in lines]
 
     # class filter
-    objs = [obj for obj in objs if obj.type == 'Car']
+    objs = [obj for obj in objs if obj.type in class_names]
 
     boxes_3d = [obj.box3d for obj in objs]
     boxes_2d = [obj.box2d for obj in objs]

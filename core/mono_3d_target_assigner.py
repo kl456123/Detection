@@ -12,6 +12,8 @@ from builder import matcher_builder
 from builder import bbox_coder_builder
 from builder import similarity_calc_builder
 
+from utils import box_ops
+
 
 class TargetAssigner(object):
     def __init__(self, assigner_config):
@@ -29,6 +31,8 @@ class TargetAssigner(object):
         self.fg_thresh = assigner_config['fg_thresh']
         self.bg_thresh = assigner_config['bg_thresh']
         # self.clobber_positives = assigner_config['clobber_positives']
+
+        #  self.fg_thresh_2d_proj = assigner_config['fg_thresh_2d_proj']
 
     @property
     def stat(self):
@@ -74,12 +78,12 @@ class TargetAssigner(object):
         # get assigned infomation
         # shape (num_batch,num_boxes)
 
-        # assign regression targets
-        reg_targets, reg_targets_3d = self._assign_regression_targets(
-            match, bboxes, gt_boxes, gt_boxes_3d)
-
         # assign classification targets
         cls_targets = self._assign_classification_targets(match, gt_labels)
+
+        # assign regression targets
+        reg_targets, reg_targets_3d = self._assign_regression_targets(
+            match, bboxes, gt_boxes, gt_boxes_3d, cls_targets)
 
         # create regression weights
         reg_weights, reg_weights_3d = self._create_regression_weights(
@@ -125,7 +129,8 @@ class TargetAssigner(object):
         cls_weights = torch.ones_like(assigned_overlaps_batch)
         return cls_weights
 
-    def _assign_regression_targets(self, match, bboxes, gt_boxes, gt_boxes_3d):
+    def _assign_regression_targets(self, match, bboxes, gt_boxes, gt_boxes_3d,
+                                   assigned_gt_labels):
         """
         Args:
             match: Tensor(num_batch,num_boxes)
@@ -146,11 +151,10 @@ class TargetAssigner(object):
         reg_targets_batch = self.bbox_coder.encode_batch(bboxes,
                                                          assigned_gt_boxes)
         reg_targets_batch_3d = self.bbox_coder_3d.encode_batch_bbox(
-            assigned_gt_boxes_3d[0], bboxes[0]).unsqueeze(0)
-        encoded_bboxes_2d_proj = self.bbox_coder.encode_batch(
-            bboxes, assigned_gt_boxes_3d[:, :, 6:])
-        reg_targets_batch_3d = torch.cat(
-            [reg_targets_batch_3d, encoded_bboxes_2d_proj], dim=-1)
+            assigned_gt_boxes_3d[0], bboxes[0],
+            assigned_gt_labels[0]).unsqueeze(0)
+
+        reg_targets_batch_3d = torch.cat([reg_targets_batch_3d], dim=-1)
 
         # no need grad_fn
         return reg_targets_batch, reg_targets_batch_3d

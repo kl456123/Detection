@@ -215,7 +215,8 @@ class RPNModel(Model):
                                dim=2)
 
         if self.training:
-            rois_batch = self.append_gt(rois_batch, gt_boxes)
+            gt_boxes_cliped = box_ops.clip_boxes(gt_boxes, im_info)
+            rois_batch = self.append_gt(rois_batch, gt_boxes_cliped)
 
         rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
                                              rpn_cls_scores.shape[2],

@@ -93,19 +93,33 @@
     # --config configs/refine_kitti_config.json \
     # --model /data/object/liangxiong/semantic_test/semantic/kitti/faster_rcnn_50_3257.pth
 
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net pr_net \
+    # --out_path /data/object/liangxiong/pr_net \
+    # --config configs/pr_config.json
+
+# CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    # --net mono_3d_final_plus \
+    # --out_path /data/object/liangxiong/mono_3d_final_plus \
+    # --config configs/mono_3d_config.json
+
 CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     --net mono_3d_final_plus \
-    --out_path /data/object/liangxiong/mono_3d_final_plus \
-    --config configs/mono_3d_config.json
+    --out_path /data/object/liangxiong/coco_pretrained \
+    --config configs/coco_mono_3d_config.json \
+    --model /data/object/liangxiong/semantic_coco/semantic/kitti/faster_rcnn_9_70008.pth
+# --checkpoint 162 \
+# --r True \
+# --checkepoch 12
     # --model /data/object/liangxiong/semantic_test2/mono_3d_final/kitti/faster_rcnn_40_3257.pth
 
 # CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     # --net semantic \
     # --out_path /data/object/liangxiong/semantic_coco \
-    # --config configs/refine_kitti_config.json \
+    # --config configs/refine_kitti_config.json
     # --r True \
     # --checkepoch 1 \
-    # --checkpoint 4000
+    # --checkpoint 6000
 
 # --model /data/object/liangxiong/semantic_test2/mono_3d_final/kitti/faster_rcnn_40_3257.pth
 

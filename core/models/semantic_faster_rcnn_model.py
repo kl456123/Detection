@@ -131,7 +131,7 @@ class SemanticFasterRCNN(Model):
         # if self.use_self_attention:
         self.rcnn_cls_pred = nn.Linear(2048, self.n_classes)
         # else:
-            # self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
+        # self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
         if self.class_agnostic:
             self.rcnn_bbox_pred = nn.Linear(2048, 4)
             # self.rcnn_bbox_pred = nn.Conv2d(2048,4,3,1,1)
@@ -238,6 +238,26 @@ class SemanticFasterRCNN(Model):
             prediction_dict['proposals_order'] = proposals_order[
                 batch_sampled_mask]
 
+    #  def umap_reg_targets():
+    #  """
+    #  expand rcnn_reg_targets(shape (N, 4) to shape(N, 4 * num_classes))
+    #  """
+    #  pass
+    def squeeze_bbox_preds(self, rcnn_bbox_preds, rcnn_cls_targets):
+        """
+        squeeze rcnn_bbox_preds from shape (N, 4 * num_classes) to shape (N, 4)
+        Args:
+            rcnn_bbox_preds: shape(N, num_classes, 4)
+            rcnn_cls_targets: shape(N, 1)
+        """
+        rcnn_bbox_preds = rcnn_bbox_preds.view(-1, self.n_classes, 4)
+        batch_size = rcnn_bbox_preds.shape[0]
+        offset = torch.arange(0, batch_size) * rcnn_bbox_preds.size(1)
+        rcnn_cls_targets = rcnn_cls_targets + offset.type_as(rcnn_cls_targets)
+        rcnn_bbox_preds = rcnn_bbox_preds.view(
+            -1, 4)[rcnn_cls_targets]
+        return rcnn_bbox_preds
+
     def loss(self, prediction_dict, feed_dict):
         """
         assign proposals label and subsample from them
@@ -263,6 +283,9 @@ class SemanticFasterRCNN(Model):
 
         # bounding box regression L1 loss
         rcnn_bbox_preds = prediction_dict['rcnn_bbox_preds']
+        if not self.class_agnostic:
+            rcnn_bbox_preds = self.squeeze_bbox_preds(rcnn_bbox_preds,
+                                                      rcnn_cls_targets)
         rcnn_bbox_loss = self.rcnn_bbox_loss(rcnn_bbox_preds,
                                              rcnn_reg_targets).sum(dim=-1)
         rcnn_bbox_loss *= rcnn_reg_weights

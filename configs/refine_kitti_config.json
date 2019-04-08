@@ -10,7 +10,7 @@
             "root_path":"/data/liangxiong/COCO2017",
             "data_path":"train2017",
             "label_path":"annotations/instances_train2017.json",
-            "classes": ["car"]
+            "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"]
         },
         "name": "kitti",
         "transform_config": {
@@ -52,15 +52,15 @@
         ],
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
-        "class_agnostic": true,
-        "classes": ["car"],
+        "class_agnostic": false,
+        "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
         "max_per_image": 100,
         "nms": 0.3,
         "rng_seed": 3,
-        "thresh": 0.1
+        "thresh": 0.5
     },
     "eval_data_config": {
         "type":"coco",
@@ -73,7 +73,7 @@
             "root_path":"/data/liangxiong/COCO2017",
             "data_path":"/data/liangxiong/COCO2017/val2017",
             "label_path":"/data/liangxiong/COCO2017/annotations/instances_val2017.json",
-            "classes": ["car"]
+            "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"]
         },
         "name": "kitti",
         "transform_config": {
@@ -91,13 +91,13 @@
     },
     "model_config": {
         "use_self_attention":false,
-        "class_agnostic": true,
-        "classes": ["car"],
+        "class_agnostic": false,
+        "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
             "pooling_size":7,
-            "class_agnostic": true,
-            "classes": ["car"],
+            "class_agnostic": false,
+            "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
             "img_channels": 3,
             "pretrained_path":"data/pretrained_model",
             "pretrained": true,
@@ -205,7 +205,7 @@
         "device_ids": [
             0
         ],
-        "disp_interval": 20,
+        "disp_interval": 100,
         "mGPUs": true,
         "max_epochs": 20,
         "optimizer_config": {
@@ -217,7 +217,7 @@
         "scheduler_config": {
             "last_step": -1,
             "lr_decay_gamma": 0.1,
-            "lr_decay_step": 4000,
+            "lr_decay_step": 50000,
             "type": "step"
         },
         "start_epoch": 1

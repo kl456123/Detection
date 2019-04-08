@@ -23,10 +23,10 @@ class Mono3DKittiDataLoaderBuilder(DataLoaderBuilder):
         trans_cfg = self.tranform_config
         if self.training:
             self.transform = trans.Compose([
-                # trans.RandomHorizontalFlip(),
+                trans.RandomHorizontalFlip(),
                 # trans.RandomSampleCrop(trans_cfg['resize_range'][0],
                                        # trans_cfg['resize_range'][1]),
-                # trans.Resize(trans_cfg['crop_size']),
+                trans.Resize(trans_cfg['crop_size']),
                 trans.RandomHSV(),
                 trans.Boxes3DTo2D(),
                 trans.ToTensor(),

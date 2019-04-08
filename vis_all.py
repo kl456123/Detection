@@ -4,8 +4,9 @@ import os
 import argparse
 
 # img_dir = '/data/object/training/image_2'
+img_dir = '/data/pengwu/seq/keyframes'
 # img_dir = '/home/pengwu/mono3d/seq/frames'
-img_dir = '/data/liangxiong/COCO2017/val2017'
+#  img_dir = '/data/liangxiong/COCO2017/val2017'
 kitti_dir = 'results/data/'
 anchors_dir = 'results/anchors/'
 rois_dir = 'results/rois/'

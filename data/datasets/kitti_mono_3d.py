@@ -7,8 +7,20 @@ from PIL import Image
 from data.det_dataset import DetDataset
 from utils.box_vis import load_projection_matrix
 from utils.kitti_util import *
+import copy
 
 color_map = [(0, 0, 142)]
+
+MEAN_DIMS = {
+    'Car': [3.88311640418, 1.62856739989, 1.52563191462],
+    'Van': [5.06763659, 1.9007158, 2.20532825],
+    'Truck': [10.13586957, 2.58549199, 3.2520595],
+    'Pedestrian': [0.84422524, 0.66068622, 1.76255119],
+    'Person_sitting': [0.80057803, 0.5983815, 1.27450867],
+    'Cyclist': [1.76282397, 0.59706367, 1.73698127],
+    'Tram': [16.17150617, 2.53246914, 3.53079012],
+    'Misc': [3.64300781, 1.54298177, 1.92320313]
+}
 
 
 class Mono3DKittiDataset(DetDataset):
@@ -38,6 +50,7 @@ class Mono3DKittiDataset(DetDataset):
         self.transforms = transforms
         self.max_num_gt_boxes = 40
         self.use_rect_v2 = dataset_config['use_rect_v2']
+        self.use_proj_2d = dataset_config['use_proj_2d']
 
     def _read_imgs_from_dir(self, img_dir):
         imgs = []
@@ -51,12 +64,18 @@ class Mono3DKittiDataset(DetDataset):
         im_scale = transform_sample['im_scale']
         w = img.size()[2]
         h = img.size()[1]
-        img_info = torch.FloatTensor([h, w, im_scale])
+        if type(im_scale) is float:
+            img_info = torch.FloatTensor([h, w, im_scale])
+        else:
+            img_info = torch.FloatTensor([h, w, *im_scale])
 
         if self.training:
             bbox = transform_sample['bbox']
             # For car, the label is one
-            bbox = torch.cat((bbox, torch.ones((bbox.size()[0], 1))), dim=1)
+            # import ipdb
+            # ipdb.set_trace()
+            bbox = torch.cat(
+                (bbox, transform_sample['label'].unsqueeze(-1).float()), dim=1)
             num = torch.LongTensor([bbox.size()[0]])
             bbox_3d = transform_sample['bbox_3d']
             coords = transform_sample['coords']
@@ -86,6 +105,7 @@ class Mono3DKittiDataset(DetDataset):
             encoded_bottom_points = transform_sample['encoded_bottom_points']
             keypoint_gt = transform_sample['keypoint_gt']
             keypoint_gt_weights = transform_sample['keypoint_gt_weights']
+            used = transform_sample['used']
         else:
             # fake gt
             bbox = torch.zeros((1, 5))
@@ -115,6 +135,7 @@ class Mono3DKittiDataset(DetDataset):
             encoded_bottom_points = torch.zeros((1, 8))
             keypoint_gt = torch.zeros((1, 2))
             keypoint_gt_weights = torch.ones((1, ))
+            used = torch.ones((1, ))
 
         h, w = transform_sample['img'].shape[-2:]
         training_sample = {}
@@ -143,16 +164,23 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['encoded_bottom_points'] = encoded_bottom_points
         training_sample['keypoint_gt'] = keypoint_gt
         training_sample['keypoint_gt_weights'] = keypoint_gt_weights
+        training_sample['used'] = used
+
+        training_sample['mean_dims'] = transform_sample['mean_dims']
 
         # use proj instead of original box
         # training_sample['boxes_2d_proj'] = boxes_2d_proj
         training_sample['gt_boxes_proj'] = boxes_2d_proj
-        training_sample['gt_boxes'] = bbox[:, :4]
+        if self.use_proj_2d:
+            training_sample['gt_boxes'] = boxes_2d_proj
+        else:
+            training_sample['gt_boxes'] = bbox[:, :4]
 
         # note here it is not truely 3d,just their some projected points in 2d
         training_sample['gt_boxes_3d'] = bbox_3d
         training_sample['coords'] = coords
         training_sample['p2'] = transform_sample['p2']
+        training_sample['orig_p2'] = transform_sample['orig_p2']
 
         # training_sample['angles_camera'] = angles_camera
         training_sample['distance'] = distances
@@ -187,7 +215,7 @@ class Mono3DKittiDataset(DetDataset):
 
         if self.training:
             lbl_file = self.labels[index]
-            bbox, bbox_3d, lbl = self.read_annotation(lbl_file)
+            bbox, bbox_3d, lbl, used = self.read_annotation(lbl_file)
 
             # make sample
             transform_sample = {
@@ -198,9 +226,10 @@ class Mono3DKittiDataset(DetDataset):
                 'img_name': img_file,
                 'bbox_3d': bbox_3d,
                 'p2': p2,
-                'orig_p2': p2,
+                'orig_p2': copy.deepcopy(p2),
                 'K': K,
-                'T': T
+                'T': T,
+                'used': used
             }
         else:
             # make sample
@@ -209,13 +238,23 @@ class Mono3DKittiDataset(DetDataset):
                 'im_scale': 1.0,
                 'img_name': img_file,
                 'p2': p2,
-                'orig_p2': p2,
+                'orig_p2': copy.deepcopy(p2),
                 'K': K,
                 'T': T
             }
         transform_sample.update({'img_orig': numpy.asarray(img).copy()})
 
+        # get mean dims for encode and decode
+        mean_dims = self._get_mean_dims()
+        transform_sample['mean_dims'] = mean_dims
+
         return transform_sample
+
+    def _get_mean_dims(self):
+        cls_mean_dims = []
+        for cls in self.classes:
+            cls_mean_dims.append(MEAN_DIMS[cls][::-1])
+        return numpy.asarray(cls_mean_dims)
 
     def __getitem__(self, index):
 
@@ -229,6 +268,13 @@ class Mono3DKittiDataset(DetDataset):
     def read_calibration(self, calib_path):
         return load_projection_matrix(calib_path)
 
+    def check_if_used(self, truncated, occlude):
+        truncated = float(truncated)
+        occluded = float(occlude)
+        if truncated > 0.3 or occluded > 1:
+            return 0
+        return 1
+
     def read_annotation(self, file_name):
         """
         read annotation from file
@@ -240,6 +286,7 @@ class Mono3DKittiDataset(DetDataset):
         boxes_3d = []
         labels = []
         annos = self.load_annotation(file_name)
+        used = []
 
         for obj in annos:
             obj = obj.split(' ')
@@ -267,12 +314,14 @@ class Mono3DKittiDataset(DetDataset):
             boxes_3d.append(obj[8:])
             boxes.append([xmin, ymin, xmax, ymax])
             labels.append(obj_id)
+            used.append(self.check_if_used(obj[1], obj[2]))
 
         boxes = numpy.array(boxes, dtype=float)
         labels = numpy.array(labels, dtype=int)
         boxes_3d = numpy.array(boxes_3d, dtype=float)
+        used = numpy.array(used, dtype=numpy.float32)
 
-        return boxes, boxes_3d, labels
+        return boxes, boxes_3d, labels, used
 
     @staticmethod
     def load_annotation(file_name):
@@ -286,7 +335,8 @@ class Mono3DKittiDataset(DetDataset):
         _id = -1
         for i in range(OBJ_CLASSES.__len__()):
             if name == OBJ_CLASSES[i]:
-                _id = i
+                # 0 refers to bg
+                _id = i + 1
                 break
         if _id == -1:
             print("wrong label !")
@@ -302,7 +352,7 @@ class Mono3DKittiDataset(DetDataset):
     def make_label_list(self, dataset_file):
         train_list_path = os.path.join(dataset_file)
         # train_list_path = './train.txt'
-        #  train_list_path = './demo.txt'
+        # train_list_path = './demo.txt'
         with open(train_list_path, 'r') as f:
             lines = f.readlines()
             labels = [line.strip() for line in lines]
@@ -346,6 +396,7 @@ class Mono3DKittiDataset(DetDataset):
         objs = [Object3d(line) for line in lines]
         for obj in objs:
             if obj.type in self.classes:
+                # if self.check_if_used(obj.truncation, obj.occlusion):
                 return True
         return False
 
