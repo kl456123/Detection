@@ -27,7 +27,7 @@ class TargetGenerator(object):
         self.bg_thresh = target_generator_config['bg_thresh']
         self.fg_thresh = target_generator_config['fg_thresh']
 
-        self.stats = {}
+        # self.stats = {}
 
     def suppress_ignored_case(self, match, num_instances):
         """
@@ -54,6 +54,7 @@ class TargetGenerator(object):
         Returns:
             targets_list: list, [(target1, weight1),(target2, weight2)]
         """
+        stats = {}
         ##########################
         # matcher
         ##########################
@@ -64,14 +65,13 @@ class TargetGenerator(object):
         match_quality_matrix = self.similarity_calc.compare_batch(
             proposals_primary, gt_primary)
 
-        match = self.matcher.match_batch(match_quality_matrix, self.fg_thresh)
-        assigned_overlaps_batch = self.matcher.assigned_overlaps_batch.to(
-            device)
+        match, assigned_overlaps_batch = self.matcher.match_batch(
+            match_quality_matrix, self.fg_thresh)
 
         # get recall stats
         num_instances = auxiliary_dict[constants.KEY_NUM_INSTANCES]
-        fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
-        self.stats.update(Analyzer.analyze_recall(fake_match, num_instances))
+        fake_match, _ = self.matcher.match_batch(match_quality_matrix, 0.7)
+        stats.update(Analyzer.analyze_recall(fake_match, num_instances))
 
         ignored_match = self.suppress_ignored_case(match, num_instances)
 
@@ -140,4 +140,4 @@ class TargetGenerator(object):
                 continue
             loss_units[key]['pred'] = proposals_dict[key]
 
-        return proposals_dict, loss_units
+        return proposals_dict, loss_units, stats

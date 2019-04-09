@@ -39,6 +39,7 @@ KEY_DIMS = 'dims'
 KEY_STATS_RECALL = 'stats_recall'
 KEY_STATS_PRECISION = 'stats_precision'
 KEY_STATS_THRESH_RECALL = 'stats_thresh_recall'
+KEY_STATS = 'stats'
 
 
 # auxiliary dict

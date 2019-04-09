@@ -5,18 +5,12 @@ import torch
 
 
 class Matcher(ABC):
-    def __init__(self):
+    def __init__(self, match_config):
+        pass
+        # pass
         # information is generated during matching
-        self._assigned_overlaps = None
-        self._assigned_overlaps_batch = None
-
-    @property
-    def assignments(self):
-        return self._assignments
-
-    @property
-    def assigned_overlaps_batch(self):
-        return self._assigned_overlaps_batch
+        # self._assigned_overlaps = None
+        # self._assigned_overlaps_batch = None
 
     @abstractmethod
     def match(self, match_quality_matrix, thresh):
@@ -34,16 +28,16 @@ class Matcher(ABC):
 
         for i in range(batch_size):
             # shape(K)
-            assignments_per_img = self.match(match_quality_matrix_batch[i],
-                                             thresh)
+            assignments_per_img, max_overlaps_per_img = self.match(match_quality_matrix_batch[i],
+                                                                   thresh)
             assignments.append(assignments_per_img)
-            overlaps.append(self._assigned_overlaps)
+            overlaps.append(max_overlaps_per_img)
 
         # shape(N,num_boxes)
         assignments = torch.stack(assignments)
         # shape(N,num_boxes)
         overlaps = torch.stack(overlaps)
-        self._assigned_overlaps_batch = overlaps
+        # self._assigned_overlaps_batch = overlaps
 
-        self._assignments = assignments
-        return assignments
+        # self._assignments = assignments
+        return assignments, overlaps

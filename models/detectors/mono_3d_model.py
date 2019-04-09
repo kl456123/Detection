@@ -44,6 +44,7 @@ class Mono3D(Model):
         prediction_dict.update(self.rpn_model.forward(feed_dict))
         proposals = prediction_dict['proposals']
         multi_stage_loss_units = []
+        multi_stage_stats = []
         for i in range(self.num_stages):
 
             if self.training:
@@ -76,7 +77,7 @@ class Mono3D(Model):
                 auxiliary_dict[constants.KEY_MEAN_DIMS] = feed_dict[
                     constants.KEY_MEAN_DIMS]
 
-                proposals_dict, loss_units = self.target_generators[
+                proposals_dict, loss_units, stats = self.target_generators[
                     i].generate_targets(proposals_dict, gt_dict,
                                         auxiliary_dict)
 
@@ -131,6 +132,7 @@ class Mono3D(Model):
                     loss_units[constants.KEY_ORIENTS],
                     loss_units[constants.KEY_DIMS]
                 ])
+                multi_stage_stats.append(stats)
 
             # decode for next stage
             coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
@@ -148,6 +150,7 @@ class Mono3D(Model):
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
+            prediction_dict[constants.KEY_STATS] = multi_stage_stats
         else:
             prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
             prediction_dict[constants.KEY_ORIENTS] = rcnn_orient_preds

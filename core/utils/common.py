@@ -81,14 +81,14 @@ class Stats(object):
         super().__init__()
         self.stats = None
 
-    def collect_from_model(self, model):
-        return [
-            copy.deepcopy(target_generator.stats)
-            for target_generator in model.target_generators
-        ]
+    # def collect_from_model(self, model):
+        # return [
+            # copy.deepcopy(target_generator.stats)
+            # for target_generator in model.target_generators
+        # ]
 
-    def update_stats(self, model):
-        stats = self.collect_from_model(model)
+    def update_stats(self, stats):
+        # stats = self.collect_from_model(model)
         if self.stats is None:
             self.stats = stats
         else:
