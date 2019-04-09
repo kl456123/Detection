@@ -15,7 +15,8 @@ class OrientsCoder(object):
             label_boxes_3d, p2)
 
         # shape(N, 2, 2)
-        center_side = OrientsCoder._get_center_side(label_corners_2d)
+        # center_side = OrientsCoder._get_center_side(label_corners_2d)
+        center_side = OrientsCoder._get_visible_side(label_corners_2d)
 
         # label_boxes_2d_proj = geometry_utils.corners_2d_to_boxes_2d(
         # label_corners_2d)
@@ -83,7 +84,7 @@ class OrientsCoder(object):
 
         # cls_orient_argmax = np.argmax(cls_orient, axis=-1)
 
-        row_inds = torch.arange(0, cls_orient_argmax.shape[1]).long()
+        row_inds = torch.arange(0, cls_orient_argmax.numel()).long()
 
         # two points
         selected_x = torch.stack([dets_2d[:, :, 2], dets_2d[:, :, 0]], dim=-1)
@@ -142,3 +143,17 @@ class OrientsCoder(object):
         mid0 = (point0 + point1) / 2
         mid1 = (point2 + point3) / 2
         return torch.stack([mid0, mid1], dim=1)
+
+    @staticmethod
+    def _get_visible_side(corners_xy, p2):
+        point0 = corners_xy[:, 0]
+        point1 = corners_xy[:, 1]
+        point2 = corners_xy[:, 2]
+        point3 = corners_xy[:, 3]
+
+        left_side = torch.stack([point0, point3], dim=1)
+        right_side = torch.stack([point1, point2], dim=1)
+
+        visible_side = left_side
+        visible_side = right_side
+        return visible_side

@@ -134,6 +134,7 @@ class Mono3D(Model):
 
             # decode for next stage
             coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+            rpn_proposals = proposals
             proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
             coder = bbox_coders.build({'type': constants.KEY_DIMS})
             rcnn_dim_preds = coder.decode_batch(
@@ -142,7 +143,7 @@ class Mono3D(Model):
             coder = bbox_coders.build({'type': constants.KEY_ORIENTS})
             # use rpn proposals to decode
             rcnn_orient_preds = coder.decode_batch(
-                rcnn_orient_preds, prediction_dict['proposals'], proposals,
+                rcnn_orient_preds, rpn_proposals, proposals,
                 feed_dict[constants.KEY_STEREO_CALIB_P2]).detach()
 
         if self.training:

@@ -32,6 +32,7 @@ KEY_BOXES_3D = 'boxes_3d'
 KEY_CLASSES = 'classes'
 KEY_KEYPOINTS = 'keypoints'
 KEY_ORIENTS = 'orients'
+KEY_ORIENTS_V2 = 'orients_v2'
 KEY_DIMS = 'dims'
 
 # key of stats

@@ -43,7 +43,8 @@ class Sampler(ABC):
 
         # assert self.num_samples % batch_size == 0, 'can not distribute samples evenly'
         if not self.num_samples % batch_size == 0:
-            print('can not distribute samples evenly')
+            print('can not distribute samples evenly {}/{}'.format(
+                self.num_samples, batch_size))
         num_samples_per_img = self.num_samples // batch_size
         num_samples = [num_samples_per_img for _ in range(batch_size)]
         num_remain = self.num_samples - batch_size * num_samples_per_img
