@@ -137,6 +137,7 @@ if __name__ == '__main__':
         'net'] + "/" + data_config['name']
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+        os.chmod(output_dir, 0o777)
 
     else:
         print('output_dir is already exist')

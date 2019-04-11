@@ -188,8 +188,8 @@ rm results/data/*
 CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     --net mono_3d_final_plus \
     --load_dir /data/object/liangxiong/coco_pretrained \
-    --checkpoint 1810 \
-    --checkepoch 90 \
+    --checkpoint 1216 \
+    --checkepoch 65 \
     --img_dir /data/pengwu/seq/keyframes \
     --calib_file ./000003.txt
     # --img_dir  /home/pengwu/mono3d/seq/frames \
