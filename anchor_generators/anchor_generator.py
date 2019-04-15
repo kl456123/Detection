@@ -29,15 +29,17 @@ class AnchorGenerator(object):
         # depercated,it can make a bug easily
         # self.input_size = anchor_generator_config['input_size']
 
-    def generate_pyramid(self, feature_map_list):
+    def generate_pyramid(self, feature_map_list, input_size, device='cuda'):
+        # import ipdb
+        # ipdb.set_trace()
         anchors_list = []
         scales = self.scales.view(len(self.scales), -1).expand(
-            (-1, len(self.aspect_ratios)))
+            (-1, len(self.aspect_ratios))).to(device)
 
         for stage, feature_map_shape in enumerate(feature_map_list):
             anchors_list.append(
-                self._generate(feature_map_shape, scales[stage],
-                               self.aspect_ratios))
+                self._generate(feature_map_shape, scales[
+                    stage], self.aspect_ratios.to(device), input_size, device))
 
         return torch.cat(anchors_list, dim=0)
 
@@ -76,16 +78,16 @@ class AnchorGenerator(object):
             input_size[1] / feature_map_shape[1]
         ]
 
-        #  import ipdb
-        #  ipdb.set_trace()
         y_ctrs = torch.arange(
             feature_map_shape[0],
             device=device) * anchor_stride[0] + self.anchor_offset[0].to(
-                device)
+                device).float()
         x_ctrs = torch.arange(
             feature_map_shape[1],
             device=device) * anchor_stride[1] + self.anchor_offset[1].to(
                 device)
+        y_ctrs = y_ctrs.float()
+        x_ctrs = x_ctrs.float()
 
         # meshgrid
         # shape(H*W,)

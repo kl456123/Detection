@@ -44,7 +44,8 @@ class TargetGenerator(object):
                          proposals_dict,
                          gt_dict,
                          auxiliary_dict,
-                         device='cuda'):
+                         device='cuda',
+                         subsample=True):
         """
             use gt to encode preds for better predictable
         Args:
@@ -109,30 +110,31 @@ class TargetGenerator(object):
         ##########################
         # subsampler
         ##########################
-        cls_criterion = None
-        reg_weights = loss_units[constants.KEY_BOXES_2D]['weight']
-        cls_weights = loss_units[constants.KEY_CLASSES]['weight']
+        if subsample:
+            cls_criterion = None
+            reg_weights = loss_units[constants.KEY_BOXES_2D]['weight']
+            cls_weights = loss_units[constants.KEY_CLASSES]['weight']
 
-        pos_indicator = reg_weights > 0
-        indicator = cls_weights > 0
+            pos_indicator = reg_weights > 0
+            indicator = cls_weights > 0
 
-        # subsample from all
-        # shape (N,M)
-        assert indicator[indicator].numel(
-        ) >= self.sampler.num_samples, 'no enough samples before subsample'
-        batch_sampled_mask = self.sampler.subsample_batch(
-            pos_indicator, indicator=indicator, criterion=cls_criterion)
+            # subsample from all
+            # shape (N,M)
+            assert indicator[indicator].numel(
+            ) >= self.sampler.num_samples, 'no enough samples before subsample'
+            batch_sampled_mask = self.sampler.subsample_batch(
+                pos_indicator, indicator=indicator, criterion=cls_criterion)
 
-        assert batch_sampled_mask[batch_sampled_mask].numel(
-        ) == self.sampler.num_samples, 'not enough samples after subsample'
+            assert batch_sampled_mask[batch_sampled_mask].numel(
+            ) == self.sampler.num_samples, 'not enough samples after subsample'
 
-        # dict
-        proposals_dict = batch_ops.filter_tensor_container(proposals_dict,
-                                                           batch_sampled_mask)
+            # dict
+            proposals_dict = batch_ops.filter_tensor_container(proposals_dict,
+                                                            batch_sampled_mask)
 
-        # list
-        loss_units = batch_ops.filter_tensor_container(loss_units,
-                                                       batch_sampled_mask)
+            # list
+            loss_units = batch_ops.filter_tensor_container(loss_units,
+                                                        batch_sampled_mask)
         # generate pred
         # add pred for loss_unit
         for key in proposals_dict:

@@ -22,6 +22,11 @@ class DetDataset(Dataset, metaclass=ABCMeta):
         if self.transforms is not None:
             sample = self.transforms(sample)
 
+        sample = self.pad_sample(sample)
+
+        return sample
+
+    def pad_sample(self, sample):
         return sample
 
     @abstractmethod

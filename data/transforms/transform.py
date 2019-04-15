@@ -9,6 +9,7 @@ from core import constants
 from core.utils import format_checker
 from utils.registry import TRANSFORMS
 from abc import ABC, abstractmethod
+from utils import geometry_utils
 
 
 class Transform(object):
@@ -18,6 +19,29 @@ class Transform(object):
     @abstractmethod
     def __call__(self, sample):
         raise NotImplementedError
+
+
+def intersect(box_a, box_b):
+    max_xy = np.minimum(box_a[:, 2:], box_b[2:])
+    min_xy = np.maximum(box_a[:, :2], box_b[:2])
+    inter = np.clip((max_xy - min_xy), a_min=0, a_max=np.inf)
+    return inter[:, 0] * inter[:, 1]
+
+
+def jaccard_numpy(box_a, box_b):
+    """Compute the jaccard overlap of two sets of boxes.
+    Args:
+    box_a: Multiple bounding boxes, Shape: [num_boxes,4]
+    box_b: Single bounding box, Shape: [4]
+    Return:
+    jaccard overlap: Shape: [box_a.shape[0], box_a.shape[1]]
+    """
+    inter = intersect(box_a, box_b)
+    area_a = (
+        (box_a[:, 2] - box_a[:, 0]) * (box_a[:, 3] - box_a[:, 1]))  # [A,B]
+    area_b = ((box_b[2] - box_b[0]) * (box_b[3] - box_b[1]))  # [A,B]
+    union = area_a + area_b - inter
+    return inter / union  # [A,B]
 
 
 @TRANSFORMS.register('to_pil')
@@ -109,8 +133,8 @@ class RandomHSV(Transform):
 
 @TRANSFORMS.register('random_zoomout')
 class RandomZoomOut(Transform):
-    def __init__(self, scale=1.5):
-        pass
+    def __init__(self, config):
+        self.scale = config.get('scale', 1.5)
 
     def __call__(self, sample):
         image = sample[constants.KEY_IMAGE]
@@ -121,8 +145,9 @@ class RandomZoomOut(Transform):
         labels = sample[constants.KEY_LABEL_CLASSES]
         # place the image on a 1.5X mean pic
         # 0.485, 0.456, 0.406
+        scale = self.scale
         remain = scale - 1
-        assert remain > 1, 'scale must be greater than 1.0'
+        assert remain > 0, 'scale must be greater than 1.0'
         mean_img = np.zeros((int(scale * height), int(scale * width), 3))
         mean_img[:, :, 0] = np.uint8(0.485 * 255)
         mean_img[:, :, 1] = np.uint8(0.456 * 255)
@@ -160,10 +185,10 @@ class RandomSampleCrop(Transform):
     labels (Tensor): the class labels for each bbox
     """
 
-    def __init__(self, min_aspect, max_aspect, keep_aspect=True):
-        self.min_aspect = min_aspect
-        self.max_aspect = max_aspect
-        self.keep_aspect = keep_aspect
+    def __init__(self, config):
+        self.min_aspect = config.get('min_aspect')
+        self.max_aspect = config.get('max_aspect')
+        self.keep_aspect = config.get('keep_aspect', True)
         self.sample_options = (
             # Using entire original input image.
             None,
@@ -255,9 +280,13 @@ class RandomSampleCrop(Transform):
                 # print('before croped shape: ',image.size)
                 # print('after croped shape: ',current_image.shape)
 
-                sample[constants.KEY_IMAGE] = Image.fromarray(current_image)
+                sample[constants.KEY_IMAGE] = Image.fromarray(
+                    current_image.astype(np.uint8))
                 sample[constants.KEY_LABEL_BOXES_2D] = current_boxes
                 sample[constants.KEY_LABEL_CLASSES] = current_labels
+                if sample.get(constants.KEY_LABEL_BOXES_3D):
+                    label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
+                    sample[constants.KEY_LABEL_BOXES_3D] = label_boxes_3d[mask]
                 return sample
 
 
@@ -354,6 +383,15 @@ class RandomHorizontalFlip(Transform):
             return sample
 
 
+@TRANSFORMS.register('fix_ratio_resize')
+class FixRatioResize(object):
+    def __init__(self, config):
+        pass
+
+    def __call__(self, sample):
+        pass
+
+
 @TRANSFORMS.register('fix_shape_resize')
 class FixShapeResize(object):
     """random Rescale the input PIL.Image to the given size.
@@ -406,6 +444,20 @@ class FixShapeResize(object):
             bbox[:, 1::2] *= image_scale[0]
 
             sample[constants.KEY_LABEL_BOXES_2D] = bbox
+
+        #  if sample.get(constants.KEY_STEREO_CALIB_P2) is not None:
+        #  p2 = sample[constants.KEY_STEREO_CALIB_P2]
+        #  K, T = geometry_utils.decompose_matrix(p2)
+        #  K[0, :] = K[0, :] * image_scale[1]
+        #  K[1, :] = K[1, :] * image_scale[0]
+        #  K[2, 2] = 1
+        #  KT = np.dot(K, T)
+
+        #  p2 = np.zeros((3, 4))
+        #  # assign back
+        #  p2[:3, :3] = K
+        #  p2[:, 3] = KT
+        #  sample[constants.KEY_STEREO_CALIB_P2] = p2
 
         return sample
 

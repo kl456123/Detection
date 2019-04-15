@@ -72,7 +72,7 @@ class BipartitleMatcher(Matcher):
         ##########################
         # shape(N,1)
         # copy from bboxes assignments result
-        assignments = torch.tensor(argmax_overlaps)
+        assignments = argmax_overlaps.clone().detach()
 
         # combined with gt assignments
         assignments[max_assignments_overlaps > 0] = gt_assignments

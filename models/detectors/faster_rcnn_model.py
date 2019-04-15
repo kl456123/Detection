@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 
-from lib.model.roi_align.modules.roi_align import RoIAlignAvg
+from lib.model.roi_layers import ROIAlign
 
 from core.model import Model
 from core.filler import Filler
@@ -48,17 +48,27 @@ class FasterRCNN(Model):
             if self.training:
                 proposals_dict = {}
                 proposals_dict[constants.KEY_PRIMARY] = proposals
+
+                # gt_dict
                 gt_dict = {}
                 gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
                                                            KEY_LABEL_BOXES_2D]
-                gt_dict[constants.KEY_CLASSES] = feed_dict[constants.
-                                                           KEY_LABEL_CLASSES]
-                gt_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
-                                                            KEY_LABEL_BOXES_2D]
+                gt_dict[constants.KEY_CLASSES] = None
+                gt_dict[constants.KEY_BOXES_2D] = None
+
+                # auxiliary_dict(used for encoding)
+                auxiliary_dict = {}
+                auxiliary_dict[constants.KEY_BOXES_2D] = feed_dict[
+                    constants.KEY_LABEL_BOXES_2D]
+                auxiliary_dict[constants.KEY_CLASSES] = feed_dict[
+                    constants.KEY_LABEL_CLASSES]
+                auxiliary_dict[constants.KEY_NUM_INSTANCES] = feed_dict[
+                    constants.KEY_NUM_INSTANCES]
+                auxiliary_dict[constants.KEY_PROPOSALS] = proposals
 
                 proposals_dict, loss_units = self.target_generators[
                     i].generate_targets(proposals_dict, gt_dict,
-                                        feed_dict[constants.KEY_NUM_INSTANCES])
+                                        auxiliary_dict)
 
                 # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
                 proposals = proposals_dict[constants.KEY_PRIMARY]
@@ -152,8 +162,8 @@ class FasterRCNN(Model):
             self.feature_extractor_config)
         self.rpn_model = detectors.build(self.rpn_config)
         if self.pooling_mode == 'align':
-            self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
-                                            self.pooling_size, 1.0 / 16.0)
+            self.rcnn_pooling = ROIAlign((self.pooling_size,
+                                          self.pooling_size), 1.0 / 16.0, 2)
         # note that roi extractor is shared but heads not
         self.rcnn_cls_preds = nn.ModuleList(
             [nn.Linear(2048, self.n_classes) for _ in range(self.num_stages)])

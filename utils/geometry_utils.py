@@ -28,6 +28,13 @@ def py_area(boxes):
     return area
 
 
+def decompose_matrix(p2):
+    K = p2[:3, :3]
+    KT = p2[:, 3]
+    T = np.dot(np.linalg.inv(K), KT)
+    return K, T
+
+
 def py_iou(boxes_a, boxes_b):
     """
     Args:
@@ -247,13 +254,15 @@ def calc_location(dims, dets_2d, ry, p2):
     return translation
 
 
-def ry_to_rotation_matix(rotation_y):
+def ry_to_rotation_matrix(rotation_y):
     zeros = np.zeros_like(rotation_y)
     ones = np.ones_like(rotation_y)
-    rotation_matrix = np.asarray([
-        np.cos(rotation_y), zeros, np.sin(rotation_y), zeros, ones, zeros,
-        -np.sin(rotation_y), zeros, np.cos(rotation_y)
-    ]).reshape(-1, 3, 3)
+    rotation_matrix = np.stack(
+        [
+            np.cos(rotation_y), zeros, np.sin(rotation_y), zeros, ones, zeros,
+            -np.sin(rotation_y), zeros, np.cos(rotation_y)
+        ],
+        axis=-1).reshape(-1, 3, 3)
     return rotation_matrix
 
 
@@ -269,7 +278,7 @@ def boxes_3d_to_corners_3d(boxes):
     h = boxes[:, 4]
     w = boxes[:, 5]
     zeros = np.zeros_like(l)
-    rotation_matrix = ry_to_rotation_matix(ry)
+    rotation_matrix = ry_to_rotation_matrix(ry)
 
     x_corners = np.array(
         [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2])
@@ -313,8 +322,8 @@ def points_3d_to_points_2d(points_3d, p2):
 def boxes_3d_to_corners_2d(boxes, p2):
     """
     Args:
-    boxes: shape(N, 7)
-    corners_2d: shape(N, )
+        boxes: shape(N, 7)
+        corners_2d: shape(N, )
     """
     corners_3d = boxes_3d_to_corners_3d(boxes)
     corners_2d = points_3d_to_points_2d(corners_3d.reshape((-1, 3)),
@@ -334,6 +343,12 @@ def corners_2d_to_boxes_2d(corners_2d):
     ymax = corners_2d[:, :, 1].max(axis=-1)
 
     return np.stack([xmin, ymin, xmax, ymax], axis=-1)
+
+
+def boxes_3d_to_boxes_2d(boxes_3d, p2):
+    corners_2d = boxes_3d_to_corners_2d(boxes_3d, p2)
+    boxes_2d = corners_2d_to_boxes_2d(corners_2d)
+    return boxes_2d
 
 
 ###########################
@@ -388,10 +403,10 @@ def torch_corners_2d_to_boxes_2d(corners_2d):
     Args:
         corners_2d: shape(N, 8, 2)
     """
-    xmin = corners_2d[:, :, 0].min(dim=-1)
-    xmax = corners_2d[:, :, 0].max(dim=-1)
-    ymin = corners_2d[:, :, 1].min(dim=-1)
-    ymax = corners_2d[:, :, 1].max(dim=-1)
+    xmin, _ = corners_2d[:, :, 0].min(dim=-1)
+    xmax, _ = corners_2d[:, :, 0].max(dim=-1)
+    ymin, _ = corners_2d[:, :, 1].min(dim=-1)
+    ymax, _ = corners_2d[:, :, 1].max(dim=-1)
 
     return torch.stack([xmin, ymin, xmax, ymax], dim=-1)
 
@@ -446,7 +461,10 @@ def torch_xywh_to_xyxy(boxes):
 
 
 def torch_dir_to_angle(x, y):
-    return torch.atan2(y, x)
+    """
+        Note that use kitti format(clockwise is positive) here
+    """
+    return -torch.atan2(y, x)
 
 
 def torch_pts_2d_to_dir_3d(lines, p2):

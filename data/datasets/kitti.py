@@ -20,6 +20,7 @@ class KITTIDataset(DetDataset):
         # root path of dataset
         self._root_path = os.path.join(config['root_path'], 'object/training')
         self._dataset_file = config['dataset_file']
+        # self._dataset_file = './data/demo.txt'
         self._cam_idx = 2
 
         # set up dirs
@@ -147,6 +148,32 @@ class KITTIDataset(DetDataset):
         box_2d = [obj_label.x1, obj_label.y1, obj_label.x2, obj_label.y2]
         return box_2d
 
+    def pad_sample(self, sample):
+        label_boxes_2d = sample[constants.KEY_LABEL_BOXES_2D]
+        label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
+        label_classes = sample[constants.KEY_LABEL_CLASSES]
+        all_label_boxes_3d = np.zeros(
+            (self.max_num_boxes, label_boxes_3d.shape[1]))
+        all_label_boxes_2d = np.zeros(
+            (self.max_num_boxes, label_boxes_2d.shape[1]))
+        all_label_classes = np.zeros((self.max_num_boxes, ))
+        # assign it with bg label
+        all_label_classes[...] = 0
+        num_boxes = label_boxes_2d.shape[0]
+        all_label_classes[:num_boxes] = label_classes
+        all_label_boxes_2d[:num_boxes] = label_boxes_2d
+        all_label_boxes_3d[:num_boxes] = label_boxes_3d
+
+        sample[constants.KEY_NUM_INSTANCES] = np.asarray(
+            num_boxes, dtype=np.int32)
+
+        sample[constants.KEY_LABEL_BOXES_3D] = all_label_boxes_3d.astype(
+            np.float32)
+        sample[constants.KEY_LABEL_BOXES_2D] = all_label_boxes_2d.astype(
+            np.float32)
+        sample[constants.KEY_LABEL_CLASSES] = all_label_classes
+        return sample
+
     def get_sample(self, index):
         sample_name = self.sample_names[index]
 
@@ -178,39 +205,23 @@ class KITTIDataset(DetDataset):
         ]
         label_classes = np.asarray(label_classes, dtype=np.int32)
 
-        all_label_boxes_3d = np.zeros(
-            (self.max_num_boxes, label_boxes_3d.shape[1]))
-        all_label_boxes_2d = np.zeros(
-            (self.max_num_boxes, label_boxes_2d.shape[1]))
-        all_label_classes = np.zeros((self.max_num_boxes, ))
-        # assign it with bg label
-        all_label_classes[...] = 0
-        num_boxes = label_boxes_2d.shape[0]
-        all_label_classes[:num_boxes] = label_classes
-        all_label_boxes_2d[:num_boxes] = label_boxes_2d
-        all_label_boxes_3d[:num_boxes] = label_boxes_3d
-
         # image_info = list(image_info).append(num_boxes)
 
         transform_sample = {}
         transform_sample[constants.KEY_IMAGE] = image_input
         transform_sample[
             constants.KEY_STEREO_CALIB_P2] = stereo_calib_p2.astype(np.float32)
-        transform_sample[constants.
-                         KEY_LABEL_BOXES_3D] = all_label_boxes_3d.astype(
-                             np.float32)
-        transform_sample[constants.
-                         KEY_LABEL_BOXES_2D] = all_label_boxes_2d.astype(
-                             np.float32)
-        transform_sample[constants.KEY_LABEL_CLASSES] = all_label_classes
+        transform_sample[constants.KEY_LABEL_BOXES_3D] = label_boxes_3d.astype(
+            np.float32)
+        transform_sample[constants.KEY_LABEL_BOXES_2D] = label_boxes_2d.astype(
+            np.float32)
+        transform_sample[constants.KEY_LABEL_CLASSES] = label_classes
         transform_sample[constants.KEY_IMAGE_PATH] = image_path
 
         # (h,w,scale)
         transform_sample[constants.KEY_IMAGE_INFO] = np.asarray(
             image_info, dtype=np.float32)
 
-        transform_sample[constants.KEY_NUM_INSTANCES] = np.asarray(
-            num_boxes, dtype=np.int32)
         #  import ipdb
         #  ipdb.set_trace()
 

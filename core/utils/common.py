@@ -104,7 +104,8 @@ class Stats(object):
             assert len(stats2[key]) == 2
             value1 = stats1.get(key, (0, 0))
             value2 = stats2.get(key, (0, 0))
-            stats[key] = (value1[0] + value2[0], value2[1] + value1[1])
+            stats[key] = (value1[0].cuda() + value2[0].cuda(),
+                          value2[1].cuda() + value1[1].cuda())
         return stats
 
     def get_summary_dict(self):

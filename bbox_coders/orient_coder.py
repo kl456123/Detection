@@ -13,15 +13,23 @@ class OrientsCoder(object):
     def encode(label_boxes_3d, proposals, p2):
         label_corners_2d = geometry_utils.torch_boxes_3d_to_corners_2d(
             label_boxes_3d, p2)
+        boxes_3d_proj = geometry_utils.torch_corners_2d_to_boxes_2d(
+            label_corners_2d)
+        boxes_3d_proj_xywh = geometry_utils.torch_xyxy_to_xywh(
+            boxes_3d_proj.unsqueeze(0)).squeeze(0)
 
         # shape(N, 2, 2)
-        # center_side = OrientsCoder._get_center_side(label_corners_2d)
-        center_side = OrientsCoder._get_visible_side(label_corners_2d)
+        center_side = OrientsCoder._get_center_side(label_corners_2d)
+        # center_side = OrientsCoder._get_visible_side(label_corners_2d)
 
         # label_boxes_2d_proj = geometry_utils.corners_2d_to_boxes_2d(
         # label_corners_2d)
 
         label_orients = OrientsCoder._generate_orients(center_side, proposals)
+
+        reg_orients = label_orients[:, 1:3]
+        reg_orients = reg_orients / boxes_3d_proj_xywh[:, 2:]
+        label_orients = torch.cat([label_orients[:, :1], reg_orients], dim=-1)
         return label_orients
 
     @staticmethod
@@ -37,6 +45,7 @@ class OrientsCoder(object):
     @staticmethod
     def decode_batch(orients, rpn_proposals, rcnn_proposals, p2):
         """
+        Note that rcnn_proposals also refers to boxes_3d_proj
         Args:
             orients: shape(N, )
         """
@@ -48,7 +57,8 @@ class OrientsCoder(object):
         _, cls_orients_argmax = torch.max(cls_orients, keepdim=True, dim=-1)
 
         rpn_proposals_xywh = geometry_utils.torch_xyxy_to_xywh(rpn_proposals)
-        reg_orients = reg_orients * rpn_proposals_xywh[:, :, 2:]
+        rcnn_proposals_xywh = geometry_utils.torch_xyxy_to_xywh(rcnn_proposals)
+        reg_orients = reg_orients * rcnn_proposals_xywh[:, :,2:]
 
         orients = torch.cat(
             [cls_orients_argmax.type_as(reg_orients), reg_orients], dim=-1)
@@ -125,7 +135,7 @@ class OrientsCoder(object):
         reg_orients = torch.abs(direction)
         proposals_xywh = geometry_utils.torch_xyxy_to_xywh(
             proposals.unsqueeze(0)).squeeze(0)
-        reg_orients = reg_orients / proposals_xywh[:, 2:]
+        # reg_orients = reg_orients / proposals_xywh[:, 2:]
         # encode
 
         return torch.cat([cls_orients.unsqueeze(-1), reg_orients], dim=-1)

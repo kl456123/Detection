@@ -27,11 +27,11 @@ def build_multistep_scheduler(config, optimizer):
     return WarmupMultiStepLR(
         optimizer,
         config['milestones'],
-        gamma=config['gamma'],
+        gamma=config['lr_decay_gamma'],
         warmup_factor=config['warmup_factor'],
         warmup_iters=config['warmup_iters'],
         warmup_method=config['warmup_method'],
-        last_epoch=config['last_epoch'])
+        last_epoch=config['last_step'])
 
 
 def build(config, optimizer):

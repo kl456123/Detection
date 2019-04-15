@@ -7,7 +7,8 @@ import torch
 
 
 # TODO (bugs of normalize=True)
-def calc_loss(module, targets, normalize=False):
+# lr too small for sgd
+def calc_loss(module, targets, normalize=True):
     """
         Args:
             weight: shape(N)

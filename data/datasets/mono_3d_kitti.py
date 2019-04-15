@@ -30,6 +30,12 @@ class Mono3DKITTIDataset(KITTIDataset):
         sample = super().get_sample(index)
         mean_dims = self._generate_mean_dims()
         sample[constants.KEY_MEAN_DIMS] = mean_dims
+
+        # use boxes_3d_proj rather than boxes 2d
+        label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
+        p2 = sample[constants.KEY_STEREO_CALIB_P2]
+        boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d, p2)
+        sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj
         return sample
         # shape(M, 7)
         # label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
@@ -80,6 +86,15 @@ class Mono3DKITTIDataset(KITTIDataset):
         mid1 = (point2 + point3) / 2
         return np.stack([mid0, mid1], axis=1)
 
+    def visuliaze_sample(self, sample):
+        image = sample[constants.KEY_IMAGE]
+        # if image.shape[0] == 3:
+        # image = image.permute(1, 2, 0)
+        boxes = sample[constants.KEY_LABEL_BOXES_2D]
+        from utils.visualize import visualize_bbox
+        image = np.asarray(image)
+        visualize_bbox(image, boxes)
+
 
 if __name__ == '__main__':
     dataset_config = {
@@ -91,4 +106,5 @@ if __name__ == '__main__':
     }
     dataset = Mono3DKITTIDataset(dataset_config)
     sample = dataset[0]
-    print(sample.keys())
+    dataset.visuliaze_sample(sample)
+    #  print(sample.keys())

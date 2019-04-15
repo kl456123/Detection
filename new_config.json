@@ -1,0 +1,241 @@
+
+{
+    "data_config": {
+        "dataloader_config": {
+            "batch_size": 2,
+            "num_workers": 2,
+            "shuffle": true
+        },
+        "dataset_config": {
+            "type":"kitti",
+            "classes":["Car", "Pedestrian"],
+            "cache_bev": false,
+            "dataset_file": "data/train.txt",
+            "root_path": "/data"
+        },
+        "name": "kitti",
+        "transform_config":[
+            {"type":"to_pil"},
+            {"type":"random_hsv"
+            },{
+            "type":"fix_shape_resize",
+            "size":[384, 1280]
+            },
+            {"type":"to_tensor"},
+            {"type":"normalize",
+                "normal_mean": [
+                    0.485,
+                    0.456,
+                    0.406
+                ],
+                "normal_std": [
+                    0.229,
+                    0.224,
+                    0.225
+                ]
+            }
+        ]
+    },
+    "eval_config": {
+        "batch_size": 2,
+        "bbox_normalize_means": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "bbox_normalize_stds": [
+            0.1,
+            0.1,
+            0.2,
+            0.2
+        ],
+        "bbox_normalize_targets_precomputed": true,
+        "bbox_reg": true,
+        "class_agnostic": true,
+        "classes": [
+            "Car",
+            "Pedestrian"
+        ],
+        "eval_out": "./results/data",
+        "eval_out_anchors":"./results/anchors",
+        "eval_out_rois":"./results/rois",
+        "max_per_image": 100,
+        "nms": 0.5,
+        "rng_seed": 3,
+        "thresh": 0.5
+    },
+    "eval_data_config": {
+        "dataloader_config": {
+            "batch_size": 1,
+            "num_workers": 1,
+            "shuffle": false
+        },
+        "dataset_config": {
+            "type":"kitti",
+            "classes":["Car", "Pedestrian"],
+            "cache_bev": false,
+            "dataset_file": "data/val.txt",
+            "root_path": "/data"
+        },
+        "name": "kitti",
+        "transform_config":[
+            {"type":"to_pil"},
+            {
+            "type":"fix_shape_resize",
+            "size":[384, 1280]
+            },
+            {"type":"to_tensor"},
+            {"type":"normalize",
+                "normal_mean": [
+                    0.485,
+                    0.456,
+                    0.406
+                ],
+                "normal_std": [
+                    0.229,
+                    0.224,
+                    0.225
+                ]
+            }
+        ]
+    },
+    "model_config": {
+        "batch_size":512,
+        "class_agnostic": true,
+        "num_stages":1,
+        "classes": [
+            "Car",
+            "Pedestrian"
+        ],
+        "target_generator_config": [{
+            "type": "faster_rcnn",
+            "similarity_calc_config": {
+                "type": "center"
+            },
+            "fg_thresh": 0.5,
+            "bg_thresh": 0.5,
+            "coder_config": {
+                "type": "center",
+                "bbox_normalize_targets_precomputed": false
+            },
+            "matcher_config": {
+                "type": "argmax"
+            },
+            "sampler_config": {
+                "num_samples":512,
+                "type": "balanced",
+                "fg_fraction": 0.5
+            },
+            "analyzer_config": {}
+        }],
+        "crop_resize_with_max_pool": false,
+        "feature_extractor_config": {
+            "type":"resnet",
+            "pretrained_models_dir": "./data/pretrained_model",
+            "net_arch":"res50",
+            "separate_feat":false,
+            "use_cascade":true,
+            "class_agnostic": true,
+            "classes": [
+                "Car",
+                "Pedestrian"
+            ],
+            "img_channels": 3,
+            "pretrained_model": "",
+            "pretrained": true
+        },
+        "pooling_mode": "align",
+        "pooling_size": 7,
+        "rcnn_batch_size": 512,
+        "rpn_config": {
+            "type":"rpn",
+            "use_score":false,
+            "use_iou":false,
+            "use_focal_loss":true,
+            "anchor_generator_config": {
+                "type":"default",
+                "anchor_offset": [
+                    0,
+                    0
+                ],
+                "anchor_stride": [
+                    16,
+                    16
+                ],
+                "aspect_ratios": [
+                    0.5,
+                    0.8,
+                    1
+                ],
+                "base_anchor_size": 16,
+                "scales": [
+                    2,
+                    4,
+                    8,
+                    16
+                ]
+            },
+            "target_generator_config": {
+                "type": "faster_rcnn",
+                "similarity_calc_config": {
+                    "type": "center"
+                },
+                "fg_thresh": 0.3,
+                "bg_thresh": 0.3,
+                "coder_config": {
+                    "type": "center",
+                    "bbox_normalize_targets_precomputed": false
+                },
+                "matcher_config": {
+                    "type": "bipartitle"
+                },
+                "sampler_config": {
+                    "num_samples":512,
+                    "type": "balanced",
+                    "fg_fraction": 0.5
+                },
+                "analyzer_config": {}
+            },
+            "din": 1024,
+            "min_size": 16,
+            "nms_thresh": 0.7,
+            "post_nms_topN": 1000,
+            "pre_nms_topN": 12000,
+            "rpn_batch_size": 1024,
+            "num_reg_samples":1024,
+            "num_cls_samples":512
+        },
+        "num_cls_samples":256,
+        "num_reg_samples":512,
+        "subsample_twice": false,
+        "truncated": false,
+        "use_focal_loss": true
+    },
+    "train_config": {
+        "num_iters":120000,
+        "checkpoint_interval": 4000,
+        "clip_gradient": 10,
+        "device_ids": [
+            0
+        ],
+        "disp_interval": 100,
+        "mGPUs": true,
+        "optimizer_config": {
+            "base_lr": 0.001,
+            "bias_lr_factor":1,
+            "weight_decay_bias":0,
+            "weight_decay":0,
+            "momentum": 0.9,
+            "type": "sgd"
+        },
+        "rng_seed": 3,
+        "scheduler_config": {
+            "last_step": -1,
+            "lr_decay_gamma": 0.1,
+            "lr_decay_step": 60000,
+            "type": "step"
+        },
+        "start_epoch": 1
+    }
+}

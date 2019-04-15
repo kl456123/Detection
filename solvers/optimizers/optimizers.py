@@ -52,6 +52,7 @@ def build_adam(optimizer_config, model, logger=None):
     adam = optim.Adam(
         optim_params,
         optimizer_config['base_lr'],
-        beta=optimizer_config['beta'],
-        eps=optimizer_config['eps'])
+        amsgrad=True,
+        eps=optimizer_config['eps']
+    )
     return adam

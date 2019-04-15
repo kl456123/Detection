@@ -51,6 +51,7 @@ def test_bbox_coders():
     # ipdb.set_trace()
     print(ry)
     print(label_boxes_3d[:, :, -1])
+    print(sample[constants.KEY_IMAGE_PATH])
 
 
 def test_orient_coder():

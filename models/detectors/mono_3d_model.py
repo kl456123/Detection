@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 
-from lib.model.roi_align.modules.roi_align import RoIAlignAvg
+from lib.model.roi_layers import ROIAlign
 
 from core.model import Model
 from core.filler import Filler
@@ -131,6 +131,16 @@ class Mono3D(Model):
                     loss_units[constants.KEY_ORIENTS],
                     loss_units[constants.KEY_DIMS]
                 ])
+                # import ipdb
+                # ipdb.set_trace()
+                # orients_loss_unit = loss_units[constants.KEY_ORIENTS]
+                # cls_orient_gt = orients_loss_unit['target'][:, :, 0].long()
+                # _, cls_orient_pred = orients_loss_unit['pred'][:, :, :2].max(
+                    # dim=-1)
+                # weight = orients_loss_unit['weight']
+                # num_tp = (cls_orient_gt == cls_orient_pred)[weight > 0].numel()
+                # all_num = weight[weight > 0].numel()
+                # print('{}/{}/{}'.format(num_tp, all_num, num_tp / all_num))
 
             # decode for next stage
             coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
@@ -193,8 +203,8 @@ class Mono3D(Model):
             self.feature_extractor_config)
         self.rpn_model = detectors.build(self.rpn_config)
         if self.pooling_mode == 'align':
-            self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
-                                            self.pooling_size, 1.0 / 16.0)
+            self.rcnn_pooling = ROIAlign(
+                (self.pooling_size, self.pooling_size), 1.0 / 16.0, 2)
         # note that roi extractor is shared but heads not
         self.rcnn_cls_preds = nn.ModuleList(
             [nn.Linear(2048, self.n_classes) for _ in range(self.num_stages)])
@@ -270,10 +280,10 @@ class Mono3D(Model):
                 self.rcnn_bbox_loss, reg_target)
         for orient_target in targets[2::4]:
             rcnn_orient_loss = rcnn_orient_loss + common_loss.calc_loss(
-                self.rcnn_orient_loss, orient_target)
+                self.rcnn_orient_loss, orient_target, True)
         for dim_target in targets[3::4]:
             rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
-                self.rcnn_bbox_loss, dim_target)
+                self.rcnn_bbox_loss, dim_target, True)
 
         loss_dict.update({
             'rcnn_cls_loss': rcnn_cls_loss,

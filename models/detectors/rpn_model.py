@@ -9,7 +9,7 @@ from core.filler import Filler
 from models.losses.focal_loss import FocalLoss
 
 from utils import box_ops
-from lib.model.nms.nms_wrapper import nms
+from lib.model.roi_layers import nms
 import functools
 from utils.registry import DETECTORS
 from target_generators.target_generator import TargetGenerator
@@ -28,7 +28,6 @@ class RPNModel(Model):
         self.pre_nms_topN = model_config['pre_nms_topN']
         self.nms_thresh = model_config['nms_thresh']
         self.use_score = model_config['use_score']
-        self.rpn_batch_size = model_config['rpn_batch_size']
         self.use_focal_loss = model_config['use_focal_loss']
 
         # anchor generator
@@ -136,9 +135,8 @@ class RPNModel(Model):
             fg_probs_single = fg_probs_single[fg_order_single]
 
             # nms
-            keep_idx_i = nms(
-                torch.cat((proposals_single, fg_probs_single.unsqueeze(1)), 1),
-                self.nms_thresh)
+            keep_idx_i = nms(proposals_single, fg_probs_single,
+                             self.nms_thresh)
             keep_idx_i = keep_idx_i.long().view(-1)
 
             # post nms

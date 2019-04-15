@@ -290,7 +290,7 @@ class Object3d(object):
 
         self.score = data[15] if data.__len__() == 16 else 0.
 
-        self.box3d = np.array([self.ry, self.l, self.h, self.w, data[11], data[12], data[13]])
+        self.box3d = np.array([self.ry, self.h, self.w, self.l, data[11], data[12], data[13]])
 
 
     def print_object(self):

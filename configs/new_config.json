@@ -128,47 +128,8 @@
                 "fg_fraction": 0.5
             },
             "analyzer_config": {}
-        },{
-            "type": "faster_rcnn",
-            "similarity_calc_config": {
-                "type": "center"
-            },
-            "fg_thresh": 0.6,
-            "bg_thresh": 0.6,
-            "coder_config": {
-                "type": "center",
-                "bbox_normalize_targets_precomputed": false
-            },
-            "matcher_config": {
-                "type": "argmax"
-            },
-            "sampler_config": {
-                "num_samples":256,
-                "type": "balanced",
-                "fg_fraction": 0.5
-            },
-            "analyzer_config": {}
-        },{
-            "type": "faster_rcnn",
-            "similarity_calc_config": {
-                "type": "center"
-            },
-            "fg_thresh": 0.7,
-            "bg_thresh": 0.7,
-            "coder_config": {
-                "type": "center",
-                "bbox_normalize_targets_precomputed": false
-            },
-            "matcher_config": {
-                "type": "argmax"
-            },
-            "sampler_config": {
-                "num_samples":128,
-                "type": "balanced",
-                "fg_fraction": 0.5
-            },
-            "analyzer_config": {}
         }],
+        "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
             "type":"resnet",
             "pretrained_path": "./data/pretrained_model",
@@ -245,6 +206,9 @@
             "num_reg_samples":1024,
             "num_cls_samples":512
         },
+        "num_cls_samples":256,
+        "num_reg_samples":512,
+        "subsample_twice": false,
         "truncated": false,
         "use_focal_loss": true
     },

@@ -2,8 +2,8 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 8,
-            "num_workers": 8,
+            "batch_size": 2,
+            "num_workers": 2,
             "shuffle": true
         },
         "dataset_config": {
@@ -206,7 +206,7 @@
         "use_focal_loss": true
     },
     "train_config": {
-        "num_iters":120000,
+        "num_iters":300000,
         "checkpoint_interval": 4000,
         "clip_gradient": 10,
         "device_ids": [
@@ -220,7 +220,8 @@
             "weight_decay_bias":0,
             "weight_decay":0,
             "momentum": 0.9,
-            "type": "sgd"
+            "type": "adam",
+            "eps":1e-3
         },
         "rng_seed": 3,
         "scheduler_config": {
