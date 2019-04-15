@@ -4,6 +4,7 @@ import torch.nn as nn
 import logging
 from core.utils import common
 import copy
+from core import constants
 
 
 class Trainer(object):
@@ -63,7 +64,7 @@ class Trainer(object):
             # adjust lr
             scheduler.step()
 
-            self.stats.update_stats(model)
+            self.stats.update_stats(prediction[constants.KEY_STATS])
 
             if step % self.disp_interval == 0:
                 # display info
