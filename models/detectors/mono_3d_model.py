@@ -218,9 +218,9 @@ class Mono3D(Model):
         # if self.use_focal_loss:
         # self.rcnn_cls_loss = FocalLoss(self.n_classes)
         # else:
-        self.rcnn_cls_loss = nn.CrossEntropyLoss(reduce=False)
+        self.rcnn_cls_loss = nn.CrossEntropyLoss(reduction='none')
 
-        self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
+        self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduction='none')
 
         self.rcnn_orient_loss = OrientationLoss()
 

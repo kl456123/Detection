@@ -69,14 +69,14 @@ class RPNModel(Model):
                                        1, 0)
 
         # bbox
-        self.rpn_bbox_loss = nn.SmoothL1Loss(reduce=False)
+        self.rpn_bbox_loss = nn.SmoothL1Loss(reduction='none')
 
         # cls
         #  if self.use_focal_loss:
         #  self.rpn_cls_loss = FocalLoss(
         #  2, alpha=0.2, gamma=2, auto_alpha=False)
         #  else:
-        self.rpn_cls_loss = nn.CrossEntropyLoss(reduce=False)
+        self.rpn_cls_loss = nn.CrossEntropyLoss(reduction='none')
 
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
@@ -275,7 +275,7 @@ class RPNModel(Model):
 
         # import ipdb
         # ipdb.set_trace()
-        _, targets = self.target_generators.generate_targets(
+        _, targets, _ = self.target_generators.generate_targets(
             anchors_dict, gt_dict, auxiliary_dict)
 
         cls_target = targets[constants.KEY_CLASSES]

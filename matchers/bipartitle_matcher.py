@@ -8,14 +8,6 @@ from utils.registry import MATCHERS
 
 @MATCHERS.register('bipartitle')
 class BipartitleMatcher(Matcher):
-    def __init__(self, matcher_config):
-        super().__init__()
-
-        # self.pos_thresh = matcher_config['fg_thresh']
-        # self.neg_thresh = matcher_config['bg_thresh']
-        # self.thresh = matcher_config['thresh']
-        # self.clobber_positives = matcher_config['clobber_positives']
-
     def match(self, match_quality_matrix, thresh):
         """
         Match each bboxes with gt_boxes,if no any gt boxes match
@@ -84,6 +76,4 @@ class BipartitleMatcher(Matcher):
                                                                 thresh]
         # shape of both of them is (N,)
 
-        self._assigned_overlaps = assigned_overlaps
-
-        return assignments.view(-1)
+        return assignments.view(-1), assigned_overlaps

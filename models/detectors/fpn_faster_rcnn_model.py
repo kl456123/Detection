@@ -82,6 +82,7 @@ class FPNFasterRCNN(Model):
         prediction_dict.update(self.rpn_model.forward(feed_dict))
         proposals = prediction_dict['proposals']
         multi_stage_loss_units = []
+        multi_stage_stats = []
         for i in range(self.num_stages):
 
             if self.training:
@@ -105,7 +106,7 @@ class FPNFasterRCNN(Model):
                     constants.KEY_NUM_INSTANCES]
                 auxiliary_dict[constants.KEY_PROPOSALS] = proposals
 
-                proposals_dict, loss_units = self.target_generators[
+                proposals_dict, loss_units, stats = self.target_generators[
                     i].generate_targets(proposals_dict, gt_dict,
                                         auxiliary_dict)
 
@@ -154,6 +155,7 @@ class FPNFasterRCNN(Model):
                     loss_units[constants.KEY_CLASSES],
                     loss_units[constants.KEY_BOXES_2D]
                 ])
+                multi_stage_stats.append(stats)
 
             # decode for next stage
             coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
@@ -161,6 +163,7 @@ class FPNFasterRCNN(Model):
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
+            prediction_dict[constants.KEY_STATS] = multi_stage_stats
         else:
             prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
 

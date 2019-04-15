@@ -9,8 +9,8 @@
         "dataset_config": {
             "type":"bdd",
             "root_path": "/data/bdd/bdd100k/",
-            "dataset_file": "bdd100k_labels_images_train.json",
-            "data_path": "images/100k/train",
+            "dataset_file": "bdd100k_labels_images_val.json",
+            "data_path": "images/100k/val",
             "label_path": "labels",
             "classes": ["car", "person", "bus", "motor","rider","train","truck"]
         },

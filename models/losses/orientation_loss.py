@@ -7,8 +7,8 @@ import torch
 class OrientationLoss(nn.Module):
     def __init__(self, split_loss=False):
         super().__init__()
-        self.cls_loss = nn.CrossEntropyLoss(reduce=False, ignore_index=-1)
-        self.reg_loss = nn.MSELoss(reduce=False)
+        self.cls_loss = nn.CrossEntropyLoss(reduction='none', ignore_index=-1)
+        self.reg_loss = nn.MSELoss(reduction='none')
         self.split_loss = split_loss
 
     def forward(self, preds, targets):
