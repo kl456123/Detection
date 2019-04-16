@@ -17,9 +17,12 @@
         "transform_config":[
             {"type":"to_pil"},
             {"type":"random_hsv"
-            },{
-            "type":"fix_shape_resize",
-            "size":[384, 1280]
+            },{"type":"random_brightness"},
+            {"type":"random_gaussian_blur"},
+            {"type":"random_horizontal_flip"},
+            {
+                "type":"fix_shape_resize",
+                "size":[384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -77,10 +80,19 @@
         },
         "name": "kitti",
         "transform_config":[
-            {"type":"to_pil"},
             {
-                "type":"fix_shape_resize",
-                "size":[384, 1280]
+                "type": "to_pil"
+            }, {
+            "type": "random_sample_crop"
+            }, {
+            "type": "random_hsv"
+            }, {
+            "type": "random_brightness"
+            }, {
+            "type": "random_horizontal_flip"
+            }, {
+            "type": "fix_shape_resize",
+            "size": [384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",

@@ -193,7 +193,7 @@ rm results/data/*
 
 #FPN_KITTI
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 80000 \
+    --checkpoint 216000 \
     --net fpn \
     --load_dir /data/object/liangxiong/fpn_kitti_pretrained \
     --dataset kitti \

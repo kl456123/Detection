@@ -107,12 +107,12 @@ class Tester(object):
             # p2 = data[constants.KEY_STEREO_CALIB_P2]
 
             batch_size = scores.shape[0]
-            scores = scores.view(-1, self.n_classes)
-            new_scores = torch.zeros_like(scores)
-            col = scores.argmax(dim=-1)
-            row = torch.arange(0, scores.shape[0]).type_as(col)
-            new_scores[row, col] = scores[row, col]
-            scores = new_scores.view(boxes_2d.shape[0], -1, self.n_classes)
+            # scores = scores.view(-1, self.n_classes)
+            # new_scores = torch.zeros_like(scores)
+            # col = scores.argmax(dim=-1)
+            # row = torch.arange(0, scores.shape[0]).type_as(col)
+            # new_scores[row, col] = scores[row, col]
+            # scores = new_scores.view(boxes_2d.shape[0], -1, self.n_classes)
             #  if step == 6:
             #  import ipdb
             #  ipdb.set_trace()

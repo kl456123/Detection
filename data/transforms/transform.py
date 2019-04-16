@@ -284,7 +284,7 @@ class RandomSampleCrop(Transform):
                     current_image.astype(np.uint8))
                 sample[constants.KEY_LABEL_BOXES_2D] = current_boxes
                 sample[constants.KEY_LABEL_CLASSES] = current_labels
-                if sample.get(constants.KEY_LABEL_BOXES_3D):
+                if sample.get(constants.KEY_LABEL_BOXES_3D) is not None:
                     label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
                     sample[constants.KEY_LABEL_BOXES_3D] = label_boxes_3d[mask]
                 return sample

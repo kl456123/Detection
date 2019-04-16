@@ -16,7 +16,14 @@
         },
         "name": "coco",
         "transform_config":[
-            {"type":"random_hsv"
+            {
+                "type": "random_sample_crop"
+            }, {
+            "type": "random_hsv"
+            }, {
+            "type": "random_brightness"
+            }, {
+            "type": "random_horizontal_flip"
             },{
             "type":"fix_shape_resize",
             "size":[384, 512]
@@ -78,8 +85,8 @@
         "name": "coco",
         "transform_config":[
             {
-            "type":"fix_shape_resize",
-            "size":[384, 512]
+                "type":"fix_shape_resize",
+                "size":[384, 512]
             },
             {"type":"to_tensor"},
             {"type":"normalize",

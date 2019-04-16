@@ -237,6 +237,36 @@ class KITTIDataset(DetDataset):
 
         self.label_dir = self._root_path + '/label_' + str(self._cam_idx)
 
+    @staticmethod
+    def visualize_samplev2(sample):
+        img = sample[constants.KEY_IMAGE]
+        bbox = sample[constants.KEY_LABEL_BOXES_2D]
+        num_instances = sample[constants.KEY_NUM_INSTANCES]
+        bbox = bbox[:num_instances]
+
+        img = np.array(img, dtype=float)
+        img = np.around(img)
+        img = np.clip(img, a_min=0, a_max=255)
+        img = img.astype(np.uint8)
+        for i, box in enumerate(bbox):
+            img = cv2.rectangle(
+                img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
+                color=(55, 255, 155),
+                thickness=2)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        cv2.imshow("test", img)
+        cv2.waitKey(0)
+
+    @staticmethod
+    def visualize_samplev1(sample):
+        image = sample[constants.KEY_IMAGE]
+        # if image.shape[0] == 3:
+        #  image = image.permute(1, 2, 0)
+        boxes = sample[constants.KEY_LABEL_BOXES_2D]
+        from utils.visualize import visualize_bbox
+        image = np.asarray(image)
+        visualize_bbox(image, boxes)
+
 
 if __name__ == '__main__':
     dataset_config = {

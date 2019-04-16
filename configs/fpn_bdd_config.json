@@ -10,13 +10,20 @@
             "type":"bdd",
             "root_path": "/data/bdd/bdd100k/",
             "dataset_file": "bdd100k_labels_images_train.json",
-            "data_path": "images/100k/train",
+            "data_path": "images/train",
             "label_path": "labels",
             "classes": ["car", "person", "bus", "motor","rider","train","truck"]
         },
         "name": "bdd",
         "transform_config":[
-            {"type":"random_hsv"
+            {
+                "type": "random_sample_crop"
+            }, {
+            "type": "random_hsv"
+            }, {
+            "type": "random_brightness"
+            }, {
+            "type": "random_horizontal_flip"
             },{
             "type":"fix_shape_resize",
             "size":[384, 768]
