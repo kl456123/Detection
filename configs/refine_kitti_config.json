@@ -1,21 +1,22 @@
 {
     "data_config": {
-        "type":"coco",
+        "type":"bdd",
         "dataloader_config": {
             "batch_size": 1,
             "num_workers": 1,
             "shuffle": true
         },
-        "dataset_config": {
-            "root_path":"/data/liangxiong/COCO2017",
-            "data_path":"train2017",
-            "label_path":"annotations/instances_train2017.json",
-            "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"]
+        "dataset_config":{
+            "root_path": "/data/bdd/bdd100k/",
+            "dataset_file": "bdd100k_labels_images_train.json",
+            "data_path": "images/100k/train",
+            "label_path": "labels",
+            "classes": ["car", "person", "bus", "motor","rider","train","truck"]
         },
-        "name": "kitti",
+        "name": "bdd",
         "transform_config": {
             "crop_size": [
-                400,
+                384,
                 1280
             ],
             "normal_mean": [
@@ -53,7 +54,7 @@
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
         "class_agnostic": false,
-        "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
+        "classes": ["car", "person", "bus", "motor","rider","train","truck"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
@@ -63,20 +64,25 @@
         "thresh": 0.5
     },
     "eval_data_config": {
-        "type":"coco",
+        "type":"bdd",
         "dataloader_config": {
             "batch_size": 1,
             "num_workers": 1,
             "shuffle": false
         },
-        "dataset_config": {
-            "root_path":"/data/liangxiong/COCO2017",
-            "data_path":"/data/liangxiong/COCO2017/val2017",
-            "label_path":"/data/liangxiong/COCO2017/annotations/instances_val2017.json",
-            "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"]
+        "dataset_config":{
+            "root_path": "/data/bdd/bdd100k/",
+            "dataset_file": "bdd100k_labels_images_val.json",
+            "data_path": "images/100k/val",
+            "label_path": "labels",
+            "classes": ["car", "person", "bus", "motor","rider","train","truck"]
         },
-        "name": "kitti",
+        "name": "bdd",
         "transform_config": {
+            "crop_size": [
+                384,
+                1280
+            ],
             "normal_mean": [
                 0.485,
                 0.456,
@@ -92,11 +98,10 @@
     "model_config": {
         "use_self_attention":false,
         "class_agnostic": false,
-        "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
+        "classes": ["car", "person", "bus", "motor","rider","train","truck"],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
             "pooling_size":7,
-            "class_agnostic": false,
             "classes": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"],
             "img_channels": 3,
             "pretrained_path":"data/pretrained_model",
@@ -108,7 +113,7 @@
         "rcnn_batch_size": 64,
         "rpn_config": {
             "use_iou":false,
-            "use_focal_loss":true,
+            "use_focal_loss":false,
             "anchor_generator_config": {
                 "anchor_offset": [
                     0,
@@ -148,14 +153,14 @@
                 "similarity_calc_config":{
                     "type":"center"
                 },
-                "fg_thresh": 0.3,
+                "fg_thresh": 0.7,
                 "bg_thresh":0.3,
                 "coder_config": {
                     "type":"center",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "bipartitle"
+                    "type": "argmax"
                 }
             },
             "use_score": false
@@ -197,10 +202,10 @@
             }
         },
         "truncated": false,
-        "use_focal_loss": true
+        "use_focal_loss": false
     },
     "train_config": {
-        "checkpoint_interval": 2000,
+        "checkpoint_interval": 4000,
         "clip_gradient": 10,
         "device_ids": [
             0
@@ -211,13 +216,13 @@
         "optimizer_config": {
             "lr": 0.001,
             "momentum": 0.9,
-            "type": "sgd"
+            "type": "adam"
         },
         "rng_seed": 3,
         "scheduler_config": {
             "last_step": -1,
             "lr_decay_gamma": 0.1,
-            "lr_decay_step": 50000,
+            "lr_decay_step": 70000,
             "type": "step"
         },
         "start_epoch": 1

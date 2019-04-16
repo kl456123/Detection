@@ -35,7 +35,7 @@ class Mono3DKittiDataLoaderBuilder(DataLoaderBuilder):
             ])
         else:
             self.transform = trans.Compose([
-                # trans.Resize(trans_cfg['crop_size']),
+                trans.Resize(trans_cfg['crop_size']),
                 trans.ToTensor(), trans.Normalize(trans_cfg['normal_mean'],
                                                   trans_cfg['normal_van'])
             ])

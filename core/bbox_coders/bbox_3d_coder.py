@@ -145,8 +145,8 @@ class BBox3DCoder(object):
         # normalize it using rois_batch
         w = proposal_bboxes[:, 2] - proposal_bboxes[:, 0] + 1
         h = proposal_bboxes[:, 3] - proposal_bboxes[:, 1] + 1
-        reg_orient[:, 0] = reg_orient[:, 0] / w
-        reg_orient[:, 1] = reg_orient[:, 1] / h
+        #  reg_orient[:, 0] = reg_orient[:, 0] / w
+        #  reg_orient[:, 1] = reg_orient[:, 1] / h
 
         targets = torch.cat([targets, dims[:, 3:4], reg_orient], dim=-1)
         return targets
@@ -309,8 +309,8 @@ class BBox3DCoder(object):
 
         reg_orient = targets[:, 5:7]
 
-        reg_orient[:, 0] = reg_orient[:, 0] * w
-        reg_orient[:, 1] = reg_orient[:, 1] * h
+        #  reg_orient[:, 0] = reg_orient[:, 0] * w
+        #  reg_orient[:, 1] = reg_orient[:, 1] * h
 
         orient = torch.stack(
             [

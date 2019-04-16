@@ -18,7 +18,6 @@ class ResNetFeatureExtractor(Model):
         self.model_path = os.path.join(model_config['pretrained_path'], 'resnet50-19c8e357.pth')
         self.dout_base_model = 1024
         self.pretrained = model_config['pretrained']
-        self.classes = model_config['classes']
         self.img_channels = model_config['img_channels']
 
         self.use_cascade = model_config.get('use_cascade')

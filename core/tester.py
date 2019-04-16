@@ -2,9 +2,7 @@
 
 import time
 from torch.autograd import Variable
-from lib.model.rpn.bbox_transform import bbox_transform_inv
-from lib.model.rpn.bbox_transform import clip_boxes
-from lib.model.nms.nms_wrapper import nms
+from lib.model.roi_layers import nms
 from utils.visualize import save_pkl, visualize_bbox
 from utils.postprocess import mono_3d_postprocess_angle, mono_3d_postprocess_bbox, mono_3d_postprocess_depth
 from utils.kitti_util import proj_3dTo2d
@@ -144,7 +142,9 @@ def test_2d(eval_config, data_loader, model):
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
-        #  thresh = 0.1
+        # thresh = 0.1
+        # import ipdb
+        # ipdb.set_trace()
 
         dets = []
         res_rois = []
@@ -235,7 +235,8 @@ def mono_test(eval_config, data_loader, model):
 
         classes = eval_config['classes']
         thresh = eval_config['thresh']
-        thresh = 0.5
+        # print(thresh)
+        # thresh = 0.5
 
         dets = []
         res_rois = []
@@ -277,7 +278,8 @@ def mono_test(eval_config, data_loader, model):
                 #  anchors_dets = anchors_dets[order]
                 rcnn_3d_dets = rcnn_3d_dets[order]
 
-                keep = nms(cls_dets, eval_config['nms'])
+                keep = nms(cls_dets[:, :4], cls_dets[:, -1],
+                           eval_config['nms'])
 
                 cls_dets = cls_dets[keep.view(-1).long()]
                 #  rois_dets = rois_dets[keep.view(-1).long()]
@@ -642,7 +644,7 @@ def im_detect_2d(model, data, eval_config, im_orig=None):
         #  if eval_config['bbox_normalize_targets_precomputed']:
         #  # Optionally normalize targets by a precomputed mean and stdev
         if not eval_config['class_agnostic']:
-            boxes = boxes.repeat(1, len(eval_config['classes']) + 1, 1)
+            boxes = boxes.repeat(1, 1, len(eval_config['classes']) + 1)
         #  box_deltas = box_deltas.view(
         #  -1, 4) * torch.FloatTensor(eval_config[
         #  'bbox_normalize_stds']).cuda() + torch.FloatTensor(
@@ -659,7 +661,8 @@ def im_detect_2d(model, data, eval_config, im_orig=None):
         #  pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
 
         pred_boxes = model.target_assigner.bbox_coder.decode_batch(
-            box_deltas.view(eval_config['batch_size'], -1, 4), boxes)
+            box_deltas.view(eval_config['batch_size'], -1, 4),
+            boxes.view(eval_config['batch_size'], -1, 4))
         pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
 
     pred_boxes /= im_scale

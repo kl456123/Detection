@@ -105,6 +105,7 @@ class CocoDataset(DetDataset):
                 new_ids.append(img_id)
 
         self.ids = new_ids
+        self.ids = new_ids[:1]
         return new_ids
 
     def test_and_load(self, idx):

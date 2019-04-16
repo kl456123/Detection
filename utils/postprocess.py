@@ -205,7 +205,7 @@ def mono_3d_postprocess_dims(dets_3d, dets_2d, p2):
     return rcnn_3d
 
 
-def generate_side_points(dets_2d, orient):
+def generate_side_points(dets_2d, orient, normalize=True):
     """
     Generate side points to calculate orientation
     Args:
@@ -217,6 +217,11 @@ def generate_side_points(dets_2d, orient):
     cls_orient_argmax = orient[:, 0].astype(np.int32)
 
     reg_orient = orient[:, 1:3]
+    if normalize:
+        # import ipdb
+        # ipdb.set_trace()
+        wh = dets_2d[:, 2:4] - dets_2d[:, :2] + 1
+        reg_orient = reg_orient * wh
 
     side_points = np.zeros((orient.shape[0], 4))
 

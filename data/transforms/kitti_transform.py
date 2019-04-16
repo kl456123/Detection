@@ -731,8 +731,9 @@ class Boxes3DTo2D(object):
             keypoint_gt_weights.append([1, 1, 1, 1])
 
             # visible side truncated with 2d box
-            center_side = get_center_side(corners_xy)
-            cls_orient, reg_orient = truncate_box(box_2d_proj, center_side)
+            # center_side = get_center_side(corners_xy)
+            # cls_orient, reg_orient = truncate_box(box_2d_proj, center_side)
+            cls_orient, reg_orient = truncate_box(box_2d_proj, visible_side)
 
             cls_orients.append(cls_orient)
             reg_orients.append(reg_orient)

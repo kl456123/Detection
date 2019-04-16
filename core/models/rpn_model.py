@@ -14,7 +14,7 @@ from core.filler import Filler
 from core.models.focal_loss import FocalLoss
 
 from utils import box_ops
-from lib.model.nms.nms_wrapper import nms
+from lib.model.roi_layers import nms
 import functools
 
 
@@ -142,9 +142,8 @@ class RPNModel(Model):
             fg_probs_single = fg_probs_single[fg_order_single]
 
             # nms
-            keep_idx_i = nms(
-                torch.cat((proposals_single, fg_probs_single.unsqueeze(1)), 1),
-                self.nms_thresh)
+            keep_idx_i = nms(proposals_single, fg_probs_single,
+                             self.nms_thresh)
             keep_idx_i = keep_idx_i.long().view(-1)
 
             # post nms

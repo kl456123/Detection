@@ -46,6 +46,7 @@ def build(dataloader_config, training):
     from builder.dataloader_builders.kitti_mono_3d_dataloader_builder import Mono3DKittiDataLoaderBuilder
     from builder.dataloader_builders.kitti_dataloader_builder import KittiDataLoaderBuilder
     from builder.dataloader_builders.coco_dataloader_builder import CocoDataLoaderBuilder
+    from builder.dataloader_builders.bdd_dataloader_builder import BDDDataLoaderBuilder
     dataloader_type = dataloader_config['type']
     if dataloader_type == 'mono_3d':
         return Mono3DKittiDataLoaderBuilder(dataloader_config,
@@ -54,5 +55,7 @@ def build(dataloader_config, training):
         return KittiDataLoaderBuilder(dataloader_config, training).build()
     elif dataloader_type == 'coco':
         return CocoDataLoaderBuilder(dataloader_config, training).build()
+    elif dataloader_type == 'bdd':
+        return BDDDataLoaderBuilder(dataloader_config, training).build()
     else:
         raise ValueError('unknown dataloader! ')

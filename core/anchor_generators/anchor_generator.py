@@ -78,6 +78,9 @@ class AnchorGenerator(object):
         x_ctrs = torch.arange(feature_map_shape[1]).cuda() * anchor_stride[
             1] + self.anchor_offset[1]
 
+        x_ctrs = x_ctrs.float()
+        y_ctrs = y_ctrs.float()
+
         # meshgrid
         # shape(H*W,)
         x_ctrs, y_ctrs = ops.meshgrid(x_ctrs, y_ctrs)

@@ -4,7 +4,10 @@ import os
 import argparse
 
 # img_dir = '/data/object/training/image_2'
-img_dir = '/data/pengwu/seq/keyframes'
+# img_dir = '/data/bdd/bdd100k/images/100k/val'
+img_dir = '/data/dm202_3w/left_img'
+# img_dir = '/data/dm202_3w/right_img'
+# img_dir = '/data/pengwu/seq/keyframes'
 # img_dir = '/home/pengwu/mono3d/seq/frames'
 #  img_dir = '/data/liangxiong/COCO2017/val2017'
 kitti_dir = 'results/data/'
@@ -18,7 +21,7 @@ def vis_all(kitti_dir, title='test', dis_lbl=False):
     for kitti in sorted(os.listdir(kitti_dir)):
         sample_idx = os.path.splitext(kitti)[0]
         print('current image idx: {}'.format(sample_idx))
-        img_path = os.path.join(img_dir, '{}.jpg'.format(sample_idx))
+        img_path = os.path.join(img_dir, '{}.png'.format(sample_idx))
         kitti_path = os.path.join(kitti_dir, '{}.txt'.format(sample_idx))
         keypoint_path = os.path.join(keypoint_dir, '{}.txt'.format(sample_idx))
         if dis_lbl:

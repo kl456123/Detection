@@ -185,13 +185,22 @@ rm results/data/*
     # --checkpoint 3480 \
     # --checkepoch 13
 
+# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+    # --net semantic \
+    # --load_dir /data/object/liangxiong/semantic_bdd \
+    # --checkpoint 8000 \
+    # --checkepoch 1 \
+    # --data bdd
+
 CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     --net mono_3d_final_plus \
-    --load_dir /data/object/liangxiong/coco_pretrained \
-    --checkpoint 1216 \
-    --checkepoch 65 \
-    --img_dir /data/pengwu/seq/keyframes \
-    --calib_file ./000003.txt
+    --load_dir /data/object/liangxiong/coco_pretrained_normalized \
+    --checkpoint 2836 \
+    --checkepoch 45 \
+    --img_dir /data/dm202_3w/left_img \
+    --calib_file ./000004.txt
+    # --img_dir /data/pengwu/seq/keyframes \
+    # --calib_file ./000003.txt
     # --img_dir  /home/pengwu/mono3d/seq/frames \
     # --calib_file ./000002.txt
     # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \

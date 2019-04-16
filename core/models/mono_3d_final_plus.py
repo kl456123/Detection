@@ -10,8 +10,8 @@ from core.models.focal_loss import FocalLoss
 from core.models.multibin_loss import MultiBinLoss
 from core.models.multibin_reg_loss import MultiBinRegLoss
 from core.models.orientation_loss import OrientationLoss
-from model.roi_align.modules.roi_align import RoIAlignAvg
-from model.psroi_pooling.modules.psroi_pool import PSRoIPool
+from lib.model.roi_layers import ROIAlign
+#  from model.psroi_pooling.modules.psroi_pool import PSRoIPool
 
 from core.filler import Filler
 from core.mono_3d_target_assigner import TargetAssigner
@@ -97,8 +97,8 @@ class Mono3DFinalPlusFasterRCNN(Model):
             self.feature_extractor_config)
         self.rpn_model = RPNModel(self.rpn_config)
         if self.pooling_mode == 'align':
-            self.rcnn_pooling = RoIAlignAvg(self.pooling_size,
-                                            self.pooling_size, 1.0 / 16.0)
+            self.rcnn_pooling = ROIAlign((self.pooling_size,
+                                          self.pooling_size), 1.0 / 16.0, 2)
         elif self.pooling_mode == 'ps':
             self.rcnn_pooling = PSRoIPool(7, 7, 1.0 / 16, 7, self.n_classes)
         elif self.pooling_mode == 'psalign':

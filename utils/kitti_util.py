@@ -533,7 +533,7 @@ def get_cls_orient_4(line):
             return cls
 
 
-def truncate_box(box_2d, line):
+def truncate_box(box_2d, line, normalize=True):
     """
     Args:
         dims_2d:
@@ -553,13 +553,14 @@ def truncate_box(box_2d, line):
     reg_orient = np.abs(direction)
 
     # normalize
-    # w, h = dims_2d
-    #  h = box_2d[3] - box_2d[1] + 1
-    #  w = box_2d[2] - box_2d[0] + 1
+    if normalize:
+        # w, h = dims_2d
+        h = box_2d[3] - box_2d[1] + 1
+        w = box_2d[2] - box_2d[0] + 1
 
-    #  reg_orient[0] /= w
-    #  reg_orient[1] /= h
-    # reg_orient = np.log(reg_orient)
+        reg_orient[0] /= w
+        reg_orient[1] /= h
+        # reg_orient = np.log(reg_orient)
     return cls_orient, reg_orient
 
 
