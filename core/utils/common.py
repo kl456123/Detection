@@ -82,10 +82,10 @@ class Stats(object):
         self.stats = None
 
     # def collect_from_model(self, model):
-        # return [
-            # copy.deepcopy(target_generator.stats)
-            # for target_generator in model.target_generators
-        # ]
+    # return [
+    # copy.deepcopy(target_generator.stats)
+    # for target_generator in model.target_generators
+    # ]
 
     def update_stats(self, stats):
         # stats = self.collect_from_model(model)
@@ -100,19 +100,18 @@ class Stats(object):
         total_keys = set(stats1.keys()).union(set(stats2.keys()))
         stats = {}
         for key in total_keys:
-            assert len(stats1[key]) == 2
-            assert len(stats2[key]) == 2
-            value1 = stats1.get(key, (0, 0))
-            value2 = stats2.get(key, (0, 0))
-            stats[key] = (value1[0].cuda() + value2[0].cuda(),
-                          value2[1].cuda() + value1[1].cuda())
+            val1 = stats1[key].sum(dim=0, keepdim=True)
+            val2 = stats2[key].sum(dim=0, keepdim=True)
+            assert val1.shape[-1] == 2
+            assert val2.shape[-1] == 2
+            stats[key] = val1 + val2
         return stats
 
     def get_summary_dict(self):
         summary_dict = {}
         for idx, stat in enumerate(self.stats):
             for key in stat:
-                value = stat[key]
+                value = stat[key][0]
                 # tensor here
                 summary_dict[key + '_' + str(idx)] = value[0].float() / value[
                     1].float()
@@ -122,7 +121,7 @@ class Stats(object):
         total_str = []
         for stat in self.stats:
             for key in stat:
-                value = stat[key]
+                value = stat[key][0]
                 total_str.append(
                     '\t\t\t{}: {}/{}/{:.4f}'.format(key, value[0].item(
                     ), value[1].item(), value[0].item() / value[1].item()))

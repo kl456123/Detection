@@ -49,7 +49,7 @@ class BDDDataset(DetDataset):
             if self._check_anno(anno):
                 new_annotations.append(anno)
 
-        return new_annotations[:1]
+        return new_annotations
 
     def make_image_list(self):
         imgs = []

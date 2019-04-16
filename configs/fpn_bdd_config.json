@@ -2,15 +2,15 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 1,
-            "num_workers": 1,
+            "batch_size": 16,
+            "num_workers": 16,
             "shuffle": true
         },
         "dataset_config": {
             "type":"bdd",
             "root_path": "/data/bdd/bdd100k/",
-            "dataset_file": "bdd100k_labels_images_val.json",
-            "data_path": "images/100k/val",
+            "dataset_file": "bdd100k_labels_images_train.json",
+            "data_path": "images/100k/train",
             "label_path": "labels",
             "classes": ["car", "person", "bus", "motor","rider","train","truck"]
         },
@@ -70,8 +70,8 @@
         "dataset_config": {
             "type":"bdd",
             "root_path": "/data/bdd/bdd100k/",
-            "dataset_file": "bdd100k_labels_images_train.json",
-            "data_path": "images/100k/train",
+            "dataset_file": "bdd100k_labels_images_val.json",
+            "data_path": "images/100k/val",
             "label_path": "labels",
             "classes": ["car", "person", "bus", "motor","rider","train","truck"]
         },
@@ -197,8 +197,8 @@
         "use_focal_loss": true
     },
     "train_config": {
-        "num_iters":1000,
-        "checkpoint_interval": 100,
+        "num_iters":300000,
+        "checkpoint_interval": 4000,
         "clip_gradient": 10,
         "device_ids": [
             0
@@ -206,12 +206,12 @@
         "disp_interval": 100,
         "mGPUs": true,
         "optimizer_config": {
-            "base_lr": 0.005,
+            "base_lr": 0.02,
             "bias_lr_factor":1,
             "weight_decay_bias":0,
-            "weight_decay":0.0001,
+            "weight_decay":0,
             "momentum": 0.9,
-            "type": "adam",
+            "type": "sgd",
             "eps":1e-8
         },
         "rng_seed": 3,

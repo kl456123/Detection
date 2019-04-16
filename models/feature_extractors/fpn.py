@@ -24,7 +24,8 @@ class FPNFeatureExtractor(Model):
 
     def upsample_add(self, x, y):
         _, _, H, W = y.size()
-        return F.interpolate(x, size=(H, W), mode='bilinear') + y
+        return F.interpolate(
+            x, size=(H, W), mode='bilinear', align_corners=False) + y
 
     def init_modules(self):
         resnet = resnet50()

@@ -205,9 +205,9 @@ class FPNFasterRCNN(Model):
             [rcnn_bbox_pred for _ in range(self.num_stages)])
 
         # loss module
-        self.rcnn_cls_loss = nn.CrossEntropyLoss(reduce=False)
+        self.rcnn_cls_loss = nn.CrossEntropyLoss(reduction='none')
 
-        self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
+        self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduction='none')
 
         # TODO add feat scale adaptive roi pooling
         self.rcnn_pooling = AdaptiveROIAlign(

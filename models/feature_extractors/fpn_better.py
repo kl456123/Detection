@@ -23,11 +23,6 @@ class FPNFeatureExtractor(Model):
                                        self.net_arch_path_map[self.net_arch])
         self.truncated = model_config.get('truncated', False)
 
-    def upsample_add(self, x, y):
-        _, _, H, W = y.size()
-        # return F.interpolate(x, size=(H, W), mode='bilinear') + y
-        return F.interpolate(x, scale_factor=2, mode="nearest") + y
-
     def init_modules(self):
         self.fpn = fpn50()
 

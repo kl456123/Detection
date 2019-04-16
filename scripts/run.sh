@@ -28,16 +28,17 @@
     # --config configs/fpn_kitti_config.json
 
 # FPN_COCO
-# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
-    # --net fpn \
-    # --out_path /data/object/liangxiong/fpn_coco_pretrained \
-    # --config configs/fpn_coco_config.json
+CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
+    --net fpn \
+    --out_path /data/object/liangxiong/fpn_coco_pretrained \
+    --config configs/fpn_coco_config.json
 
 # FPN_BDD
-CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
-    --net fpn \
-    --out_path /data/object/liangxiong/fpn_bdd_pretrained \
-    --config configs/fpn_bdd_config.json
+# CUDA_VISIBLE_DEVICES=0,1 python train.py --cuda \
+    # --net fpn \
+    # --out_path /data/object/liangxiong/fpn_bdd_pretrained \
+    # --config configs/fpn_bdd_config.json \
+    # --mGPUs
 
 
 # CUDA_VISIBLE_DEVICES=0,1 python train.py --cuda \

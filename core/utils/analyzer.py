@@ -25,7 +25,8 @@ class Analyzer(object):
             num_matched = num_matched + gt_mask.sum()
 
         stats = {}
-        stats[constants.KEY_STATS_RECALL] = (num_matched, num_gt)
+        stats[constants.KEY_STATS_RECALL] = torch.tensor(
+            [num_matched, num_gt]).to('cuda').float().unsqueeze(0)
         return stats
 
     @staticmethod
@@ -53,6 +54,8 @@ class Analyzer(object):
             num_dets = num_det + num_dets
 
         stats = {}
-        stats[constants.KEY_STATS_PRECISION] = (num_tps, num_dets)
-        stats[constants.KEY_STATS_THRESH_RECALL] = (num_matched_thresh, num_gt)
+        stats[constants.KEY_STATS_PRECISION] = torch.tensor(
+            num_tps, num_dets).to('cuda').float().unsqueeze(0)
+        stats[constants.KEY_STATS_THRESH_RECALL] = torch(
+            num_matched_thresh, num_gt).to('cuda').float().unsqueeze(0)
         return stats
