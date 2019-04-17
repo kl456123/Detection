@@ -4,7 +4,8 @@ import logging
 import sys
 
 
-def setup_logger(logger_name, logger_level=logging.INFO,
+def setup_logger(logger_name='',
+                 logger_level=logging.INFO,
                  logger_path='log.txt'):
 
     # set level for logger

@@ -63,7 +63,7 @@
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
         "max_per_image": 100,
-        "nms": 0.5,
+        "nms": 0.3,
         "rng_seed": 3,
         "thresh": 0.5
     },

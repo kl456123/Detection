@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from core.model import Model
 from torchvision.models import resnet50
+import logging
 import os
 import torch
 from utils.registry import FEATURE_EXTRACTORS
@@ -21,6 +22,7 @@ class FPNFeatureExtractor(Model):
         self.model_path = os.path.join(self.pretrained_path,
                                        self.net_arch_path_map[self.net_arch])
         self.truncated = model_config.get('truncated', False)
+        self.logger = logging.getLogger(__name__)
 
     def upsample_add(self, x, y):
         _, _, H, W = y.size()
@@ -34,7 +36,8 @@ class FPNFeatureExtractor(Model):
             resnet.layer1
         ]
         if self.training and self.pretrained:
-            print(("Loading pretrained weights from %s" % (self.model_path)))
+            self.logger.info(
+                ("Loading pretrained weights from %s" % (self.model_path)))
             state_dict = torch.load(self.model_path)
             resnet.load_state_dict({
                 k: v

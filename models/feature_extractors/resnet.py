@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import torch.nn as nn
+import logging
 
 from core.model import Model
 import copy
@@ -25,11 +26,13 @@ class ResNetFeatureExtractor(Model):
         self.net_arch_path_map = {'res50': 'resnet50-19c8e357.pth'}
         self.model_path = os.path.join(self.pretrained_path,
                                        self.net_arch_path_map[self.net_arch])
+        self.logger = logging.getLogger(__name__)
 
     def init_modules(self):
         resnet = build_backbone(self.net_arch)()
         if self.training and self.pretrained:
-            print(("Loading pretrained weights from %s" % (self.model_path)))
+            self.logger.info(
+                ("Loading pretrained weights from %s" % (self.model_path)))
             state_dict = torch.load(self.model_path)
             resnet.load_state_dict({
                 k: v

@@ -192,24 +192,24 @@ rm results/data/*
     # --dataset kitti
 
 #FPN_KITTI
-CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 216000 \
-    --net fpn \
-    --load_dir /data/object/liangxiong/fpn_kitti_pretrained \
-    --dataset kitti \
-    --thresh 0.5
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 216000 \
+    # --net fpn \
+    # --load_dir /data/object/liangxiong/fpn_kitti_pretrained \
+    # --dataset kitti \
+    # --thresh 0.5
 
 # FPN_COCO
-# CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
-    # --checkpoint 4000 \
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 300000 \
     # --net fpn \
     # --load_dir /data/object/liangxiong/fpn_coco_pretrained \
     # --dataset coco
 
 # FPN_BDD
-# CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
-    # --checkpoint 1000 \
-    # --net fpn \
-    # --load_dir /data/object/liangxiong/fpn_bdd_pretrained \
-    # --dataset bdd \
-    # --thresh 0.5
+CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    --checkpoint 300000 \
+    --net fpn \
+    --load_dir /data/object/liangxiong/fpn_bdd_pretrained \
+    --dataset bdd \
+    --thresh 0.5

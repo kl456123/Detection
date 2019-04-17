@@ -52,6 +52,8 @@ class Trainer(object):
             loss = 0
             for loss_key, loss_val in loss_dict.items():
                 loss += loss_val.mean()
+                # update loss dict
+                loss_dict[loss_key] = loss_val.mean()
 
             optimizer.zero_grad()
             loss.backward()
@@ -75,7 +77,7 @@ class Trainer(object):
 
                 # info stats
                 self.logger.info(self.stats)
-                common.print_loss(loss_dict)
+                self.logger.info(common.loss_dict_to_str(loss_dict))
 
                 # summary writer
                 # loss
@@ -97,3 +99,4 @@ class Trainer(object):
                     'scheduler': scheduler
                 }
                 saver.save(params_dict, checkpoint_name)
+                self.logger.info('checkpoint {} saved'.format(checkpoint_name))

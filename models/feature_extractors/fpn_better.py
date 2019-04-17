@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import torch.nn as nn
-import torch.nn.functional as F
+import logging
 from core.model import Model
 import os
 import torch
@@ -22,12 +22,14 @@ class FPNFeatureExtractor(Model):
         self.model_path = os.path.join(self.pretrained_path,
                                        self.net_arch_path_map[self.net_arch])
         self.truncated = model_config.get('truncated', False)
+        self.logger = logging.getLogger(__name__)
 
     def init_modules(self):
         self.fpn = fpn50()
 
         if self.training and self.pretrained:
-            print(("Loading pretrained weights from %s" % (self.model_path)))
+            self.logger.info(
+                ("Loading pretrained weights from %s" % (self.model_path)))
             state_dict = torch.load(self.model_path)
             module_dict = self.fpn.state_dict()
 

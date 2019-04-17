@@ -214,7 +214,7 @@ def generate_config(args, logger):
 if __name__ == '__main__':
     args = parse_args()
     # first setup logger
-    logger = setup_logger('detection')
+    logger = setup_logger()
 
     config = generate_config(args, logger)
     train(config, logger)

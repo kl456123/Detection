@@ -42,17 +42,11 @@ def to_cuda(target):
         return target
 
 
-def print_loss(loss_dict):
-    print_num = 0
+def loss_dict_to_str(loss_dict):
+    res_str = ""
     for key, val in loss_dict.items():
-        if print_num % 3 == 0:
-            sys.stdout.write("\t\t\t")
-        sys.stdout.write("{}: {:.4f}\t".format(key, val.mean().item()))
-        print_num += 1
-        if print_num % 3 == 0:
-            sys.stdout.write("\n")
-    if print_num % 3:
-        sys.stdout.write("\n")
+        res_str += "{}: {:.4f}\t".format(key, val.item())
+    return res_str
 
 
 class MyParallel(nn.DataParallel):
@@ -118,14 +112,14 @@ class Stats(object):
         return summary_dict
 
     def __repr__(self):
-        total_str = []
+        total_str = ""
         for stat in self.stats:
             for key in stat:
                 value = stat[key][0]
-                total_str.append(
-                    '\t\t\t{}: {}/{}/{:.4f}'.format(key, value[0].item(
-                    ), value[1].item(), value[0].item() / value[1].item()))
-        return '\n'.join(total_str)
+                total_str += '{}: {}/{}/{:.4f}\t'.format(
+                    key, value[0].item(), value[1].item(),
+                    value[0].item() / value[1].item())
+        return total_str
 
     def clear_stats(self):
         self.stats = None
