@@ -23,14 +23,17 @@ class OrientsV3Coder(object):
         return ry_local.unsqueeze(-1)
 
     @staticmethod
-    def decode_batch(orient_preds, bin_centers):
+    def decode_batch(orient_preds, bin_centers, rcnn_proposals, p2):
         """
+        Note that rcnn_proposals refers to 2d bbox project of 3d bbox
         Args:
             bin_centers: shape(num_bins)
             orient_preds: shape(N, num, num_bins*4)
+            rcnn_proposals: shape(N)
         Returns:
             theta: shape(N, num)
         """
+        # get local angle first
         batch_size = orient_preds.shape[0]
         num = orient_preds.shape[1]
         orient_preds = orient_preds.view(batch_size, num, -1, 4)
@@ -47,5 +50,12 @@ class OrientsV3Coder(object):
         bin_centers = bin_centers[angles_cls_argmax]
         theta = torch.atan2(angles_oritations[:, :, 1],
                             angles_oritations[:, :, 0])
-        theta = bin_centers + theta
-        return theta
+        local_angle = bin_centers + theta
+
+        # get global angle
+        rcnn_proposals_xywh = geometry_utils.torch_xyxy_to_xywh(rcnn_proposals)
+        ray_angle = geometry_utils.compute_ray_angle(
+            rcnn_proposals_xywh[:, :, :2], p2)
+        global_angle = local_angle + (-ray_angle)
+
+        return global_angle

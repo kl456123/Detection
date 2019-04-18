@@ -68,6 +68,21 @@ def test_orient_coder():
     print(orients.shape)
 
 
+def test_orientv3_coder():
+    coder_config = {'type': constants.KEY_ORIENTS_V3}
+    orient_coder = bbox_coders.build(coder_config)
+
+    dataset = build_dataset()
+    sample = dataset[0]
+    label_boxes_3d = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_3D])
+    num_instances = torch.from_numpy(sample[constants.KEY_NUM_INSTANCES])
+
+    label_boxes_3d = torch.stack(3 * [label_boxes_3d[:num_instances]], dim=0)
+    orients = orient_coder.encode_batch(label_boxes_3d)
+    print(orients)
+
+
 if __name__ == '__main__':
-    test_bbox_coders()
+    # test_bbox_coders()
     # test_orient_coder()
+    test_orientv3_coder()

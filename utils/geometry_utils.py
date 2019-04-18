@@ -519,3 +519,20 @@ class ProjectMatrixTransform(object):
         KT = np.dot(K, T)
 
         return np.concatenate([K, KT[..., np.newaxis]], axis=-1)
+
+
+def compute_ray_angle(center_2d, p2):
+    """
+    Args:
+        center_2d: shape(N, M, 2)
+        p2: shape(N, 3, 4)
+    """
+    M = p2[:, :, :3]
+    center_2d_homo = torch.cat(
+        [center_2d, torch.ones_like(center_2d[:, :, -1:])], dim=-1)
+
+    direction_vector = torch.bmm(
+        torch.inverse(M), center_2d_homo.permute(0, 2, 1)).permute(0, 2, 1)
+    ray_angle = torch.atan2(direction_vector[:, :, 2],
+                            direction_vector[:, :, 0])
+    return ray_angle

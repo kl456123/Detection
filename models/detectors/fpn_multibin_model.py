@@ -119,8 +119,8 @@ class FPNMultiBinMono3D(FPNMono3D):
                         rcnn_cls_probs.argmax(dim=-1).view(-1))
 
             rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
-            rcnn_orient_preds = rcnn_orient_preds.view(batch_size, -1, 4 *
-                                                       self.num_bins)
+            rcnn_orient_preds = rcnn_orient_preds.view(batch_size, -1,
+                                                       4 * self.num_bins)
             rcnn_dim_preds = rcnn_dim_preds.view(batch_size, -1, 3)
 
             if self.training:
@@ -149,7 +149,8 @@ class FPNMultiBinMono3D(FPNMono3D):
             coder = bbox_coders.build({'type': constants.KEY_ORIENTS_V3})
             # use rpn proposals to decode
             rcnn_orient_preds = coder.decode_batch(
-                rcnn_orient_preds, self.rcnn_orient_loss.bin_centers).detach()
+                rcnn_orient_preds, self.rcnn_orient_loss.bin_centers,
+                proposals, feed_dict[constants.KEY_STEREO_CALIB_P2]).detach()
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
