@@ -28,13 +28,6 @@ def py_area(boxes):
     return area
 
 
-def decompose_matrix(p2):
-    K = p2[:3, :3]
-    KT = p2[:, 3]
-    T = np.dot(np.linalg.inv(K), KT)
-    return K, T
-
-
 def py_iou(boxes_a, boxes_b):
     """
     Args:
@@ -478,3 +471,51 @@ def torch_pts_2d_to_dir_3d(lines, p2):
     c = plane[:, :, 2]
     ry = torch_dir_to_angle(c, -a)
     return ry
+
+
+class ProjectMatrixTransform(object):
+    def _format_check(p2, dtype=np.float32):
+        pass
+
+    @staticmethod
+    def decompose_matrix(p2):
+        K = p2[:3, :3]
+        KT = p2[:, 3]
+        T = np.dot(np.linalg.inv(K), KT)
+        return K, T
+
+    @classmethod
+    def resize(cls, P, image_scale):
+        cls._format_check(P)
+        K, T = cls.decompose_matrix(P)
+
+        K[0, :] = K[0, :] * image_scale[1]
+        K[1, :] = K[1, :] * image_scale[0]
+        K[2, 2] = 1
+        KT = np.dot(K, T)
+
+        return np.concatenate([K, KT[..., np.newaxis]], axis=-1)
+
+    @classmethod
+    def horizontal_flip(cls, P, w):
+        cls._format_check(P)
+        K, T = cls.decompose_matrix(P)
+        K[0, 0] = -K[0, 0]
+        K[0, 2] = w - K[0, 2]
+        KT = np.dot(K, T)
+
+        return np.concatenate([K, KT[..., np.newaxis]], axis=-1)
+
+    @classmethod
+    def crop(cls, P, offset):
+        """
+            Note here offset
+        """
+        cls._format_check(P)
+        K, T = cls.decompose_matrix(P)
+
+        K[0, 2] -= offset[0]
+        K[1, 2] -= offset[1]
+        KT = np.dot(K, T)
+
+        return np.concatenate([K, KT[..., np.newaxis]], axis=-1)

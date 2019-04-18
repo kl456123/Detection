@@ -31,11 +31,16 @@ class Mono3DKITTIDataset(KITTIDataset):
         mean_dims = self._generate_mean_dims()
         sample[constants.KEY_MEAN_DIMS] = mean_dims
 
-        # use boxes_3d_proj rather than boxes 2d
-        label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
-        p2 = sample[constants.KEY_STEREO_CALIB_P2]
-        boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d, p2)
-        sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj
+        if self.training:
+            # use boxes_3d_proj rather than boxes 2d
+            label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
+            p2 = sample[constants.KEY_STEREO_CALIB_P2]
+            boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d, p2)
+            sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj
+
+        if not self.training:
+            sample[constants.KEY_STEREO_CALIB_P2_ORIG] = np.copy(
+                sample[constants.KEY_STEREO_CALIB_P2])
         return sample
         # shape(M, 7)
         # label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
@@ -90,10 +95,15 @@ class Mono3DKITTIDataset(KITTIDataset):
         image = sample[constants.KEY_IMAGE]
         # if image.shape[0] == 3:
         # image = image.permute(1, 2, 0)
-        boxes = sample[constants.KEY_LABEL_BOXES_2D]
+        #  boxes = sample[constants.KEY_LABEL_BOXES_2D]
+
+        label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
+        p2 = sample[constants.KEY_STEREO_CALIB_P2]
+        boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d, p2)
+        sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj
         from utils.visualize import visualize_bbox
         image = np.asarray(image)
-        visualize_bbox(image, boxes)
+        visualize_bbox(image, boxes_3d_proj)
 
 
 if __name__ == '__main__':
@@ -104,7 +114,22 @@ if __name__ == '__main__':
         'classes': ['Car', 'Pedestrian', 'Truck'],
         'dataset_file': './data/train.txt'
     }
-    dataset = Mono3DKITTIDataset(dataset_config)
-    sample = dataset[0]
-    dataset.visuliaze_sample(sample)
+    transforms_config = [{
+        "type": "to_pil"
+    }, {
+        "type": "random_hsv"
+    }, {
+        "type": "random_brightness"
+    }, {
+        "type": "random_horizontal_flip"
+    }, {
+        "type": "fix_shape_resize",
+        "size": [384, 1280]
+    }]
+    from data import transforms
+    transform = transforms.build(transforms_config)
+    dataset = Mono3DKITTIDataset(dataset_config, transform, training=True)
+    for sample in dataset:
+        # sample = dataset[4]
+        dataset.visuliaze_sample(sample)
     #  print(sample.keys())

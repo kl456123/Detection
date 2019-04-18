@@ -1,6 +1,7 @@
 #!/bin/bash
 
 rm results/data/*
+rm results/fv/*
 
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
@@ -207,9 +208,27 @@ rm results/data/*
     # --dataset coco
 
 # FPN_BDD
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 300000 \
+    # --net fpn \
+    # --load_dir /data/object/liangxiong/fpn_bdd_pretrained \
+    # --dataset bdd \
+    # --thresh 0.5
+
+# FPN_MONO_3D
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 1000 \
+    # --net fpn_mono_3d \
+    # --load_dir /data/object/liangxiong/fpn_mono_3d \
+    # --dataset kitti \
+    # --thresh 0.5
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
+
+# FPN FPN_MULTIBIN
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 300000 \
-    --net fpn \
-    --load_dir /data/object/liangxiong/fpn_bdd_pretrained \
-    --dataset bdd \
+    --checkpoint 1000 \
+    --net fpn_multibin_mono_3d \
+    --load_dir /data/object/liangxiong/fpn_multibin_mono_3d \
+    --dataset kitti \
     --thresh 0.5

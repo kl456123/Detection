@@ -120,6 +120,30 @@ class OrientsTargetAssigner(TargetAssigner):
         return reg_weights
 
 
+# multibin
+@TARGET_ASSIGNERS.register(constants.KEY_ORIENTS_V3)
+class OrientsV3TargetAssigner(TargetAssigner):
+    @classmethod
+    def assign_target(cls, **kwargs):
+        match = kwargs[constants.KEY_MATCH]
+        gt = kwargs[constants.KEY_BOXES_3D]
+        assigned_gt = cls.generate_assigned_label(
+            cls, kwargs[constants.KEY_IGNORED_MATCH], gt)
+
+        coder = bbox_coders.build({'type': constants.KEY_ORIENTS_V3})
+        reg_targets_batch = coder.encode_batch(assigned_gt)
+        reg_targets_batch[match == -1] = 0
+        # no need grad_fn
+        return reg_targets_batch
+
+    @classmethod
+    def assign_weight(cls, **kwargs):
+        match = kwargs[constants.KEY_MATCH]
+        reg_weights = super().assign_weight(cls, match)
+        reg_weights[match == -1] = 0
+        return reg_weights
+
+
 @TARGET_ASSIGNERS.register(constants.KEY_DIMS)
 class DimsTargetAssigner(TargetAssigner):
     @classmethod

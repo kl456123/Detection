@@ -4,6 +4,7 @@ Wrap pytorch loss
 """
 import torch.nn as nn
 import torch
+from core.utils import format_checker
 
 
 # TODO (bugs of normalize=True)
@@ -25,7 +26,11 @@ def calc_loss(module, targets, normalize=True):
     target_shape = target.shape
     if len(preds_shape) == len(target_shape):
         # assume one2one match(reg loss)
-        loss = module(preds, target) * weight.unsqueeze(-1)
+        #  import ipdb
+        #  ipdb.set_trace()
+        loss = module(preds, target)
+        format_checker.check_tensor_dims(loss, 3)
+        loss = loss * weight.unsqueeze(-1)
         loss = loss.sum(dim=-1)
 
     elif len(preds_shape) == len(target_shape) + 1:
@@ -34,8 +39,9 @@ def calc_loss(module, targets, normalize=True):
         # target = target.view(-1)
         # preds = preds.view(-1, preds_shape[-1])
 
-        loss = module(preds.view(-1, preds_shape[-1]),
-                      target.view(-1)) * weight.view(-1)
+        loss = module(preds.view(-1, preds_shape[-1]), target.view(-1))
+        format_checker.check_tensor_dims(loss, 1)
+        loss = loss * weight.view(-1)
         loss = loss.view(batch_size, -1)
     else:
         raise ValueError('can not assume any possible loss type')

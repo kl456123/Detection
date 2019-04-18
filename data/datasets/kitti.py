@@ -4,6 +4,7 @@ import os
 from PIL import Image
 import numpy as np
 from data.det_dataset import DetDataset
+import logging
 
 # wavedata for kitti
 from wavedata.tools.core import calib_utils
@@ -16,15 +17,35 @@ import cv2
 
 @DATASETS.register('kitti')
 class KITTIDataset(DetDataset):
-    def __init__(self, config, transform=None, training=True):
+    def __init__(self, config, transform=None, training=True, logger=None):
+        super().__init__(training)
         # root path of dataset
         self._root_path = os.path.join(config['root_path'], 'object/training')
-        self._dataset_file = config['dataset_file']
-        # self._dataset_file = './data/demo.txt'
+        self._dataset_file = None
         self._cam_idx = 2
 
-        # set up dirs
-        self._set_up_directories()
+        # some different input methods
+        if config.get('dataset_file') is not None:
+            self.logger.info('use kitti dataset')
+            self._dataset_file = config['dataset_file']
+            self._dataset_file = './data/demo.txt'
+            self.logger.info('use dataset_file: {}'.format(self._dataset_file))
+            # set up dirs
+            self._set_up_directories()
+
+        elif config.get('img_dir') is not None:
+            self.logger.info('use custom dataset')
+            self.image_dir = config['img_dir']
+            self.logger.info('use image dir: {}'.format(self.image_dir))
+        else:
+            self.logger.error('please specific dataset file or img dir first')
+
+        if config.get('calib_file'):
+            self._calib_file = config['calib_file']
+        else:
+            self._calib_file = None
+
+
 
         self.transforms = transform
 
@@ -33,8 +54,18 @@ class KITTIDataset(DetDataset):
         classes = ['bg']
         self.classes = classes + config['classes']
 
-        sample_names = self.load_sample_names()
-        self.sample_names = sorted(self.filter_sample_names(sample_names))
+        if self._dataset_file is not None:
+            # filter when training
+            sample_names = self.load_sample_names_from_dataset_file(
+                self.image_dir, self._dataset_file)
+        else:
+            sample_names = self.load_sample_names_from_image_dir(
+                self.image_dir)
+
+        if self.training:
+            self.sample_names = sorted(self.filter_sample_names(sample_names))
+        else:
+            self.sample_names = sample_names
 
         self.max_num_boxes = 40
 
@@ -46,12 +77,6 @@ class KITTIDataset(DetDataset):
         matches the desired class.
         """
         return obj.type in classes
-
-    def load_sample_names(self):
-        # set_file = './train.txt'
-        with open(self._dataset_file) as f:
-            sample_names = f.read().splitlines()
-        return np.array(sample_names)
 
     def _check_difficulty(self, obj, difficulty):
         """This filters an object by difficulty.
@@ -68,17 +93,19 @@ class KITTIDataset(DetDataset):
 
     def filter_sample_names(self, sample_names):
         loaded_sample_names = []
-        for sample_name in sample_names:
+        for sample_path in sample_names:
+            sample_name = self.get_sample_name_from_path(sample_path)
             obj_labels = obj_utils.read_labels(self.label_dir,
                                                int(sample_name))
             obj_labels = self.filter_labels(obj_labels, self.classes)
             if len(obj_labels):
-                loaded_sample_names.append(sample_name)
+                loaded_sample_names.append(sample_path)
 
         return loaded_sample_names
 
-    def get_rgb_image_path(self, sample_idx):
-        return os.path.join(self.image_dir, '{}.png'.format(sample_idx))
+    #  def get_rgb_image_path(self, sample_idx):
+    #  return os.path.join(self.image_dir, '{}{}'.format(sample_idx,
+    #  self._image_suffix))
 
     def get_depth_map_path(self, sample_idx):
         return os.path.join(self.depth_dir, '{}.png'.format(sample_idx))
@@ -174,11 +201,30 @@ class KITTIDataset(DetDataset):
         sample[constants.KEY_LABEL_CLASSES] = all_label_classes
         return sample
 
-    def get_sample(self, index):
-        sample_name = self.sample_names[index]
+    def load_projection_matrix(self, calib_file):
+        """Load the camera project matrix."""
+        assert os.path.isfile(calib_file)
+        with open(calib_file) as f:
+            lines = f.readlines()
+            line = lines[2]
+            line = line.split()
+            assert line[0] == 'P2:'
+            p = [float(x) for x in line[1:]]
+            p = np.array(p).reshape(3, 4)
+        return p
+
+    def get_calib_path(self, sample_name):
+        if self._calib_file is not None:
+            return self._calib_file
+        else:
+            return os.path.join(self.calib_dir, '{}.txt'.format(sample_name))
+
+    def get_training_sample(self, index):
+        image_path = self.sample_names[index]
 
         # image
-        image_path = self.get_rgb_image_path(sample_name)
+        sample_name = self.get_sample_name_from_path(image_path)
+        #  image_path = self.get_rgb_image_path(sample_name)
         # image_input = Image.open(image_path)
         cv_bgr_image = cv2.imread(image_path)
         image_input = cv_bgr_image[..., ::-1]
@@ -188,12 +234,13 @@ class KITTIDataset(DetDataset):
         image_info = image_shape + image_scale
 
         # calib
-        stereo_calib_p2 = calib_utils.read_calibration(self.calib_dir,
-                                                       int(sample_name)).p2
+        # stereo_calib_p2 = calib_utils.read_calibration(self.calib_dir,
+        # int(sample_name)).p2
+        calib_path = self.get_calib_path(sample_name)
+        stereo_calib_p2 = self.load_projection_matrix(calib_path)
 
         # labels
         obj_labels = obj_utils.read_labels(self.label_dir, int(sample_name))
-        # filter it already
         obj_labels = self.filter_labels(obj_labels, self.classes)
         label_boxes_3d = np.asarray(
             [self._obj_label_to_box_3d(obj_label) for obj_label in obj_labels])
@@ -224,6 +271,37 @@ class KITTIDataset(DetDataset):
 
         #  import ipdb
         #  ipdb.set_trace()
+
+        return transform_sample
+
+    def get_testing_sample(self, index):
+        image_path = self.sample_names[index]
+        sample_name = self.get_sample_name_from_path(image_path)
+
+        # image
+        #  image_path = self.get_rgb_image_path(sample_name, self._img_suffix)
+        # image_input = Image.open(image_path)
+        cv_bgr_image = cv2.imread(image_path)
+        image_input = cv_bgr_image[..., ::-1]
+        image_shape = image_input.shape[0:2]
+        # no scale now
+        image_scale = (1.0, 1.0)
+        image_info = image_shape + image_scale
+
+        # as for calib, it can read from different files
+        # for each sample or single file for all samples
+        calib_path = self.get_calib_path(sample_name)
+        stereo_calib_p2 = self.load_projection_matrix(calib_path)
+
+        transform_sample = {}
+        transform_sample[constants.KEY_IMAGE] = image_input
+        transform_sample[
+            constants.KEY_STEREO_CALIB_P2] = stereo_calib_p2.astype(np.float32)
+        transform_sample[constants.KEY_IMAGE_PATH] = image_path
+
+        # (h,w,scale)
+        transform_sample[constants.KEY_IMAGE_INFO] = np.asarray(
+            image_info, dtype=np.float32)
 
         return transform_sample
 

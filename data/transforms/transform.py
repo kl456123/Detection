@@ -10,6 +10,7 @@ from core.utils import format_checker
 from utils.registry import TRANSFORMS
 from abc import ABC, abstractmethod
 from utils import geometry_utils
+from utils.geometry_utils import ProjectMatrixTransform
 
 
 class Transform(object):
@@ -200,6 +201,7 @@ class RandomSampleCrop(Transform):
             (0.9, None))
 
     def __call__(self, sample):
+        raise NotImplementedError('there are some bugs here')
         image = sample[constants.KEY_IMAGE]
         format_checker.check_pil_image(image)
 
@@ -246,20 +248,24 @@ class RandomSampleCrop(Transform):
                 # Calculate IoU (jaccard overlap) b/t the cropped and gt boxes.
                 overlap = jaccard_numpy(boxes, rect)
                 # Is min and max overlap constraint satisfied? if not try again.
-                if overlap.min() < min_iou and max_iou < overlap.max():
-                    continue
+                # if overlap.min() < min_iou and max_iou < overlap.max():
+                    # continue
 
                 # Cut the crop from the image.
                 current_image = current_image[rect[1]:rect[3], rect[0]:rect[
                     2], :]
                 # Keep overlap with gt box IF center in sampled patch.
-                centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
-                # Mask in all gt boxes that above and to the left of centers.
-                m1 = (rect[0] < centers[:, 0]) * (rect[1] < centers[:, 1])
-                # Mask in all gt boxes that under and to the right of centers.
-                m2 = (rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
+                # centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
+                # # Mask in all gt boxes that above and to the left of centers.
+                # m1 = (rect[0] < centers[:, 0]) * (rect[1] < centers[:, 1])
+                # # Mask in all gt boxes that under and to the right of centers.
+                # m2 = (rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
                 # mask in that both m1 and m2 are true
-                mask = m1 * m2
+                # mask = m1 * m2
+                # mask = np.ones_like(mask, dtype=mask.dtype)
+                mask = overlap > 0
+                # import ipdb
+                # ipdb.set_trace()
                 # have any valid boxes? try again if not
                 if not mask.any():
                     continue
@@ -287,6 +293,12 @@ class RandomSampleCrop(Transform):
                 if sample.get(constants.KEY_LABEL_BOXES_3D) is not None:
                     label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
                     sample[constants.KEY_LABEL_BOXES_3D] = label_boxes_3d[mask]
+
+                if sample.get(constants.KEY_STEREO_CALIB_P2) is not None:
+                    p2 = sample[constants.KEY_STEREO_CALIB_P2]
+                    new_p2 = ProjectMatrixTransform.crop(p2, rect[:2])
+
+                    sample[constants.KEY_STEREO_CALIB_P2] = new_p2
                 return sample
 
 
@@ -378,9 +390,14 @@ class RandomHorizontalFlip(Transform):
             bbox[:, 2] = xmax
             sample[constants.KEY_IMAGE] = img.transpose(Image.FLIP_LEFT_RIGHT)
             sample[constants.KEY_LABEL_BOXES_2D] = bbox
-            return sample
-        else:
-            return sample
+
+            if sample.get(constants.KEY_STEREO_CALIB_P2) is not None:
+                p2 = sample[constants.KEY_STEREO_CALIB_P2]
+                w = img.size[0]
+                new_p2 = ProjectMatrixTransform.horizontal_flip(p2, w)
+                sample[constants.KEY_STEREO_CALIB_P2] = new_p2
+
+        return sample
 
 
 @TRANSFORMS.register('fix_ratio_resize')
@@ -445,19 +462,22 @@ class FixShapeResize(object):
 
             sample[constants.KEY_LABEL_BOXES_2D] = bbox
 
-        #  if sample.get(constants.KEY_STEREO_CALIB_P2) is not None:
-        #  p2 = sample[constants.KEY_STEREO_CALIB_P2]
-        #  K, T = geometry_utils.decompose_matrix(p2)
-        #  K[0, :] = K[0, :] * image_scale[1]
-        #  K[1, :] = K[1, :] * image_scale[0]
-        #  K[2, 2] = 1
-        #  KT = np.dot(K, T)
+        if sample.get(constants.KEY_STEREO_CALIB_P2) is not None:
+            # import ipdb
+            # ipdb.set_trace()
+            p2 = sample[constants.KEY_STEREO_CALIB_P2]
+            # K, T = geometry_utils.decompose_matrix(p2)
+            # K[0, :] = K[0, :] * image_scale[1]
+            # K[1, :] = K[1, :] * image_scale[0]
+            # K[2, 2] = 1
+            # KT = np.dot(K, T)
 
-        #  p2 = np.zeros((3, 4))
-        #  # assign back
-        #  p2[:3, :3] = K
-        #  p2[:, 3] = KT
-        #  sample[constants.KEY_STEREO_CALIB_P2] = p2
+            # new_p2 = np.zeros((3, 4)).astype(p2.dtype)
+            # # assign back
+            # new_p2[:3, :3] = K
+            # new_p2[:, 3] = KT
+            new_p2 = ProjectMatrixTransform.resize(p2, image_scale)
+            sample[constants.KEY_STEREO_CALIB_P2] = new_p2
 
         return sample
 

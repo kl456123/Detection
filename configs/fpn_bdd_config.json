@@ -218,7 +218,7 @@
             "weight_decay_bias":0,
             "weight_decay":0,
             "momentum": 0.9,
-            "type": "sgd",
+            "type": "adam",
             "eps":1e-8
         },
         "rng_seed": 3,

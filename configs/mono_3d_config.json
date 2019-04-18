@@ -2,13 +2,13 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 2,
-            "num_workers": 2,
+            "batch_size": 16,
+            "num_workers": 32,
             "shuffle": true
         },
         "dataset_config": {
             "type":"mono_3d_kitti",
-            "classes":["Car", "Pedestrian"],
+            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
             "dataset_file": "data/train.txt",
             "root_path": "/data"
@@ -17,6 +17,10 @@
         "transform_config":[
             {"type":"to_pil"},
             {"type":"random_hsv"
+            }, {
+            "type": "random_brightness"
+            }, {
+            "type": "random_horizontal_flip"
             },{
             "type":"fix_shape_resize",
             "size":[384, 1280]
@@ -53,10 +57,7 @@
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
         "class_agnostic": true,
-        "classes": [
-            "Car",
-            "Pedestrian"
-        ],
+        "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
@@ -73,7 +74,7 @@
         },
         "dataset_config": {
             "type":"mono_3d_kitti",
-            "classes":["Car", "Pedestrian"],
+            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
             "dataset_file": "data/val.txt",
             "root_path": "/data"
@@ -82,8 +83,8 @@
         "transform_config":[
             {"type":"to_pil"},
             {
-            "type":"fix_shape_resize",
-            "size":[384, 1280]
+                "type":"fix_shape_resize",
+                "size":[384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -103,10 +104,7 @@
     "model_config": {
         "class_agnostic": true,
         "num_stages":1,
-        "classes": [
-            "Car",
-            "Pedestrian"
-        ],
+        "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
         "target_generator_config": [{
             "similarity_calc_config": {
                 "type": "center"
@@ -134,10 +132,7 @@
             "separate_feat":false,
             "use_cascade":true,
             "class_agnostic": true,
-            "classes": [
-                "Car",
-                "Pedestrian"
-            ],
+            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
             "img_channels": 3,
             "pretrained_model": "",
             "pretrained": true
@@ -177,14 +172,14 @@
                 "similarity_calc_config": {
                     "type": "center"
                 },
-                "fg_thresh": 0.3,
+                "fg_thresh": 0.7,
                 "bg_thresh": 0.3,
                 "coder_config": {
                     "type": "center",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "bipartitle"
+                    "type": "argmax"
                 },
                 "sampler_config": {
                     "num_samples":512,

@@ -10,6 +10,7 @@ KEY_IMAGE_INFO = 'image_info'
 KEY_NUM_INSTANCES = 'num_instances'
 
 KEY_STEREO_CALIB_P2 = 'stereo_calib_p2'
+KEY_STEREO_CALIB_P2_ORIG = 'stereo_calib_p2_orig'
 
 # logger config key
 KEY_LOGGER_NAME = 'logger_name'
@@ -33,6 +34,7 @@ KEY_CLASSES = 'classes'
 KEY_KEYPOINTS = 'keypoints'
 KEY_ORIENTS = 'orients'
 KEY_ORIENTS_V2 = 'orients_v2'
+KEY_ORIENTS_V3 = 'orients_v3'
 KEY_DIMS = 'dims'
 
 # key of stats

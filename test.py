@@ -27,22 +27,16 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
     parser.add_argument(
-        '--cfg',
-        dest='cfg_file',
-        help='optional config file',
-        default='cfgs/vgg16.yml',
-        type=str)
-    parser.add_argument(
-        '--set',
-        dest='set_cfgs',
-        help='set config keys',
-        default=None,
-        nargs=argparse.REMAINDER)
-    parser.add_argument(
         '--load_dir',
         dest='load_dir',
         help='directory to load models',
         default="/srv/share/jyang375/models",
+        type=str)
+    parser.add_argument(
+        '--calib_file',
+        dest='calib_file',
+        help='calibration file using kitti format',
+        default='',
         type=str)
     parser.add_argument(
         '--cuda', dest='cuda', help='whether use CUDA', action='store_true')
@@ -76,6 +70,12 @@ def parse_args():
         '--img_path',
         dest='img_path',
         help='path to image',
+        default='',
+        type=str)
+    parser.add_argument(
+        '--img_dir',
+        dest='img_dir',
+        help='img directory',
         default='',
         type=str)
     parser.add_argument(
@@ -147,7 +147,7 @@ def test(config, logger):
     else:
         logger.warning('dir {} exist already!'.format(eval_out))
 
-    #restore from random or checkpoint
+    # restore from random or checkpoint
     restore = True
     # two methods to load model
     # 1. load from any other dirs,it just needs config and model path
@@ -241,13 +241,22 @@ def generate_config(args, logger):
         dataset_config['dataset_file'] = None
         dataset_config['demo_file'] = args.img_path
 
+    if args.img_dir:
+        dataset_config = data_config['dataset_config']
+        # disable dataset file,just use image directly
+        dataset_config['dataset_file'] = None
+        dataset_config['img_dir'] = args.img_dir
+    if args.calib_file:
+        dataset_config = data_config['dataset_config']
+        dataset_config['calib_file'] = args.calib_file
+
     return config
 
 
 if __name__ == '__main__':
     args = parse_args()
     # first setup logger
-    logger = setup_logger('detection')
+    logger = setup_logger()
 
     config = generate_config(args, logger)
     test(config, logger)

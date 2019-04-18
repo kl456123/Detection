@@ -13,6 +13,7 @@ from utils.registry import DATASETS
 @DATASETS.register('coco')
 class CocoDataset(DetDataset):
     def __init__(self, config, transform=None, training=True):
+        super().__init__(training)
         # root path of dataset
         self._root_path = os.path.join(config['root_path'])
         self._data_path = os.path.join(self._root_path, config['data_path'])

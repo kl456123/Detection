@@ -3,9 +3,8 @@
 import os
 import argparse
 
-#  img_dir = '/data/object/training/image_2'
-#  img_dir = '/data/liangxiong/COCO2017/val2017'
-img_dir = '/data/bdd/bdd100k/images/100k/val/'
+img_dir = '/data/object/training/image_2'
+# img_dir = '/data/liangxiong/COCO2017/val2017'
 kitti_dir = 'results/data/'
 anchors_dir = 'results/anchors/'
 rois_dir = 'results/rois/'
@@ -20,7 +19,7 @@ def vis_all(kitti_dir, title='test', dis_lbl=False, resume=None):
         else:
             resume = None
         print('current image idx: {}'.format(sample_idx))
-        img_path = os.path.join(img_dir, '{}.jpg'.format(sample_idx))
+        img_path = os.path.join(img_dir, '{}.png'.format(sample_idx))
         kitti_path = os.path.join(kitti_dir, '{}.txt'.format(sample_idx))
         if dis_lbl:
             lbl_path = os.path.join(lbl_dir, '{}.txt'.format(sample_idx))

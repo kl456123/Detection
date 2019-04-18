@@ -35,24 +35,24 @@ class Saver():
         for name, module in list(params_dict.items()):
             if name in checkpoint:
                 if isinstance(module, torch.nn.parallel.DataParallel):
-                    module.module.load_state_dict(checkpoint[name])
-                elif hasattr(module, 'load_state_dict'):
-                    module.load_state_dict(checkpoint[name])
-                    # module_dict = module.state_dict()
-
-                    # checkpoint_dict = {
-                        # k: v
-                        # for k, v in checkpoint[name].items()
-                        # if k in module_dict
-                    # }
-                    #  import ipdb
-                    #  ipdb.set_trace()
-                    #  if hasattr(module, 'unloaded_parameters'):
-                    #  for unloaded_param in module.unloaded_parameters():
-                    #  checkpoint_dict.pop(unloaded_param, None)
-                    # module_dict.update(checkpoint_dict)
-                    # module.load_state_dict(module_dict)
+                    # module.module.load_state_dict(checkpoint[name])
+                    module = module.module
+                if hasattr(module, 'load_state_dict'):
                     # module.load_state_dict(checkpoint[name])
+                    module_dict = module.state_dict()
+
+                    checkpoint_dict = {}
+                    for k, v in checkpoint[name].items():
+                        if k in module_dict:
+                            if module_dict[k].shape != v.shape:
+                                self.logger.warning(
+                                    'size mismatch for {} shape({}/{}), ignore it by default!'.
+                                    format(k, module_dict[k].shape, v.shape))
+                            else:
+                                checkpoint_dict[k] = v
+
+                    module_dict.update(checkpoint_dict)
+                    module.load_state_dict(module_dict)
                 else:
                     params_dict[name] = checkpoint[name]
             else:
