@@ -309,12 +309,10 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
 
     num = dets_3d.shape[0]
 
-    # ry
-    # import ipdb
-    # ipdb.set_trace()
-    #  lines = dets_3d[:, 3:]
+
     lines = generate_side_points(dets_2d, dets_3d[:, 3:])
     ry = twopoints2direction(lines, p2)
+
     # ry = np.zeros_like(dets_3d[:, 0])
     # ry[...] = np.pi/2
     # ry = fourpoints2direction(lines)
@@ -329,13 +327,13 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     # C_3d = calculate_location(dets_3d, p2)
 
     # ry[...] = 1.57
-    # ry_local = dets_3d[:, -1]
+    #  ry_local = dets_3d[:, -1]
     # # compute global angle
     # # center of 2d
-    # center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
-    # center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
-    # center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
-    # ry = compute_global_angle(center_2d, p2, ry_local)
+    #  center_2d_x = (dets_2d[:, 0] + dets_2d[:, 2]) / 2
+    #  center_2d_y = (dets_2d[:, 1] + dets_2d[:, 3]) / 2
+    #  center_2d = np.stack([center_2d_x, center_2d_y], axis=-1)
+    #  ry = compute_global_angle(center_2d, p2, ry_local)
     C_3d = None
     #  ry = ry_local
 
@@ -518,6 +516,8 @@ def match(boxes_2d, corners, trans_3d, r, p, thresh=None):
         trans_3d: shape(64,3)
         ry: shape(3, 3)
     """
+    import ipdb
+    ipdb.set_trace()
     corners_3d = np.dot(r, corners.T)
     trans_3d = np.repeat(np.expand_dims(trans_3d.T, axis=1), 8, axis=1)
     corners_3d = corners_3d.transpose((1, 2, 0)) + trans_3d

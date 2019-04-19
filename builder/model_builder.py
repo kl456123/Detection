@@ -25,7 +25,7 @@
 # from core.models.three_iou_faster_rcnn_model_org_ohem_second import OrgOHEMThreeIoUSecondStageFasterRCNN
 # from core.models.fpn_faster_rcnn_model import FPNFasterRCNN
 # from core.models.mono_3d import Mono3DFasterRCNN
-# from core.models.mono_3d_angle import Mono3DAngleFasterRCNN
+from core.models.mono_3d_angle import Mono3DAngleFasterRCNN
 # from core.models.mono_3d_angle_simpler import Mono3DAngleSimplerFasterRCNN
 # from core.models.mono_3d_simpler import Mono3DSimplerFasterRCNN
 # from core.models.mono_3d_angle_new import Mono3DAngleNewFasterRCNN
@@ -36,7 +36,7 @@
 # from core.models.oft_4c_model import OFT4CModel
 # from core.models.mono_3d_final import Mono3DFinalFasterRCNN
 from core.models.mono_3d_final_plus import Mono3DFinalPlusFasterRCNN
-
+from core.models.mono_3d_final_angle import Mono3DFinalAngleFasterRCNN
 
 # class ModelBuilder(object):
 # def __init__(self, model_config):
@@ -131,6 +131,8 @@ def build(model_config, training=True):
     elif net_arch == 'pr_net':
         from core.models.pr_model import PRModel
         fasterRCNN = PRModel(model_config)
+    elif net_arch == 'mono_3d_final_angle':
+        fasterRCNN = Mono3DFinalAngleFasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

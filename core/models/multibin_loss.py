@@ -20,7 +20,7 @@ class MultiBinLoss(nn.Module):
         interval = 2 * math.pi / self.num_bins
 
         # bin centers
-        bin_centers = torch.arange(0, self.num_bins) * interval
+        bin_centers = torch.arange(0, self.num_bins).float() * interval
         bin_centers = bin_centers.cuda()
         bin_centers += self.offset
         cond = bin_centers > math.pi
@@ -52,6 +52,8 @@ class MultiBinLoss(nn.Module):
             preds: shape(N,num*4)
             targets: shape(N,1)
         """
+        #  import ipdb
+        #  ipdb.set_trace()
         preds = preds.contiguous().view(-1, self.num_bins, 4)
         # targets[targets < 0] = targets[targets < 0] + 2 * math.pi
 

@@ -192,11 +192,19 @@ rm results/data/*
     # --checkepoch 1 \
     # --data bdd
 
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net mono_3d_final_angle \
+    # --load_dir /data/object/liangxiong/coco_pretrained_angle \
+    # --checkpoint 89 \
+    # --checkepoch 32 \
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
+
 CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     --net mono_3d_final_plus \
     --load_dir /data/object/liangxiong/coco_pretrained_normalized \
-    --checkpoint 2836 \
-    --checkepoch 45 \
+    --checkpoint 1798 \
+    --checkepoch 43 \
     --img_dir /data/dm202_3w/left_img \
     --calib_file ./000004.txt
     # --img_dir /data/pengwu/seq/keyframes \

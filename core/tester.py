@@ -4,7 +4,8 @@ import time
 from torch.autograd import Variable
 from lib.model.roi_layers import nms
 from utils.visualize import save_pkl, visualize_bbox
-from utils.postprocess import mono_3d_postprocess_angle, mono_3d_postprocess_bbox, mono_3d_postprocess_depth
+# from utils.postprocess import mono_3d_postprocess_angle, mono_3d_postprocess_bbox, mono_3d_postprocess_depth
+from utils.parallel_postprocess import mono_3d_postprocess_bbox
 from utils.kitti_util import proj_3dTo2d
 import numpy as np
 import torch
@@ -35,6 +36,7 @@ def oft_test(eval_config, data_loader, model):
     # import ipdb
     # ipdb.set_trace()
     num_samples = len(data_loader)
+    end_time = 0
     for i, data in enumerate(data_loader):
         img_file = data['img_name']
         start_time = time.time()
@@ -219,11 +221,14 @@ def mono_test(eval_config, data_loader, model):
     Only one image in batch is supported
     """
     num_samples = len(data_loader)
+    end_time = 0
     for i, data in enumerate(data_loader):
+        data_time = time.time() - end_time
         img_file = data['img_name']
         start_time = time.time()
         pred_boxes, scores, rois, anchors, rcnn_3d = im_detect(
             model, to_cuda(data), eval_config, im_orig=data['img_orig'])
+        det_time = time.time() - start_time
 
         # import ipdb
         # ipdb.set_trace()
@@ -252,6 +257,7 @@ def mono_test(eval_config, data_loader, model):
         for j in range(1, len(classes) + 1):
             inds = torch.nonzero(scores[:, j] > thresh).view(-1)
             # if there is det
+            post_start_time = time.time()
             if inds.numel() > 0:
                 cls_scores = scores[:, j][inds]
 
@@ -311,6 +317,7 @@ def mono_test(eval_config, data_loader, model):
 
                 # use gt
                 use_gt = False
+                post_time = 0
 
                 if use_gt:
                     #  import ipdb
@@ -370,6 +377,8 @@ def mono_test(eval_config, data_loader, model):
                     # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
                     rcnn_3d_dets, location = mono_3d_postprocess_bbox(
                         rcnn_3d_dets, cls_dets, p2)
+
+                    post_time = time.time() - post_start_time
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
                     # rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
                     # rcnn_3d[:, 3:6] = location
@@ -383,6 +392,7 @@ def mono_test(eval_config, data_loader, model):
                 res_rois.append([])
                 res_anchors.append([])
                 dets_3d.append([])
+
 
         duration_time = time.time() - start_time
 
@@ -400,8 +410,12 @@ def mono_test(eval_config, data_loader, model):
         # eval_config['eval_out_anchors'])
 
         sys.stdout.write(
-            '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
+            '\r{}/{},duration: {}, det_time: {}, post_time: {}, data_time: {}'.
+            format(i + 1, num_samples, duration_time, det_time, post_time,
+                   data_time))
         sys.stdout.flush()
+
+        end_time = time.time()
 
 
 def mono_test_keypoint(eval_config, data_loader, model):

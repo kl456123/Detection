@@ -386,8 +386,6 @@ def compute_local_angle(location, ry):
     # [0, pi]
     alpha = np.arctan2(location[2], location[0])
     ry_local = ry - (-alpha)
-    if ry_local > np.pi:
-        ry_local -= 2 * np.pi
     return ry_local
 
 

@@ -7,6 +7,7 @@ from torchvision import models
 from core.model import Model
 import copy
 import os
+from .resnet18_pruned import resnet18
 
 
 class ResNetFeatureExtractor(Model):
@@ -14,8 +15,21 @@ class ResNetFeatureExtractor(Model):
         pass
 
     def init_param(self, model_config):
+        net_arch_map = {
+            'res50': 'resnet50-19c8e357.pth',
+            'res18': 'resnet18-5c106cde.pth',
+            'res18_pruned': 'resnet18_pruned0.5.pth'
+        }
+        self.model_map = {
+            'res50': models.resnet50,
+            'res18': models.resnet18,
+            'res18_pruned': resnet18
+        }
+        self.net_arch = model_config.get('net_arch', 'res50')
+        model_name = net_arch_map[self.net_arch]
         #  self.model_path = 'data/pretrained_model/resnet50-19c8e357.pth'
-        self.model_path = os.path.join(model_config['pretrained_path'], 'resnet50-19c8e357.pth')
+        self.model_path = os.path.join(model_config['pretrained_path'],
+                                       model_name)
         self.dout_base_model = 1024
         self.pretrained = model_config['pretrained']
         self.img_channels = model_config['img_channels']
@@ -25,7 +39,7 @@ class ResNetFeatureExtractor(Model):
         self.separate_feat = model_config.get('separate_feat')
 
     def init_modules(self):
-        resnet = models.resnet50()
+        resnet = self.model_map[self.net_arch]()
         # self.model_path = '/node01/jobs/io/pretrained/resnet50-19c8e357.pth'
         if self.training and self.pretrained:
             print(("Loading pretrained weights from %s" % (self.model_path)))
@@ -36,10 +50,16 @@ class ResNetFeatureExtractor(Model):
                 if k in resnet.state_dict()
             })
 
-        base_features = [
-            resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,
-            resnet.layer1, resnet.layer2, resnet.layer3
-        ]
+        if self.net_arch == 'res18_pruned':
+            base_features = [
+                resnet.conv1, resnet.bn1, resnet.maxpool, resnet.layer1,
+                resnet.layer2, resnet.layer3
+            ]
+        else:
+            base_features = [
+                resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,
+                resnet.layer1, resnet.layer2, resnet.layer3
+            ]
 
         if self.separate_feat:
             base_features = base_features[:-1]

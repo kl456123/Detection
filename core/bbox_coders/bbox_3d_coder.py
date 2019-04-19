@@ -326,24 +326,19 @@ class BBox3DCoder(object):
         Args:
             targets: shape(N, 3)
         """
-
-        # dims
-        h_3d_mean = 1.67
-        w_3d_mean = 1.87
-        l_3d_mean = 3.7
-
-        h_3d_std = 1
-        w_3d_std = 1
-        l_3d_std = 1
-
-        h_3d = targets[:, 0] * h_3d_std + h_3d_mean
-        w_3d = targets[:, 1] * w_3d_std + w_3d_mean
-        l_3d = targets[:, 2] * l_3d_std + l_3d_mean
+        bg_mean_dims = torch.zeros_like(self.mean_dims[:, -1:, :])
+        mean_dims = torch.cat([bg_mean_dims, self.mean_dims], dim=1).float()
+        # assigned_mean_dims = mean_dims[0][pred_labels].float()
+        std_dims = torch.ones_like(mean_dims)
+        #  targets = (dims[:, :3] - assigned_mean_dims) / assigned_std_dims
+        bbox = targets[:, :-2].view(targets.shape[0], -1,
+                                    3) * std_dims + mean_dims
+        bbox = bbox.view(targets.shape[0], -1)
 
         # ry
         # sin = targets[:, -2]
         # cos = targets[:, -1]
-        theta = get_angle(targets[:, 4], targets[:, 3])
+        theta = get_angle(targets[:, -1], targets[:, -2])
         if bin_centers is not None:
             theta = bin_centers + theta
             # theta = bin_centers
@@ -361,5 +356,6 @@ class BBox3DCoder(object):
         # ry[cond & cond_pos] = ry[cond & cond_pos] + math.pi
         # ry[cond & cond_neg] = ry[cond & cond_neg] - math.pi
 
-        bbox = torch.stack([h_3d, w_3d, l_3d, theta], dim=-1)
-        return bbox
+        return torch.cat([bbox, theta.unsqueeze(-1)], dim=-1)
+        # bbox = torch.stack([h_3d, w_3d, l_3d, theta], dim=-1)
+        # return bbox

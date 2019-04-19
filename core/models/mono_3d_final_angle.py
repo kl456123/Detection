@@ -25,7 +25,7 @@ from utils.visualizer import FeatVisualizer
 import functools
 
 
-class Mono3DFinalPlusFasterRCNN(Model):
+class Mono3DFinalAngleFasterRCNN(Model):
     def forward(self, feed_dict):
         self.target_assigner.bbox_coder_3d.mean_dims = feed_dict['mean_dims']
         prediction_dict = {}
@@ -73,10 +73,23 @@ class Mono3DFinalPlusFasterRCNN(Model):
         prediction_dict['rcnn_3d'] = rcnn_3d
 
         if not self.training:
-            _, pred_labels = rcnn_cls_probs.max(dim=-1)
-            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
-                rcnn_3d, rois_batch[0, :, 1:])
-
+            if self.class_agnostic_3d:
+                orient = rcnn_3d[:, 3:]
+                dims = rcnn_3d[:, :3]
+            else:
+                orient = rcnn_3d[:, 3 * self.n_classes:]
+                dims = rcnn_3d[:, :3 * self.n_classes]
+            angles = orient.view(-1, self.num_bins, 4)
+            angles_cls = F.softmax(angles[:, :, :2], dim=-1)
+            _, angles_cls_argmax = torch.max(angles_cls[:, :, 1], dim=-1)
+            row = torch.arange(
+                0, angles_cls_argmax.shape[0]).type_as(angles_cls_argmax)
+            angles_oritations = angles[:, :, 2:][row, angles_cls_argmax]
+            rcnn_3d = torch.cat([dims, angles_oritations], dim=-1)
+            #  import ipdb
+            #  ipdb.set_trace()
+            rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_angle(
+                rcnn_3d, self.rcnn_3d_loss.bin_centers[angles_cls_argmax])
             prediction_dict['rcnn_3d'] = rcnn_3d
 
         return prediction_dict
@@ -106,12 +119,15 @@ class Mono3DFinalPlusFasterRCNN(Model):
         elif self.pooling_mode == 'deformable_psalign':
             raise NotImplementedError('have not implemented yet!')
         # self.rcnn_cls_pred = nn.Conv2d(2048, self.n_classes, 3, 1, 1)
-        self.rcnn_cls_preds = nn.Linear(self.in_channels, self.n_classes)
-        if self.class_agnostic:
-            self.rcnn_bbox_preds = nn.Linear(self.in_channels, 4)
+        self.rcnn_cls_preds = nn.Linear(2048, self.n_classes)
+        if self.reduce:
+            in_channels = 2048
         else:
-            self.rcnn_bbox_preds = nn.Linear(self.in_channels, 4 *
-                                             self.n_classes)
+            in_channels = 2048 * 4 * 4
+        if self.class_agnostic:
+            self.rcnn_bbox_preds = nn.Linear(in_channels, 4)
+        else:
+            self.rcnn_bbox_preds = nn.Linear(in_channels, 4 * self.n_classes)
 
         # loss module
         if self.use_focal_loss:
@@ -124,14 +140,15 @@ class Mono3DFinalPlusFasterRCNN(Model):
 
         # self.rcnn_3d_pred = nn.Linear(c, 3 + 4 + 11 + 2 + 1)
         if self.class_agnostic_3d:
-            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 + 4)
+            self.rcnn_3d_pred = nn.Linear(in_channels, 3 + 4 * self.num_bins)
         else:
-            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 * self.n_classes + 4)
+            self.rcnn_3d_pred = nn.Linear(
+                in_channels, 3 * self.n_classes + 4 * self.num_bins)
 
-        self.rcnn_3d_loss = OrientationLoss(split_loss=True)
+        #  self.rcnn_3d_loss = OrientationLoss(split_loss=True)
+        self.rcnn_3d_loss = MultiBinLoss(num_bins=self.num_bins)
 
     def init_param(self, model_config):
-        self.in_channels = model_config.get('ndin', 2048)
         classes = model_config['classes']
         self.classes = classes
         self.n_classes = len(classes) + 1
@@ -179,18 +196,22 @@ class Mono3DFinalPlusFasterRCNN(Model):
     def pre_subsample(self, prediction_dict, feed_dict):
         rois_batch = prediction_dict['rois_batch']
         gt_boxes = feed_dict['gt_boxes']
-        # gt_boxes_proj = feed_dict['gt_boxes_proj']
         gt_labels = feed_dict['gt_labels']
+        #  gt_boxes_3d = feed_dict['coords']
+        #  dims_2d = feed_dict['dims_2d']
+        # use local angle
+        #  oritations = feed_dict['local_angle_oritation']
+        local_angle = feed_dict['local_angle']
 
         # shape(N,7)
         gt_boxes_3d = feed_dict['gt_boxes_3d']
 
         # orient
-        cls_orient = torch.unsqueeze(feed_dict['cls_orient'], dim=-1).float()
-        reg_orient = feed_dict['reg_orient']
-        orient = torch.cat([cls_orient, reg_orient], dim=-1)
 
-        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], orient], dim=-1)
+        # here just concat them
+        # dims and their projection
+
+        gt_boxes_3d = torch.cat([gt_boxes_3d[:, :, :3], local_angle], dim=-1)
 
         ##########################
         # assigner
@@ -198,7 +219,7 @@ class Mono3DFinalPlusFasterRCNN(Model):
         rcnn_cls_targets, rcnn_reg_targets,\
             rcnn_cls_weights, rcnn_reg_weights,\
             rcnn_reg_targets_3d, rcnn_reg_weights_3d = self.target_assigner.assign(
-            rois_batch[:, :, 1:], gt_boxes, gt_boxes_3d, gt_labels)
+            rois_batch[:, :, 1:], gt_boxes, gt_boxes_3d, gt_labels )
 
         ##########################
         # subsampler
@@ -221,9 +242,7 @@ class Mono3DFinalPlusFasterRCNN(Model):
         num_reg_coeff = (rcnn_reg_weights > 0).sum(dim=-1)
         # check
         assert num_cls_coeff, 'bug happens'
-        # assert num_reg_coeff, 'bug happens'
-        if num_reg_coeff == 0:
-            num_reg_coeff = torch.ones_like(num_reg_coeff)
+        assert num_reg_coeff, 'bug happens'
 
         prediction_dict[
             'rcnn_cls_weights'] = rcnn_cls_weights / num_cls_coeff.float()
@@ -317,41 +336,53 @@ class Mono3DFinalPlusFasterRCNN(Model):
             dims_pred, rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
 
         # angles
-        res = self.rcnn_3d_loss(orient_pred, rcnn_reg_targets_3d[:, 3:6])
-        for res_loss_key in res:
-            tmp = res[res_loss_key] * rcnn_reg_weights_3d
-            res[res_loss_key] = tmp.sum(dim=-1)
-        loss_dict.update(res)
+        rcnn_angle_loss, angle_tp_mask = self.rcnn_3d_loss(
+            orient_pred, rcnn_reg_targets_3d[:, 3:])
+        # angles
+        #  res = self.rcnn_3d_loss(rcnn_3d[:, 3:], rcnn_reg_targets_3d[:, 3:6])
+        #  for res_loss_key in res:
+        #  tmp = res[res_loss_key] * rcnn_reg_weights_3d
+        #  res[res_loss_key] = tmp.sum(dim=-1)
+        #  loss_dict.update(res)
 
         rcnn_3d_loss = rcnn_3d_loss_dims * rcnn_reg_weights_3d
         rcnn_3d_loss = rcnn_3d_loss.sum(dim=-1)
 
+        rcnn_angle_loss = rcnn_angle_loss * rcnn_reg_weights_3d
+        rcnn_angle_loss = rcnn_angle_loss.sum(dim=-1)
+
         loss_dict['rcnn_3d_loss'] = rcnn_3d_loss
+        loss_dict['rcnn_angle_loss'] = rcnn_angle_loss
 
         # stats of orients
-        cls_orient_preds = rcnn_3d[:, 3:5]
-        cls_orient = rcnn_reg_targets_3d[:, 3]
-        _, cls_orient_preds_argmax = torch.max(cls_orient_preds, dim=-1)
-        orient_tp_mask = cls_orient.type_as(
-            cls_orient_preds_argmax) == cls_orient_preds_argmax
-        mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
-        orient_tp_mask = orient_tp_mask[mask]
-        orient_tp_num = orient_tp_mask.int().sum().item()
-        orient_all_num = orient_tp_mask.numel()
+        angle_tp_mask = angle_tp_mask[rcnn_reg_weights_3d > 0]
+        angles_tp_num = angle_tp_mask.int().sum().item()
+        angles_all_num = angle_tp_mask.numel()
+        #  cls_orient_preds = rcnn_3d[:, 3:5]
+        #  cls_orient = rcnn_reg_targets_3d[:, 3]
+        #  _, cls_orient_preds_argmax = torch.max(cls_orient_preds, dim=-1)
+        #  orient_tp_mask = cls_orient.type_as(
+        #  cls_orient_preds_argmax) == cls_orient_preds_argmax
+        #  mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
+        #  orient_tp_mask = orient_tp_mask[mask]
+        #  orient_tp_num = orient_tp_mask.int().sum().item()
+        #  orient_all_num = orient_tp_mask.numel()
 
         # gt_boxes_proj = feed_dict['gt_boxes_proj']
 
         self.target_assigner.stat.update({
+            'cls_orient_2s_all_num': angles_all_num,
+            'cls_orient_2s_tp_num': angles_tp_num
             # 'angle_num_tp': torch.tensor(0),
             # 'angle_num_all': 1,
 
             # stats of orient
-            'orient_tp_num': orient_tp_num,
+            #  'orient_tp_num': orient_tp_num,
             # 'orient_tp_num2': orient_tp_num2,
             #  'orient_tp_num3': orient_tp_num3,
             # 'orient_all_num3': orient_all_num3,
             # 'orient_pr': orient_pr,
-            'orient_all_num': orient_all_num,
+            #  'orient_all_num': orient_all_num,
             #  'orient_all_num3': orient_all_num3,
             # 'orient_tp_num4': orient_tp_num4,
             # 'orient_all_num4': orient_all_num4,

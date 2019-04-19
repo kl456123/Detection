@@ -95,7 +95,7 @@ class Mono3DKittiDataset(DetDataset):
             center_orients = transform_sample['center_orient']
 
             # angles_camera = transform_sample['angles_camera']
-            distances = transform_sample['distance']
+            # distances = transform_sample['distance']
             d_ys = transform_sample['d_y']
             gt_boxes_2d_ground_rect = transform_sample[
                 'gt_boxes_2d_ground_rect']
@@ -126,7 +126,7 @@ class Mono3DKittiDataset(DetDataset):
             r_2ds = torch.zeros((1, 1))
             cls_orient_4s = torch.zeros((1, 1))
             center_orients = torch.zeros((1, 1))
-            distances = torch.zeros((1, 3))
+            # distances = torch.zeros((1, 3))
             # angles_camera = torch.zeros((1, 2))
             d_ys = torch.zeros((1, 1))
             gt_boxes_2d_ground_rect = torch.zeros((1, 4))
@@ -183,7 +183,7 @@ class Mono3DKittiDataset(DetDataset):
         training_sample['orig_p2'] = transform_sample['orig_p2']
 
         # training_sample['angles_camera'] = angles_camera
-        training_sample['distance'] = distances
+        # training_sample['distance'] = distances
         training_sample['d_y'] = d_ys
 
         if self.use_rect_v2:
