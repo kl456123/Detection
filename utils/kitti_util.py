@@ -531,6 +531,19 @@ def get_cls_orient_4(line):
             return cls
 
 
+def modify_cls_orient(cls_orient, left_side, right_side):
+    """
+    For special case, classifiy it from common case
+    """
+    left_dir = (left_side[0] - left_side[1])
+    right_dir = (right_side[0] - right_side[1])
+    cond = left_dir[0] * right_dir[0] < 0
+    if cond:
+        return 2
+    else:
+        return cls_orient
+
+
 def truncate_box(box_2d, line, normalize=True):
     """
     Args:

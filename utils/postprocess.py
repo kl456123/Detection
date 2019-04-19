@@ -215,6 +215,8 @@ def generate_side_points(dets_2d, orient, normalize=True):
         side_points: shape(N,4)
     """
     cls_orient_argmax = orient[:, 0].astype(np.int32)
+    abnormal_cond = cls_orient_argmax == 2
+    cls_orient_argmax[abnormal_cond] = 0
 
     reg_orient = orient[:, 1:3]
     if normalize:
@@ -223,6 +225,8 @@ def generate_side_points(dets_2d, orient, normalize=True):
         wh = dets_2d[:, 2:4] - dets_2d[:, :2] + 1
         reg_orient = reg_orient * wh
 
+    abnormal_case = np.concatenate(
+        [dets_2d[:, :2], dets_2d[:, :2] + reg_orient], axis=-1)
     side_points = np.zeros((orient.shape[0], 4))
 
     # cls_orient_argmax = np.argmax(cls_orient, axis=-1)
@@ -242,6 +246,8 @@ def generate_side_points(dets_2d, orient, normalize=True):
         axis=-1)
     side_points[:, 1] = dets_2d[:, 3]
     side_points[:, 0] = selected_x[row_inds, cls_orient_argmax]
+
+    side_points[abnormal_cond] = abnormal_case[abnormal_cond]
     return side_points
 
 
@@ -308,7 +314,6 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     T = np.dot(np.linalg.inv(K), KT)
 
     num = dets_3d.shape[0]
-
 
     lines = generate_side_points(dets_2d, dets_3d[:, 3:])
     ry = twopoints2direction(lines, p2)

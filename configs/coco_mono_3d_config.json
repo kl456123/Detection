@@ -186,7 +186,7 @@
             "nms_thresh": 0.7,
             "num_bbox_samples": 500,
             "num_cls_samples": 2000,
-            "post_nms_topN": 500,
+            "post_nms_topN": 1000,
             "pre_nms_topN": 12000,
             "rpn_batch_size": 1024,
             "sampler_config": {

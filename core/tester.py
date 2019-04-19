@@ -394,7 +394,7 @@ def mono_test(eval_config, data_loader, model):
                 dets_3d.append([])
 
 
-        duration_time = time.time() - start_time
+        duration_time = time.time() - end_time
 
         # import ipdb
         # ipdb.set_trace()

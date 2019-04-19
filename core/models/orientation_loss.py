@@ -22,7 +22,7 @@ class OrientationLoss(nn.Module):
 
         # cls loss
         cls_orient = targets[:, 0].long()
-        cls_preds = preds[:, :2]
+        cls_preds = preds[:, :3]
         cls_loss = self.cls_loss(cls_preds, cls_orient)
 
         # depth_ind_targets = targets[:, 3].long()
@@ -42,7 +42,7 @@ class OrientationLoss(nn.Module):
 
         # reg loss
         reg_orient = torch.cat([targets[:, 1:3]], dim=-1)
-        reg_preds = torch.cat([preds[:, 2:4]], dim=-1)
+        reg_preds = torch.cat([preds[:, 3:5]], dim=-1)
         reg_loss = self.reg_loss(reg_preds, reg_orient)
         if self.split_loss:
             loss_dict = {

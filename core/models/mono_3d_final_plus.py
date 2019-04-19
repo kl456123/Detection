@@ -124,9 +124,9 @@ class Mono3DFinalPlusFasterRCNN(Model):
 
         # self.rcnn_3d_pred = nn.Linear(c, 3 + 4 + 11 + 2 + 1)
         if self.class_agnostic_3d:
-            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 + 4)
+            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 + 5)
         else:
-            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 * self.n_classes + 4)
+            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 * self.n_classes + 5)
 
         self.rcnn_3d_loss = OrientationLoss(split_loss=True)
 

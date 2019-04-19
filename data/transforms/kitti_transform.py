@@ -14,6 +14,7 @@ from ..kitti_helper import process_center_coords
 from utils.kitti_util import get_gt_boxes_2d_ground_rect, get_gt_boxes_2d_ground_rect_v2
 from utils.kitti_util import encode_side_points, encode_bottom_points
 from utils.kitti_util import generate_keypoint_gt, get_center_side
+from utils.kitti_util import modify_cls_orient
 
 
 class Sample(object):
@@ -734,6 +735,7 @@ class Boxes3DTo2D(object):
             # center_side = get_center_side(corners_xy)
             # cls_orient, reg_orient = truncate_box(box_2d_proj, center_side)
             cls_orient, reg_orient = truncate_box(box_2d_proj, visible_side)
+            cls_orient = modify_cls_orient(cls_orient, left_side_points_2d, right_side_points_2d)
 
             cls_orients.append(cls_orient)
             reg_orients.append(reg_orient)

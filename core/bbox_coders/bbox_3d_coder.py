@@ -293,7 +293,7 @@ class BBox3DCoder(object):
         # assigned_mean_dims = mean_dims[0][pred_labels].float()
         std_dims = torch.ones_like(mean_dims)
         #  targets = (dims[:, :3] - assigned_mean_dims) / assigned_std_dims
-        bbox = targets[:, :-4].view(targets.shape[0], -1,
+        bbox = targets[:, :-5].view(targets.shape[0], -1,
                                     3) * std_dims + mean_dims
         bbox = bbox.view(targets.shape[0], -1)
         #  bbox = torch.stack([h_3d, w_3d, l_3d], dim=-1)
@@ -303,11 +303,11 @@ class BBox3DCoder(object):
         h = rois[:, 3] - rois[:, 1] + 1
 
         # cls orient
-        cls_orient = targets[:, 3:5]
+        cls_orient = targets[:, 3:6]
         cls_orient = F.softmax(cls_orient, dim=-1)
         cls_orient, cls_orient_argmax = torch.max(cls_orient, dim=-1)
 
-        reg_orient = targets[:, 5:7]
+        reg_orient = targets[:, 6:8]
 
         #  reg_orient[:, 0] = reg_orient[:, 0] * w
         #  reg_orient[:, 1] = reg_orient[:, 1] * h
