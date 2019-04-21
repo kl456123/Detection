@@ -35,6 +35,7 @@ KEY_KEYPOINTS = 'keypoints'
 KEY_ORIENTS = 'orients'
 KEY_ORIENTS_V2 = 'orients_v2'
 KEY_ORIENTS_V3 = 'orients_v3'
+KEY_REAR_SIDE = 'rear_side'
 KEY_DIMS = 'dims'
 
 # key of stats

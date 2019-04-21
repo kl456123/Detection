@@ -28,7 +28,7 @@ class KITTIDataset(DetDataset):
         if config.get('dataset_file') is not None:
             self.logger.info('use kitti dataset')
             self._dataset_file = config['dataset_file']
-            self._dataset_file = './data/demo.txt'
+            # self._dataset_file = './data/demo.txt'
             self.logger.info('use dataset_file: {}'.format(self._dataset_file))
             # set up dirs
             self._set_up_directories()

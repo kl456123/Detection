@@ -101,10 +101,17 @@ class Tester(object):
             scores = prediction[constants.KEY_CLASSES]
             boxes_2d = prediction[constants.KEY_BOXES_2D]
             dims = prediction[constants.KEY_DIMS]
-            orients = prediction[constants.KEY_ORIENTS_V3]
+            orients = prediction[constants.KEY_ORIENTS_V2]
             p2 = data[constants.KEY_STEREO_CALIB_P2_ORIG]
 
             batch_size = scores.shape[0]
+            scores = scores.view(-1, self.n_classes)
+            new_scores = torch.zeros_like(scores)
+            _, scores_argmax = scores.max(dim=-1)
+            row = torch.arange(0, scores_argmax.numel()).type_as(scores_argmax)
+            new_scores[row, scores_argmax] = scores[row, scores_argmax]
+            scores = new_scores.view(batch_size, -1, self.n_classes)
+
             #  if step == 6:
             #  import ipdb
             #  ipdb.set_trace()

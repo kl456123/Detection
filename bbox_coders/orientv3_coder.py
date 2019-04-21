@@ -33,6 +33,7 @@ class OrientsV3Coder(object):
         Returns:
             theta: shape(N, num)
         """
+        bin_centers = bin_centers.to('cuda')
         # get local angle first
         batch_size = orient_preds.shape[0]
         num = orient_preds.shape[1]

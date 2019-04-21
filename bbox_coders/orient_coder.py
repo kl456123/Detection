@@ -43,7 +43,7 @@ class OrientsCoder(object):
         return torch.stack(orients_batch, dim=0)
 
     @staticmethod
-    def decode_batch(orients, rpn_proposals, rcnn_proposals, p2):
+    def decode_batch(orients, rcnn_proposals, p2):
         """
         Note that rcnn_proposals also refers to boxes_3d_proj
         Args:
@@ -56,7 +56,6 @@ class OrientsCoder(object):
         cls_orients = F.softmax(cls_orients, dim=-1)
         _, cls_orients_argmax = torch.max(cls_orients, keepdim=True, dim=-1)
 
-        rpn_proposals_xywh = geometry_utils.torch_xyxy_to_xywh(rpn_proposals)
         rcnn_proposals_xywh = geometry_utils.torch_xyxy_to_xywh(rcnn_proposals)
         reg_orients = reg_orients * rcnn_proposals_xywh[:, :,2:]
 

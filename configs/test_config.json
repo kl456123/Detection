@@ -1,16 +1,15 @@
-
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 16,
-            "num_workers": 32,
+            "batch_size": 1,
+            "num_workers": 1,
             "shuffle": true
         },
         "dataset_config": {
-            "type":"kitti",
+            "type":"mono_3d_kitti",
             "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
-            "dataset_file": "data/trainval.txt",
+            "dataset_file": "data/demo.txt",
             "root_path": "/data"
         },
         "name": "kitti",
@@ -18,12 +17,8 @@
             {"type":"to_pil"},
             {"type":"random_hsv"
             },{"type":"random_brightness"},
-            {"type":"random_gaussian_blur"},
             {"type":"random_horizontal_flip"},
-            {
-                "type":"fix_shape_resize",
-                "size":[384, 1280]
-            },
+            
             {"type":"to_tensor"},
             {"type":"normalize",
                 "normal_mean": [
@@ -72,19 +67,16 @@
             "shuffle": false
         },
         "dataset_config": {
-            "type":"kitti",
+            "type":"mono_3d_kitti",
             "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
-            "dataset_file": "data/val.txt",
+            "dataset_file": "data/demo.txt",
             "root_path": "/data"
         },
         "name": "kitti",
         "transform_config":[
             {
                 "type": "to_pil"
-            }, {
-            "type": "fix_shape_resize",
-            "size": [384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -102,6 +94,7 @@
         ]
     },
     "model_config": {
+        "num_bins":2,
         "batch_size":512,
         "class_agnostic": true,
         "num_stages":1,
@@ -179,7 +172,7 @@
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "bipartitle"
+                    "type": "argmax"
                 },
                 "sampler_config": {
                     "num_samples":512,
@@ -201,16 +194,16 @@
         "use_focal_loss": true
     },
     "train_config": {
-        "num_iters":600000,
-        "checkpoint_interval": 4000,
+        "num_iters":1000,
+        "checkpoint_interval": 100,
         "clip_gradient": 10,
         "device_ids": [
             0
         ],
-        "disp_interval": 400,
+        "disp_interval": 100,
         "mGPUs": true,
         "optimizer_config": {
-            "base_lr": 0.02,
+            "base_lr": 0.001,
             "bias_lr_factor":1,
             "weight_decay_bias":0,
             "weight_decay":0,
@@ -226,7 +219,7 @@
             "milestones":[60000, 120000, 240000],
             "type": "multi_step",
             "warmup_method":"linear",
-            "warmup_iters":2000,
+            "warmup_iters":500,
             "warmup_factor":0.333
         },
         "start_epoch": 1

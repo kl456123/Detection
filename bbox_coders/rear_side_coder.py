@@ -7,9 +7,10 @@ import torch
 import torch.nn.functional as F
 from utils.visualize import visualize_bbox, read_img
 from utils.box_vis import draw_line
+import math
 
 
-@BBOX_CODERS.register(constants.KEY_ORIENTS_V2)
+@BBOX_CODERS.register(constants.KEY_REAR_SIDE)
 class OrientsCoder(object):
     @staticmethod
     def encode(label_boxes_3d, proposals, p2):
@@ -27,15 +28,15 @@ class OrientsCoder(object):
         corners_2d = geometry_utils.torch_points_3d_to_points_2d(
             corners_3d.reshape((-1, 3)), p2).reshape(-1, 8, 2)
         # shape(N, 3)
-        left_side_points_3d = (corners_3d[:, 0] + corners_3d[:, 3]) / 2
-        right_side_points_3d = (corners_3d[:, 1] + corners_3d[:, 2]) / 2
+        front_side_points_3d = (corners_3d[:, 0] + corners_3d[:, 1]) / 2
+        rear_side_points_3d = (corners_3d[:, 2] + corners_3d[:, 3]) / 2
 
         # shape(N, 2, 2)
-        left_side = torch.stack([corners_2d[:, 0], corners_2d[:, 3]], dim=1)
-        right_side = torch.stack([corners_2d[:, 1], corners_2d[:, 2]], dim=1)
+        front_side = torch.stack([corners_2d[:, 0], corners_2d[:, 1]], dim=1)
+        rear_side = torch.stack([corners_2d[:, 2], corners_2d[:, 3]], dim=1)
 
         # shape(N, 2, 2, 2)
-        side = torch.stack([left_side, right_side], dim=1)
+        side = torch.stack([front_side, rear_side], dim=1)
 
         # no rotation
         K = p2[:3, :3]
@@ -43,8 +44,8 @@ class OrientsCoder(object):
         T = torch.matmul(torch.inverse(K), KT)
         C = -T
         # shape(N, )
-        left_dist = torch.norm(left_side_points_3d - C, dim=-1)
-        right_dist = torch.norm(right_side_points_3d - C, dim=-1)
+        left_dist = torch.norm(front_side_points_3d - C, dim=-1)
+        right_dist = torch.norm(rear_side_points_3d - C, dim=-1)
         dist = torch.stack([left_dist, right_dist], dim=-1)
         _, visible_index = torch.min(dist, dim=-1)
 
@@ -56,18 +57,18 @@ class OrientsCoder(object):
         # draw_line(img_name, visible_side)
 
         # in abnormal case both of them is invisible
-        left_slope = geometry_utils.torch_line_to_orientation(left_side[:, 0],
-                                                              left_side[:, 1])
-        right_slope = geometry_utils.torch_line_to_orientation(
-            right_side[:, 0], right_side[:, 1])
-        non_visible_cond = left_slope * right_slope < 0
+        # left_slope = geometry_utils.torch_line_to_orientation(left_side[:, 0],
+        # left_side[:, 1])
+        # right_slope = geometry_utils.torch_line_to_orientation(
+        # right_side[:, 0], right_side[:, 1])
+        # non_visible_cond = left_slope * right_slope < 0
 
         visible_slope = geometry_utils.torch_line_to_orientation(
             visible_side[:, 0], visible_side[:, 1])
         # cls_orients
         cls_orients = visible_slope > 0
         cls_orients = cls_orients.float()
-        cls_orients[non_visible_cond] = 2.0
+        # cls_orients[non_visible_cond] = 2.0
 
         # reg_orients
         boxes_3d_proj = geometry_utils.torch_corners_2d_to_boxes_2d(corners_2d)
@@ -97,9 +98,11 @@ class OrientsCoder(object):
             orients: shape(N, )
         """
 
-        assert orients.shape[-1] == 5
-        cls_orients = orients[:, :, :3]
-        reg_orients = orients[:, :, 3:]
+        # import ipdb
+        # ipdb.set_trace()
+        assert orients.shape[-1] == 4
+        cls_orients = orients[:, :, :2]
+        reg_orients = orients[:, :, 2:]
         cls_orients = F.softmax(cls_orients, dim=-1)
         _, cls_orients_argmax = torch.max(cls_orients, keepdim=True, dim=-1)
 
@@ -112,7 +115,9 @@ class OrientsCoder(object):
         side_points = OrientsCoder._generate_side_points(rcnn_proposals,
                                                          orients)
 
-        ry = geometry_utils.torch_pts_2d_to_dir_3d(side_points, p2)
+        ry_vertical = geometry_utils.torch_pts_2d_to_dir_3d(side_points, p2)
+
+        ry = ry_vertical + 0.5 * math.pi
 
         return ry
 

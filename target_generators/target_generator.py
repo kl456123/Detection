@@ -72,7 +72,10 @@ class TargetGenerator(object):
         # get recall stats
         num_instances = auxiliary_dict[constants.KEY_NUM_INSTANCES]
         fake_match, _ = self.matcher.match_batch(match_quality_matrix, 0.7)
-        stats.update(Analyzer.analyze_recall(fake_match, num_instances))
+        # remove appended gts
+        append_num_gt = gt_primary.shape[-2]
+        stats.update(
+            Analyzer.analyze_recall(fake_match, num_instances, append_num_gt))
 
         ignored_match = self.suppress_ignored_case(match, num_instances)
 
@@ -129,12 +132,12 @@ class TargetGenerator(object):
             ) == self.sampler.num_samples, 'not enough samples after subsample'
 
             # dict
-            proposals_dict = batch_ops.filter_tensor_container(proposals_dict,
-                                                            batch_sampled_mask)
+            proposals_dict = batch_ops.filter_tensor_container(
+                proposals_dict, batch_sampled_mask)
 
             # list
             loss_units = batch_ops.filter_tensor_container(loss_units,
-                                                        batch_sampled_mask)
+                                                           batch_sampled_mask)
         # generate pred
         # add pred for loss_unit
         for key in proposals_dict:

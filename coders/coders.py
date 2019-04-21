@@ -4,6 +4,7 @@ from utils.registry import TARGET_ASSIGNERS
 from core import constants
 import torch
 import bbox_coders
+from utils import geometry_utils
 
 
 class TargetAssigner(object):
@@ -47,6 +48,15 @@ class TargetAssigner(object):
         return torch.ones_like(match).float()
 
 
+class RegTargetAssigner(TargetAssigner):
+    @classmethod
+    def assign_weight(cls, **kwargs):
+        match = kwargs[constants.KEY_MATCH]
+        reg_weights = super().assign_weight(cls, match)
+        reg_weights[match == -1] = 0
+        return reg_weights
+
+
 @TARGET_ASSIGNERS.register(constants.KEY_CLASSES)
 class ClassesTargetAssigner(TargetAssigner):
     @classmethod
@@ -72,7 +82,7 @@ class ClassesTargetAssigner(TargetAssigner):
 
 
 @TARGET_ASSIGNERS.register(constants.KEY_BOXES_2D)
-class Box2DTargetAssigner(TargetAssigner):
+class Box2DTargetAssigner(RegTargetAssigner):
     @classmethod
     def assign_target(cls, **kwargs):
         match = kwargs[constants.KEY_MATCH]
@@ -87,16 +97,9 @@ class Box2DTargetAssigner(TargetAssigner):
         # no need grad_fn
         return reg_targets_batch
 
-    @classmethod
-    def assign_weight(cls, **kwargs):
-        match = kwargs[constants.KEY_MATCH]
-        reg_weights = super().assign_weight(cls, match)
-        reg_weights[match == -1] = 0
-        return reg_weights
-
 
 @TARGET_ASSIGNERS.register(constants.KEY_ORIENTS)
-class OrientsTargetAssigner(TargetAssigner):
+class OrientsTargetAssigner(RegTargetAssigner):
     @classmethod
     def assign_target(cls, **kwargs):
         match = kwargs[constants.KEY_MATCH]
@@ -112,17 +115,10 @@ class OrientsTargetAssigner(TargetAssigner):
         # no need grad_fn
         return reg_targets_batch
 
-    @classmethod
-    def assign_weight(cls, **kwargs):
-        match = kwargs[constants.KEY_MATCH]
-        reg_weights = super().assign_weight(cls, match)
-        reg_weights[match == -1] = 0
-        return reg_weights
-
 
 # multibin
 @TARGET_ASSIGNERS.register(constants.KEY_ORIENTS_V3)
-class OrientsV3TargetAssigner(TargetAssigner):
+class OrientsV3TargetAssigner(RegTargetAssigner):
     @classmethod
     def assign_target(cls, **kwargs):
         match = kwargs[constants.KEY_MATCH]
@@ -136,16 +132,84 @@ class OrientsV3TargetAssigner(TargetAssigner):
         # no need grad_fn
         return reg_targets_batch
 
+
+# visible side estimation
+@TARGET_ASSIGNERS.register(constants.KEY_ORIENTS_V2)
+class OrientsV2TargetAssigner(RegTargetAssigner):
     @classmethod
-    def assign_weight(cls, **kwargs):
+    def assign_target(cls, **kwargs):
         match = kwargs[constants.KEY_MATCH]
-        reg_weights = super().assign_weight(cls, match)
-        reg_weights[match == -1] = 0
-        return reg_weights
+        gt = kwargs[constants.KEY_BOXES_3D]
+        assigned_gt = cls.generate_assigned_label(
+            cls, kwargs[constants.KEY_IGNORED_MATCH], gt)
+        proposals = kwargs[constants.KEY_PROPOSALS]
+        p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
+
+        coder = bbox_coders.build({'type': constants.KEY_ORIENTS_V2})
+        reg_targets_batch = coder.encode_batch(assigned_gt, proposals, p2)
+        reg_targets_batch[match == -1] = 0
+        # no need grad_fn
+        return reg_targets_batch
+
+
+@TARGET_ASSIGNERS.register(constants.KEY_REAR_SIDE)
+class RearSideTargetAssigner(RegTargetAssigner):
+    @classmethod
+    def assign_target(cls, **kwargs):
+        match = kwargs[constants.KEY_MATCH]
+        gt = kwargs[constants.KEY_BOXES_3D]
+        assigned_gt = cls.generate_assigned_label(
+            cls, kwargs[constants.KEY_IGNORED_MATCH], gt)
+        proposals = kwargs[constants.KEY_PROPOSALS]
+        p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
+
+        coder = bbox_coders.build({'type': constants.KEY_REAR_SIDE})
+        reg_targets_batch = coder.encode_batch(assigned_gt, proposals, p2)
+        reg_targets_batch[match == -1] = 0
+        # no need grad_fn
+        return reg_targets_batch
+
+    # @classmethod
+    # def assign_weight(cls, **kwargs):
+    # import ipdb
+    # ipdb.set_trace()
+    # match = kwargs[constants.KEY_MATCH]
+    # valid_cond = cls.get_valid_cond(**kwargs)
+
+    # reg_weights = super().assign_weight(**kwargs)
+    # reg_weights[(match == -1) | (~valid_cond)] = 0
+
+    # return reg_weights
+
+    # @classmethod
+    # def get_valid_cond(cls, **kwargs):
+    # label_boxes_3d = kwargs[constants.KEY_BOXES_3D]
+    # p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
+    # batch_size = label_boxes_3d.shape[0]
+    # valid_cond = []
+    # for batch_ind in range(batch_size):
+    # corners_3d = geometry_utils.torch_boxes_3d_to_corners_3d(
+    # label_boxes_3d[batch_ind])
+    # corners_2d = geometry_utils.torch_points_3d_to_points_2d(
+    # corners_3d.reshape((-1, 3)), p2[batch_ind]).reshape(-1, 8, 2)
+
+    # # shape(N, 2, 2)
+    # left_side = torch.stack(
+    # [corners_2d[:, 0], corners_2d[:, 3]], dim=1)
+    # right_side = torch.stack(
+    # [corners_2d[:, 1], corners_2d[:, 2]], dim=1)
+    # left_slope = geometry_utils.torch_line_to_orientation(
+    # left_side[:, 0], left_side[:, 1])
+    # right_slope = geometry_utils.torch_line_to_orientation(
+    # right_side[:, 0], right_side[:, 1])
+    # non_visible_cond = left_slope * right_slope < 0
+    # valid_cond.append(non_visible_cond)
+
+    # return torch.stack(valid_cond, dim=0)
 
 
 @TARGET_ASSIGNERS.register(constants.KEY_DIMS)
-class DimsTargetAssigner(TargetAssigner):
+class DimsTargetAssigner(RegTargetAssigner):
     @classmethod
     def assign_target(cls, **kwargs):
         match = kwargs[constants.KEY_MATCH]
@@ -168,10 +232,3 @@ class DimsTargetAssigner(TargetAssigner):
         reg_targets_batch[match == -1] = 0
         # no need grad_fn
         return reg_targets_batch
-
-    @classmethod
-    def assign_weight(cls, **kwargs):
-        match = kwargs[constants.KEY_MATCH]
-        reg_weights = super().assign_weight(cls, match)
-        reg_weights[match == -1] = 0
-        return reg_weights

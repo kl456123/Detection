@@ -7,9 +7,9 @@
         },
         "dataset_config": {
             "type":"mono_3d_kitti",
-            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+            "classes":["Car", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
-            "dataset_file": "data/train.txt",
+            "dataset_file": "data/trainval.txt",
             "root_path": "/data"
         },
         "name": "kitti",
@@ -54,12 +54,12 @@
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
         "class_agnostic": true,
-        "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+        "classes":["Car", "Truck", "Van", "Cyclist", "Tram"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
         "max_per_image": 100,
-        "nms": 0.5,
+        "nms": 0.3,
         "rng_seed": 3,
         "thresh": 0.5
     },
@@ -71,7 +71,7 @@
         },
         "dataset_config": {
             "type":"mono_3d_kitti",
-            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+            "classes":["Car", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
             "dataset_file": "data/val.txt",
             "root_path": "/data"
@@ -82,6 +82,8 @@
                 "type": "to_pil"
             }, {
             "type": "fix_shape_resize",
+            "min_size":384,
+            "max_size":1280,
             "size": [384, 1280]
             },
             {"type":"to_tensor"},
@@ -100,11 +102,11 @@
         ]
     },
     "model_config": {
-        "num_bins":4,
+        "num_bins":2,
         "batch_size":512,
         "class_agnostic": true,
         "num_stages":1,
-        "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+        "classes":["Car", "Truck", "Van", "Cyclist", "Tram"],
         "target_generator_config": [{
             "type": "faster_rcnn",
             "similarity_calc_config": {
@@ -206,7 +208,7 @@
         "device_ids": [
             0
         ],
-        "disp_interval": 100,
+        "disp_interval": 400,
         "mGPUs": true,
         "optimizer_config": {
             "base_lr": 0.02,
@@ -225,7 +227,7 @@
             "milestones":[60000, 120000, 240000],
             "type": "multi_step",
             "warmup_method":"linear",
-            "warmup_iters":500,
+            "warmup_iters":2000,
             "warmup_factor":0.333
         },
         "start_epoch": 1

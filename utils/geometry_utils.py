@@ -536,3 +536,28 @@ def compute_ray_angle(center_2d, p2):
     ray_angle = torch.atan2(direction_vector[:, :, 2],
                             direction_vector[:, :, 0])
     return ray_angle
+
+
+def torch_points_3d_distance(points1, points2):
+    """
+    Args:
+        points1: shape(N, 3)
+        points2: shape(N, 3)
+    """
+    torch.norm()
+
+
+def torch_line_to_orientation(points1, points2):
+    """
+    If return positive number, turn to the right side,
+    otherwise turn to the left side
+    Note that if equal to zeros, line is horizontal or vertical
+    Args:
+        points1: shape(N, 2)
+        points2: shape(N, 2)
+    Return:
+        res: shape(N, )
+    """
+
+    deltas = points1 - points2
+    return deltas[:, 1] * deltas[:, 0]

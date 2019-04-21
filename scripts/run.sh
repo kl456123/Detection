@@ -22,10 +22,11 @@
     # --config configs/bdd_config.json
 
 # FPN_KITTI
-# CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
+# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
     # --net fpn \
     # --out_path /data/object/liangxiong/fpn_kitti_pretrained \
-    # --config configs/fpn_kitti_config.json
+    # --config configs/fpn_kitti_config.json \
+    # --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth
 
 # FPN_COCO
 # CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
@@ -46,18 +47,20 @@
     # --config configs/mono_3d_config.json
 
 # FPN_MONO_3D
-# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
-    # --net fpn_mono_3d \
-    # --out_path /data/object/liangxiong/fpn_mono_3d \
-    # --config configs/fpn_mono_3d_kitti_config.json
-    # --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth
+CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
+    --net fpn_mono_3d_rear \
+    --out_path /data/object/liangxiong/test \
+    --config configs/test_config.json \
+    --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth
     # --mGPUs
 # --resume True \
 # --checkpoint 600
     # --mGPUs
+
+# FAIL(not work)
 # FPN_MULTIBIN
-CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
-    --net fpn_multibin_mono_3d \
-    --out_path /data/object/liangxiong/fpn_multibin_mono_3d \
-    --config configs/fpn_mono_3d_kitti_config.json \
-    --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth
+# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
+    # --net fpn_multibin_mono_3d \
+    # --out_path /data/object/liangxiong/test \
+    # --config configs/test_config.json \
+    # --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth

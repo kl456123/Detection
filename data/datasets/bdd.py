@@ -84,7 +84,27 @@ class BDDDataset(DetDataset):
         bboxes = np.asarray(bboxes, dtype=np.float32)
         return bboxes, labels
 
-    def get_sample(self, index):
+    def pad_sample(self, sample):
+        label_boxes_2d = sample[constants.KEY_LABEL_BOXES_2D]
+        label_classes = sample[constants.KEY_LABEL_CLASSES]
+        all_label_boxes_2d = np.zeros(
+            (self.max_num_boxes, label_boxes_2d.shape[1]))
+        all_label_classes = np.zeros((self.max_num_boxes, ))
+        # assign it with bg label
+        all_label_classes[...] = 0
+        num_boxes = label_boxes_2d.shape[0]
+        all_label_classes[:num_boxes] = label_classes
+        all_label_boxes_2d[:num_boxes] = label_boxes_2d
+
+        sample[constants.KEY_NUM_INSTANCES] = np.asarray(
+            num_boxes, dtype=np.int32)
+
+        sample[constants.KEY_LABEL_BOXES_2D] = all_label_boxes_2d.astype(
+            np.float32)
+        sample[constants.KEY_LABEL_CLASSES] = all_label_classes
+        return sample
+
+    def get_training_sample(self, index):
         image_path = self.imgs[index]
         label_boxes_2d, label_classes = self.read_annotation(
             self.sample_names[index])
@@ -92,24 +112,25 @@ class BDDDataset(DetDataset):
         w, h = image.size
         image_info = np.asarray([h, w, 1.0, 1.0])
 
-        # pad instances
-        all_label_boxes_2d = np.zeros(
-            (self.max_num_boxes, label_boxes_2d.shape[1]))
-        all_label_classes = np.zeros((self.max_num_boxes, ))
-        num_boxes = label_boxes_2d.shape[0]
-        all_label_classes[:num_boxes] = label_classes
-        all_label_boxes_2d[:num_boxes] = label_boxes_2d
+        sample = {}
+        sample[constants.KEY_IMAGE] = image
+        sample[constants.KEY_LABEL_BOXES_2D] = label_boxes_2d.astype(
+            np.float32)
+        sample[constants.KEY_LABEL_CLASSES] = label_classes.astype(np.int32)
+        sample[constants.KEY_IMAGE_PATH] = image_path
+        sample[constants.KEY_IMAGE_INFO] = image_info.astype(np.float32)
+        return sample
+
+    def get_testing_sample(self, index):
+        image_path = self.imgs[index]
+        image = Image.open(image_path).convert('RGB')
+        w, h = image.size
+        image_info = np.asarray([h, w, 1.0, 1.0])
 
         sample = {}
         sample[constants.KEY_IMAGE] = image
-        sample[constants.KEY_LABEL_BOXES_2D] = all_label_boxes_2d.astype(
-            np.float32)
-        sample[constants.KEY_LABEL_CLASSES] = all_label_classes.astype(
-            np.int32)
         sample[constants.KEY_IMAGE_PATH] = image_path
         sample[constants.KEY_IMAGE_INFO] = image_info.astype(np.float32)
-        sample[constants.KEY_NUM_INSTANCES] = np.asarray(
-            num_boxes, dtype=np.int32)
         return sample
 
     @staticmethod

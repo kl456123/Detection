@@ -205,8 +205,9 @@ class RPNModel(Model):
         #  rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
         #  dim=2)
 
-        # if self.training:
-        # rois_batch = self.append_gt(rois_batch, gt_boxes)
+        if self.training:
+            label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
+            proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
 
         rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
                                              rpn_cls_scores.shape[2],
@@ -238,17 +239,16 @@ class RPNModel(Model):
 
         return predict_dict
 
-    def append_gt(self, rois_batch, gt_boxes):
-        ################################
-        # append gt_boxes to rois_batch for losses
-        ################################
-        # may be some bugs here
-        gt_boxes_append = torch.zeros(gt_boxes.shape[0], gt_boxes.shape[1],
-                                      5).type_as(gt_boxes)
-        gt_boxes_append[:, :, 1:5] = gt_boxes[:, :, :4]
-        # cat gt_boxes to rois_batch
-        rois_batch = torch.cat([rois_batch, gt_boxes_append], dim=1)
-        return rois_batch
+    def append_gt(self, proposals_batch, label_boxes_2d):
+        """
+        Args:
+            proposals_batch: shape(N, M, 4)
+            label_boxes_2d: shape(N, m, 4)
+            num_instances: shape(N,) valid num of bboxes in each image
+        Returns:
+            proposals_batch: shape(N, M+m, 4)
+        """
+        return torch.cat([proposals_batch, label_boxes_2d], dim=1)
 
     def loss(self, prediction_dict, feed_dict):
         # loss for cls

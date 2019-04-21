@@ -123,8 +123,10 @@ if __name__ == '__main__':
     }, {
         "type": "random_horizontal_flip"
     }, {
-        "type": "fix_shape_resize",
-        "size": [384, 1280]
+        "type": "fix_ratio_resize",
+        "size": [384, 1280],
+        "min_size":500,
+        "max_size":1280
     }]
     from data import transforms
     transform = transforms.build(transforms_config)

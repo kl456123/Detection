@@ -3,7 +3,7 @@ from data import datasets
 from data import transforms
 
 
-def main():
+def test_kitti_dataset():
     dataset_config = {
         'type': 'kitti',
         'root_path': '/data',
@@ -14,8 +14,6 @@ def main():
     }
     transforms_config = [{
         "type": "to_pil"
-    }, {
-        "type": "random_sample_crop"
     }, {
         "type": "random_hsv"
     }, {
@@ -42,4 +40,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    test_kitti_dataset()

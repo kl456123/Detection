@@ -32,6 +32,13 @@ class Trainer(object):
         batch_size = data_loader.batch_sampler.batch_size
         self.logger.info('Start training')
         self.logger.info('batch size: {}'.format(batch_size))
+        # check batch_size, disp_interval and checkpoint_interval
+        assert self.checkpoint_interval % batch_size == 0, \
+            'checkpoint_interval({}) cannot be mod by batch_size({})'.format(
+                self.checkpoint_interval, batch_size)
+        assert self.disp_interval % batch_size == 0, \
+            'disp_interval({}) cannot be mod by batch_size({})'.format(
+                self.disp_interval, batch_size)
         # start from 1
         start_iters = max(1, self.start_iters // batch_size)
         for step, data in enumerate(data_loader, start_iters):
@@ -64,7 +71,8 @@ class Trainer(object):
             optimizer.step()
 
             # adjust lr
-            scheduler.step()
+            # step by iters
+            scheduler.step(step)
 
             self.stats.update_stats(prediction[constants.KEY_STATS])
 

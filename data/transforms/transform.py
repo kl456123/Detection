@@ -249,7 +249,7 @@ class RandomSampleCrop(Transform):
                 overlap = jaccard_numpy(boxes, rect)
                 # Is min and max overlap constraint satisfied? if not try again.
                 # if overlap.min() < min_iou and max_iou < overlap.max():
-                    # continue
+                # continue
 
                 # Cut the crop from the image.
                 current_image = current_image[rect[1]:rect[3], rect[0]:rect[
@@ -402,11 +402,56 @@ class RandomHorizontalFlip(Transform):
 
 @TRANSFORMS.register('fix_ratio_resize')
 class FixRatioResize(object):
+
+    interpolate_map = {'bilinear': Image.BILINEAR, 'bicubic': Image.BICUBIC}
+
     def __init__(self, config):
-        pass
+        self.min_size = config['min_size']
+        self.max_size = config['max_size']
+        interpolate = config.get('interpolate', 'bilinear')
+        self.interpolation = self.interpolate_map[interpolate]
 
     def __call__(self, sample):
-        pass
+        image = sample[constants.KEY_IMAGE]
+        format_checker.check_pil_image(image)
+        w, h = image.size
+
+        if w > h:
+            im_scale = float(self.min_size) / h
+            target_shape = (im_scale * w, self.min_size)
+        else:
+            im_scale = float(self.min_size) / w
+            target_shape = (self.min_size, im_scale * h)
+
+        target_shape = (int(target_shape[0]), int(target_shape[1]))
+
+        sample[constants.KEY_IMAGE] = image.resize(target_shape,
+                                                   self.interpolation)
+        # image_info
+        image_info = [target_shape[1], target_shape[0], im_scale, im_scale]
+        sample[constants.KEY_IMAGE_INFO] = np.asarray(
+            image_info, dtype=np.float32)
+
+        if sample.get(constants.KEY_LABEL_BOXES_2D) is not None:
+            bbox = sample[constants.KEY_LABEL_BOXES_2D]
+            bbox[:, 2] /= w
+            bbox[:, 0] /= w
+            bbox[:, 1] /= h
+            bbox[:, 3] /= h
+
+            bbox[:, 2] *= target_shape[0]
+            bbox[:, 0] *= target_shape[0]
+            bbox[:, 1] *= target_shape[1]
+            bbox[:, 3] *= target_shape[1]
+            sample[constants.KEY_LABEL_BOXES_2D] = bbox
+
+        if sample.get(constants.KEY_STEREO_CALIB_P2) is not None:
+            p2 = sample[constants.KEY_STEREO_CALIB_P2]
+            image_scale = [im_scale, im_scale]
+            new_p2 = ProjectMatrixTransform.resize(p2, image_scale)
+            sample[constants.KEY_STEREO_CALIB_P2] = new_p2
+
+        return sample
 
 
 @TRANSFORMS.register('fix_shape_resize')

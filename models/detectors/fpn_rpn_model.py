@@ -154,8 +154,9 @@ class RPNModel(_RPNModel):
         proposals_batch, proposals_order = self.generate_proposal(
             rpn_cls_probs, anchors, rpn_bbox_preds, im_info)
 
-        # if self.training:
-        # proposals_batch = self.append_gt(proposals_batch, gt_boxes)
+        if self.training:
+            label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
+            proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
 
         # postprocess
 

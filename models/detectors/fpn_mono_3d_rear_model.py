@@ -26,8 +26,8 @@ import bbox_coders
 from core.utils.analyzer import Analyzer
 
 
-@DETECTORS.register('fpn_mono_3d')
-class FPNMono3D(FPNFasterRCNN):
+@DETECTORS.register('fpn_mono_3d_rear')
+class FPNMono3DREAR(FPNFasterRCNN):
     def forward(self, feed_dict):
         # import ipdb
         # ipdb.set_trace()
@@ -60,6 +60,7 @@ class FPNMono3D(FPNFasterRCNN):
                 gt_dict[constants.KEY_BOXES_2D] = None
                 gt_dict[constants.KEY_ORIENTS_V2] = None
                 gt_dict[constants.KEY_DIMS] = None
+                gt_dict[constants.KEY_REAR_SIDE] = None
 
                 # auxiliary_dict(used for encoding)
                 auxiliary_dict = {}
@@ -97,6 +98,7 @@ class FPNMono3D(FPNFasterRCNN):
             rcnn_cls_scores = self.rcnn_cls_preds[i](pooled_feat)
             rcnn_orient_preds = self.rcnn_orient_preds[i](pooled_feat)
             rcnn_dim_preds = self.rcnn_dim_preds[i](pooled_feat)
+            rcnn_rear_preds = self.rcnn_rear_preds[i](pooled_feat)
 
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -120,19 +122,32 @@ class FPNMono3D(FPNFasterRCNN):
             rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
             rcnn_orient_preds = rcnn_orient_preds.view(batch_size, -1, 5)
             rcnn_dim_preds = rcnn_dim_preds.view(batch_size, -1, 3)
+            rcnn_rear_preds = rcnn_rear_preds.view(batch_size, -1, 4)
 
             if self.training:
                 loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
                 loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
                 loss_units[constants.KEY_ORIENTS_V2]['pred'] = rcnn_orient_preds
                 loss_units[constants.KEY_DIMS]['pred'] = rcnn_dim_preds
+                loss_units[constants.KEY_REAR_SIDE]['pred'] = rcnn_rear_preds
+
+                # modify the weight of rear_side
+                orient_target = loss_units[constants.KEY_ORIENTS_V2]['target']
+                cls_orient = orient_target[:, :, 0]
+                rear_side_weight = loss_units[constants.KEY_REAR_SIDE]['weight']
+                tmp_weight = torch.zeros_like(rear_side_weight)
+                tmp_weight[cls_orient == 2] = 1.0
+                rear_side_weight = rear_side_weight * tmp_weight
+                loss_units[constants.KEY_REAR_SIDE]['weight'] = rear_side_weight
+
                 # import ipdb
                 # ipdb.set_trace()
                 multi_stage_loss_units.append([
                     loss_units[constants.KEY_CLASSES],
                     loss_units[constants.KEY_BOXES_2D],
                     loss_units[constants.KEY_ORIENTS_V2],
-                    loss_units[constants.KEY_DIMS]
+                    loss_units[constants.KEY_DIMS],
+                    loss_units[constants.KEY_REAR_SIDE]
                 ])
                 multi_stage_stats.append(stats)
 
@@ -144,10 +159,22 @@ class FPNMono3D(FPNFasterRCNN):
                 rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
                 rcnn_cls_probs).detach()
             coder = bbox_coders.build({'type': constants.KEY_ORIENTS_V2})
-            # use rpn proposals to decode
+            # use rcnn proposals to decode
+            rear_valid_cond = self.get_rear_valid_cond(rcnn_orient_preds)
             rcnn_orient_preds = coder.decode_batch(
                 rcnn_orient_preds, proposals,
                 feed_dict[constants.KEY_STEREO_CALIB_P2]).detach()
+            coder = bbox_coders.build({'type': constants.KEY_REAR_SIDE})
+            # use rcnn proposals to decode
+            rcnn_rear_preds = coder.decode_batch(
+                rcnn_rear_preds, proposals,
+                feed_dict[constants.KEY_STEREO_CALIB_P2]).detach()
+
+            # final ry
+            rcnn_orient_preds[rear_valid_cond] = rcnn_rear_preds[
+                rear_valid_cond]
+
+            # final decision combine rcnn_rear_preds with rcnn_orient_preds
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
@@ -169,6 +196,12 @@ class FPNMono3D(FPNFasterRCNN):
 
         return prediction_dict
 
+    def get_rear_valid_cond(self, rcnn_orient_preds):
+        cls_orients = rcnn_orient_preds[:, :, :3]
+        cls_orients = F.softmax(cls_orients, dim=-1)
+        _, cls_orients_argmax = torch.max(cls_orients, dim=-1)
+        return cls_orients_argmax == 2
+
     def init_weights(self):
         super().init_weights()
 
@@ -182,6 +215,9 @@ class FPNMono3D(FPNFasterRCNN):
 
         self.rcnn_orient_loss = OrientationLoss()
 
+        self.rcnn_rear_preds = nn.ModuleList(
+            [nn.Linear(1024, 4) for _ in range(self.num_stages)])
+
     def loss(self, prediction_dict, feed_dict):
         """
         assign proposals label and subsample from them
@@ -191,6 +227,7 @@ class FPNMono3D(FPNFasterRCNN):
         targets = prediction_dict[constants.KEY_TARGETS]
         rcnn_orient_loss = 0
         rcnn_dim_loss = 0
+        rcnn_rear_loss = 0
 
         for stage_ind in range(self.num_stages):
             orient_target = targets[stage_ind][2]
@@ -201,9 +238,14 @@ class FPNMono3D(FPNFasterRCNN):
             rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
                 self.rcnn_bbox_loss, dim_target, True)
 
+            rear_target = targets[stage_ind][4]
+            rcnn_rear_loss = rcnn_rear_loss + common_loss.calc_loss(
+                self.rcnn_orient_loss, rear_target, True)
+
         loss_dict.update({
             'rcnn_orient_loss': rcnn_orient_loss,
-            'rcnn_dim_loss': rcnn_dim_loss
+            'rcnn_dim_loss': rcnn_dim_loss,
+            'rcnn_rear_loss': rcnn_rear_loss
         })
 
         return loss_dict
