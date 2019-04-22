@@ -132,13 +132,13 @@ class FPNMono3DREAR(FPNFasterRCNN):
                 loss_units[constants.KEY_REAR_SIDE]['pred'] = rcnn_rear_preds
 
                 # modify the weight of rear_side
-                orient_target = loss_units[constants.KEY_ORIENTS_V2]['target']
-                cls_orient = orient_target[:, :, 0]
-                rear_side_weight = loss_units[constants.KEY_REAR_SIDE]['weight']
-                tmp_weight = torch.zeros_like(rear_side_weight)
-                tmp_weight[cls_orient == 2] = 1.0
-                rear_side_weight = rear_side_weight * tmp_weight
-                loss_units[constants.KEY_REAR_SIDE]['weight'] = rear_side_weight
+                # orient_target = loss_units[constants.KEY_ORIENTS_V2]['target']
+                # cls_orient = orient_target[:, :, 0]
+                # rear_side_weight = loss_units[constants.KEY_REAR_SIDE]['weight']
+                # tmp_weight = torch.zeros_like(rear_side_weight)
+                # tmp_weight[cls_orient == 2] = 1.0
+                # rear_side_weight = rear_side_weight * tmp_weight
+                # loss_units[constants.KEY_REAR_SIDE]['weight'] = rear_side_weight
 
                 # import ipdb
                 # ipdb.set_trace()

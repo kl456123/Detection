@@ -38,14 +38,13 @@ class KITTIDataset(DetDataset):
             self.image_dir = config['img_dir']
             self.logger.info('use image dir: {}'.format(self.image_dir))
         else:
-            self.logger.error('please specific dataset file or img dir first')
+            self.logger.info('use demo file')
+            # self.logger.error('please specific dataset file or img dir first')
 
         if config.get('calib_file'):
             self._calib_file = config['calib_file']
         else:
             self._calib_file = None
-
-
 
         self.transforms = transform
 
@@ -58,6 +57,8 @@ class KITTIDataset(DetDataset):
             # filter when training
             sample_names = self.load_sample_names_from_dataset_file(
                 self.image_dir, self._dataset_file)
+        elif config.get('demo_file') is not None:
+            sample_names = [config['demo_file']]
         else:
             sample_names = self.load_sample_names_from_image_dir(
                 self.image_dir)

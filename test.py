@@ -240,6 +240,7 @@ def generate_config(args, logger):
         # disable dataset file,just use image directly
         dataset_config['dataset_file'] = None
         dataset_config['demo_file'] = args.img_path
+        dataset_config['calib_file'] = args.calib_file
 
     if args.img_dir:
         dataset_config = data_config['dataset_config']

@@ -78,15 +78,16 @@ class Tester(object):
         if self.feat_vis:
             # enable it before forward pass
             model.enable_feat_vis()
+        end_time = 0
 
         for step, data in enumerate(dataloader):
-            start_time = time.time()
+            # start_time = time.time()
             data = common.to_cuda(data)
             image_path = data[constants.KEY_IMAGE_PATH]
 
             with torch.no_grad():
                 prediction = model(data)
-            duration_time = time.time() - start_time
+            # duration_time = time.time() - start_time
 
             if self.feat_vis:
                 featmaps_dict = model.get_feat()
@@ -105,12 +106,12 @@ class Tester(object):
             p2 = data[constants.KEY_STEREO_CALIB_P2_ORIG]
 
             batch_size = scores.shape[0]
-            scores = scores.view(-1, self.n_classes)
-            new_scores = torch.zeros_like(scores)
-            _, scores_argmax = scores.max(dim=-1)
-            row = torch.arange(0, scores_argmax.numel()).type_as(scores_argmax)
-            new_scores[row, scores_argmax] = scores[row, scores_argmax]
-            scores = new_scores.view(batch_size, -1, self.n_classes)
+            # scores = scores.view(-1, self.n_classes)
+            # new_scores = torch.zeros_like(scores)
+            # _, scores_argmax = scores.max(dim=-1)
+            # row = torch.arange(0, scores_argmax.numel()).type_as(scores_argmax)
+            # new_scores[row, scores_argmax] = scores[row, scores_argmax]
+            # scores = new_scores.view(batch_size, -1, self.n_classes)
 
             #  if step == 6:
             #  import ipdb
@@ -165,8 +166,12 @@ class Tester(object):
                         dets.append(nms_dets_per_img)
                     else:
                         dets.append([])
+
+                duration_time = time.time() - end_time
                 label_path = self._generate_label_path(image_path[batch_ind])
                 self.save_mono_3d_dets(dets, label_path)
                 sys.stdout.write('\r{}/{},duration: {}'.format(
                     step + 1, num_samples, duration_time))
                 sys.stdout.flush()
+
+                end_time = time.time()

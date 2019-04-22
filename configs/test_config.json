@@ -18,7 +18,10 @@
             {"type":"random_hsv"
             },{"type":"random_brightness"},
             {"type":"random_horizontal_flip"},
-            
+            {
+                "type":"fix_shape_resize",
+                "size":[384, 1280]
+            },
             {"type":"to_tensor"},
             {"type":"normalize",
                 "normal_mean": [
@@ -56,7 +59,7 @@
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
         "max_per_image": 100,
-        "nms": 0.5,
+        "nms": 0.3,
         "rng_seed": 3,
         "thresh": 0.5
     },
@@ -77,6 +80,9 @@
         "transform_config":[
             {
                 "type": "to_pil"
+            }, {
+            "type": "fix_shape_resize",
+            "size": [384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -165,7 +171,7 @@
                 "similarity_calc_config": {
                     "type": "center"
                 },
-                "fg_thresh": 0.7,
+                "fg_thresh": 0.3,
                 "bg_thresh": 0.3,
                 "coder_config": {
                     "type": "center",

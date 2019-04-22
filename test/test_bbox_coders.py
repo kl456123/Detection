@@ -26,7 +26,7 @@ def test_bbox_coders():
     bbox_coder = bbox_coders.build(coder_config)
 
     dataset = build_dataset()
-    sample = dataset[11]
+    sample = dataset[0]
     label_boxes_3d = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_3D])
     p2 = torch.from_numpy(sample[constants.KEY_STEREO_CALIB_P2])
     proposals = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_2D])
@@ -114,8 +114,41 @@ def test_orientv2_coder():
     print(sample[constants.KEY_IMAGE_PATH])
 
 
+def test_rear_side_coder():
+    coder_config = {'type': constants.KEY_REAR_SIDE}
+    bbox_coder = bbox_coders.build(coder_config)
+
+    dataset = build_dataset()
+    sample = dataset[0]
+    label_boxes_3d = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_3D])
+    p2 = torch.from_numpy(sample[constants.KEY_STEREO_CALIB_P2])
+    proposals = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_2D])
+    num_instances = torch.from_numpy(sample[constants.KEY_NUM_INSTANCES])
+
+    label_boxes_3d = torch.stack(1 * [label_boxes_3d[:num_instances]], dim=0)
+    proposals = torch.stack(1 * [proposals[:num_instances]], dim=0)
+    p2 = torch.stack(1 * [p2], dim=0)
+    # import ipdb
+    # ipdb.set_trace()
+    orients = bbox_coder.encode_batch(label_boxes_3d, proposals, p2)
+    print(orients)
+
+    encoded_cls_orients = torch.zeros_like(orients[:, :, :2])
+    cls_orients = orients[:, :, :1].long()
+    row = torch.arange(0, cls_orients.numel()).type_as(cls_orients)
+    encoded_cls_orients.view(-1, 2)[row, cls_orients.view(-1)] = 1
+    encoded_orients = torch.cat([encoded_cls_orients, orients[:, :, 1:]],
+                                dim=-1)
+
+    ry = bbox_coder.decode_batch(encoded_orients, proposals, p2)
+    print(ry)
+    print(label_boxes_3d[:, :, -1])
+    print(sample[constants.KEY_IMAGE_PATH])
+
+
 if __name__ == '__main__':
     # test_bbox_coders()
     # test_orient_coder()
     # test_orientv3_coder()
-    test_orientv2_coder()
+    # test_orientv2_coder()
+    test_rear_side_coder()

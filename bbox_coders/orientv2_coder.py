@@ -131,8 +131,10 @@ class OrientsCoder(object):
         abnormal_cond = cls_orient_argmax == 2
         cls_orient_argmax[cls_orient_argmax == 2] = 0
         reg_orient = orient[:, :, 1:3]
+        # abnormal_case = torch.cat(
+        # [dets_2d[:, :, :2], dets_2d[:, :, :2] + reg_orient], dim=-1)
         abnormal_case = torch.cat(
-            [dets_2d[:, :, :2], dets_2d[:, :, :2] + reg_orient], dim=-1)
+            [dets_2d[:, :, 2:] - reg_orient, dets_2d[:, :, 2:]], dim=-1)
 
         side_points = torch.zeros(
             (orient.shape[0], orient.shape[1], 4)).type_as(orient)

@@ -18,7 +18,6 @@
             {"type":"to_pil"},
             {"type":"random_hsv"
             },{"type":"random_brightness"},
-            {"type":"random_gaussian_blur"},
             {"type":"random_horizontal_flip"},
             {
                 "type":"fix_shape_resize",

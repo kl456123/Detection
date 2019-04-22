@@ -7,7 +7,7 @@
         },
         "dataset_config": {
             "type":"mono_3d_kitti",
-            "classes":["Car", "Truck", "Van", "Cyclist", "Tram"],
+            "classes":["Car","Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
             "dataset_file": "data/trainval.txt",
             "root_path": "/data"
@@ -54,7 +54,7 @@
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
         "class_agnostic": true,
-        "classes":["Car", "Truck", "Van", "Cyclist", "Tram"],
+        "classes":["Car","Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
@@ -71,7 +71,7 @@
         },
         "dataset_config": {
             "type":"mono_3d_kitti",
-            "classes":["Car", "Truck", "Van", "Cyclist", "Tram"],
+            "classes":["Car","Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
             "dataset_file": "data/val.txt",
             "root_path": "/data"
@@ -81,7 +81,7 @@
             {
                 "type": "to_pil"
             }, {
-            "type": "fix_shape_resize",
+            "type": "fix_ratio_resize",
             "min_size":384,
             "max_size":1280,
             "size": [384, 1280]
@@ -106,7 +106,7 @@
         "batch_size":512,
         "class_agnostic": true,
         "num_stages":1,
-        "classes":["Car", "Truck", "Van", "Cyclist", "Tram"],
+        "classes":["Car","Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
         "target_generator_config": [{
             "type": "faster_rcnn",
             "similarity_calc_config": {
@@ -173,7 +173,7 @@
                 "similarity_calc_config": {
                     "type": "center"
                 },
-                "fg_thresh": 0.7,
+                "fg_thresh": 0.3,
                 "bg_thresh": 0.3,
                 "coder_config": {
                     "type": "center",
@@ -202,7 +202,7 @@
         "use_focal_loss": true
     },
     "train_config": {
-        "num_iters":300000,
+        "num_iters":600000,
         "checkpoint_interval": 4000,
         "clip_gradient": 10,
         "device_ids": [

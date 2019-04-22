@@ -50,8 +50,8 @@
 CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
     --net fpn_mono_3d_rear \
     --out_path /data/object/liangxiong/test \
-    --config configs/test_config.json \
-    --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth
+    --config configs/test_config.json
+    # --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth
     # --mGPUs
 # --resume True \
 # --checkpoint 600

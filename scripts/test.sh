@@ -216,14 +216,25 @@ rm results/fv/*
     # --thresh 0.5
 
 # FPN_MONO_3D
-CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 1000 \
-    --net fpn_mono_3d_rear \
-    --load_dir /data/object/liangxiong/test \
-    --dataset kitti \
-    --thresh 0.5
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 300000 \
+    # --net fpn_mono_3d \
+    # --load_dir /data/object/liangxiong/fpn_mono_3d \
+    # --dataset kitti \
+    # --thresh 0.5 \
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
+
+# FPN_MONO_3D_REAR
+CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    --checkpoint 56000 \
+    --net fpn_mono_3d_rear \
+    --load_dir /data/object/liangxiong/fpn_mono_3d_rear \
+    --dataset kitti \
+    --thresh 0.5 \
+    --calib_file ./000004.txt \
+    --img_path /data/dm202_3w/left_img/007890.png
+    # --img_dir /data/dm202_3w/left_img
 
 # FPN FPN_MULTIBIN
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
