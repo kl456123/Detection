@@ -64,7 +64,31 @@ class ClassesTargetAssigner(TargetAssigner):
         match = kwargs[constants.KEY_MATCH]
         gt = kwargs[constants.KEY_CLASSES]
         assigned_gt = cls.generate_assigned_label(
-            cls, kwargs[constants.KEY_IGNORED_MATCH], gt)
+            cls, kwargs[constants.KEY_MATCH], gt)
+        assigned_gt[match == -1] = 0
+
+        return assigned_gt.long()
+
+    @classmethod
+    def assign_weight(cls, **kwargs):
+        match = kwargs[constants.KEY_MATCH]
+        assigned_overlaps_batch = kwargs[constants.KEY_ASSIGNED_OVERLAPS]
+        bg_thresh = kwargs[constants.KEY_BG_THRESH]
+        cls_weights = super().assign_weight(cls, match)
+        if bg_thresh > 0:
+            ignored_bg = (assigned_overlaps_batch > bg_thresh) & (match == -1)
+            cls_weights[ignored_bg] = 0
+        return cls_weights
+
+
+@TARGET_ASSIGNERS.register(constants.KEY_OBJECTNESS)
+class ObjectnessTargetAssigner(TargetAssigner):
+    @classmethod
+    def assign_target(cls, **kwargs):
+        match = kwargs[constants.KEY_MATCH]
+        gt = torch.ones_like(kwargs[constants.KEY_CLASSES])
+        assigned_gt = cls.generate_assigned_label(
+            cls, kwargs[constants.KEY_MATCH], gt)
         assigned_gt[match == -1] = 0
 
         return assigned_gt.long()
@@ -82,6 +106,7 @@ class ClassesTargetAssigner(TargetAssigner):
 
 
 @TARGET_ASSIGNERS.register(constants.KEY_BOXES_2D)
+@TARGET_ASSIGNERS.register(constants.KEY_BOXES_2D_REFINE)
 class Box2DTargetAssigner(RegTargetAssigner):
     @classmethod
     def assign_target(cls, **kwargs):
@@ -89,7 +114,7 @@ class Box2DTargetAssigner(RegTargetAssigner):
         gt = kwargs[constants.KEY_BOXES_2D]
         proposals = kwargs[constants.KEY_PROPOSALS]
         assigned_gt = cls.generate_assigned_label(
-            cls, kwargs[constants.KEY_IGNORED_MATCH], gt)
+            cls, kwargs[constants.KEY_MATCH], gt)
         # prepare coder
         coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
         reg_targets_batch = coder.encode_batch(proposals, assigned_gt)
@@ -105,7 +130,7 @@ class OrientsTargetAssigner(RegTargetAssigner):
         match = kwargs[constants.KEY_MATCH]
         gt = kwargs[constants.KEY_BOXES_3D]
         assigned_gt = cls.generate_assigned_label(
-            cls, kwargs[constants.KEY_IGNORED_MATCH], gt)
+            cls, kwargs[constants.KEY_MATCH], gt)
         proposals = kwargs[constants.KEY_PROPOSALS]
         p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
 
@@ -124,7 +149,7 @@ class OrientsV3TargetAssigner(RegTargetAssigner):
         match = kwargs[constants.KEY_MATCH]
         gt = kwargs[constants.KEY_BOXES_3D]
         assigned_gt = cls.generate_assigned_label(
-            cls, kwargs[constants.KEY_IGNORED_MATCH], gt)
+            cls, kwargs[constants.KEY_MATCH], gt)
 
         coder = bbox_coders.build({'type': constants.KEY_ORIENTS_V3})
         reg_targets_batch = coder.encode_batch(assigned_gt)
@@ -141,7 +166,7 @@ class OrientsV2TargetAssigner(RegTargetAssigner):
         match = kwargs[constants.KEY_MATCH]
         gt = kwargs[constants.KEY_BOXES_3D]
         assigned_gt = cls.generate_assigned_label(
-            cls, kwargs[constants.KEY_IGNORED_MATCH], gt)
+            cls, kwargs[constants.KEY_MATCH], gt)
         proposals = kwargs[constants.KEY_PROPOSALS]
         p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
 
@@ -159,7 +184,7 @@ class RearSideTargetAssigner(RegTargetAssigner):
         match = kwargs[constants.KEY_MATCH]
         gt = kwargs[constants.KEY_BOXES_3D]
         assigned_gt = cls.generate_assigned_label(
-            cls, kwargs[constants.KEY_IGNORED_MATCH], gt)
+            cls, kwargs[constants.KEY_MATCH], gt)
         proposals = kwargs[constants.KEY_PROPOSALS]
         p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
 
@@ -227,7 +252,7 @@ class DimsTargetAssigner(RegTargetAssigner):
         reg_targets_batch = coder.encode_batch(gt, mean_dims)
 
         reg_targets_batch = cls.generate_assigned_label(
-            cls, kwargs[constants.KEY_IGNORED_MATCH], reg_targets_batch)
+            cls, kwargs[constants.KEY_MATCH], reg_targets_batch)
 
         reg_targets_batch[match == -1] = 0
         # no need grad_fn

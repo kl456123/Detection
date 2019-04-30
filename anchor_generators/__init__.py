@@ -5,7 +5,7 @@ from core.utils.common import build as _build
 import os
 from utils.registry import ANCHOR_GENERATORS
 
-include = ['anchor_generator']
+include = ['anchor_generator', 'retina_anchor_generator']
 
 import_dir(os.path.dirname(__file__), include=include)
 

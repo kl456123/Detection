@@ -12,15 +12,13 @@
             "dataset_file": "data/demo.txt",
             "root_path": "/data"
         },
-        "name": "kitti",
+        "name": "mono_3d_kitti",
         "transform_config":[
             {"type":"to_pil"},
             {"type":"random_hsv"
-            },{"type":"random_brightness"},
-            {"type":"random_horizontal_flip"},
-            {
-                "type":"fix_shape_resize",
-                "size":[384, 1280]
+            },{
+            "type":"fix_shape_resize",
+            "size":[384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -53,7 +51,7 @@
         ],
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
-        "class_agnostic": true,
+        "class_agnostic": false,
         "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
@@ -76,13 +74,12 @@
             "dataset_file": "data/demo.txt",
             "root_path": "/data"
         },
-        "name": "kitti",
+        "name": "mono_3d_kitti",
         "transform_config":[
+            {"type":"to_pil"},
             {
-                "type": "to_pil"
-            }, {
-            "type": "fix_shape_resize",
-            "size": [384, 1280]
+                "type":"fix_shape_resize",
+                "size":[384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -100,18 +97,25 @@
         ]
     },
     "model_config": {
-        "num_bins":2,
+        "input_size":[384, 1280],
+        "anchor_generator_config": {
+                "type":"retina",
+                "aspect_ratio":[[1.5, 3.5], [1.5, 3.5], [1.5, 3.5], [1.5, 3.5], [1.5, 3.5], [1.5, 3.5]],
+                "default_ratio":[0.02, 0.04, 0.08, 0.16, 0.32],
+                "output_scale":[8, 16, 32, 64, 128]
+            },
         "batch_size":512,
-        "class_agnostic": true,
+        "class_agnostic": false,
         "num_stages":1,
         "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
-        "target_generator_config": [{
+        "target_generator_config": {
+            "fake_fg_thresh":0.7,
             "type": "faster_rcnn",
             "similarity_calc_config": {
                 "type": "center"
             },
             "fg_thresh": 0.5,
-            "bg_thresh": 0.5,
+            "bg_thresh": 0.4,
             "coder_config": {
                 "type": "center",
                 "bbox_normalize_targets_precomputed": false
@@ -125,47 +129,32 @@
                 "fg_fraction": 0.5
             },
             "analyzer_config": {}
-        }],
+        },
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
-            "type":"fpn",
+            "type":"prnet",
             "pretrained_path": "./data/pretrained_model",
-            "pooling_size":7,
-            "net_arch":"res50",
+            "net_arch":"res18_pruned",
             "separate_feat":false,
-            "pretrained": true
+            "use_cascade":true,
+            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+            "img_channels": 3,
+            "pretrained_model": "",
+            "pretrained": true,
+            "det_features": 128,
+            "layer_structure": [2, 2, 2, 2],
+            "dla_input": [128, 256, 512],
+            "output_scale":[8, 16, 32, 64, 128]
         },
         "pooling_mode": "align",
         "pooling_size": 7,
+        "rcnn_batch_size": 512,
         "rpn_config": {
-            "type":"fpn_rpn",
+            "type":"rpn",
             "use_score":false,
             "use_iou":false,
             "use_focal_loss":true,
-            "anchor_generator_config": {
-                "use_pyramid":true,
-                "type":"default",
-                "anchor_offset": [
-                    0,
-                    0
-                ],
-                "anchor_stride": [
-                    16,
-                    16
-                ],
-                "aspect_ratios": [
-                    0.5,
-                    0.8,
-                    1
-                ],
-                "base_anchor_size": 16,
-                "scales": [
-                    2,
-                    4,
-                    8,
-                    16
-                ]
-            },
+            
             "target_generator_config": {
                 "type": "faster_rcnn",
                 "similarity_calc_config": {
@@ -178,7 +167,7 @@
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "argmax"
+                    "type": "bipartitle"
                 },
                 "sampler_config": {
                     "num_samples":512,
@@ -187,11 +176,14 @@
                 },
                 "analyzer_config": {}
             },
-            "din": 256,
+            "din": 1024,
             "min_size": 16,
             "nms_thresh": 0.7,
-            "post_nms_topN": 2000,
-            "pre_nms_topN": 12000
+            "post_nms_topN": 1000,
+            "pre_nms_topN": 12000,
+            "rpn_batch_size": 1024,
+            "num_reg_samples":1024,
+            "num_cls_samples":512
         },
         "num_cls_samples":256,
         "num_reg_samples":512,
@@ -200,7 +192,7 @@
         "use_focal_loss": true
     },
     "train_config": {
-        "num_iters":1000,
+        "num_iters": 1000,
         "checkpoint_interval": 100,
         "clip_gradient": 10,
         "device_ids": [
@@ -225,7 +217,7 @@
             "milestones":[60000, 120000, 240000],
             "type": "multi_step",
             "warmup_method":"linear",
-            "warmup_iters":500,
+            "warmup_iters":2000,
             "warmup_factor":0.333
         },
         "start_epoch": 1

@@ -196,3 +196,14 @@ def check_tensor_shape(tensor, shape):
     for dim_ind, dim in enumerate(shape):
         if dim is not None:
             assert tensor.shape[dim_ind] == dim
+
+
+def check_tensor_type(tensor, tensor_type_name):
+    tensor_type_map = {
+        'float': torch.float32,
+        'long': torch.int64,
+        'int': torch.int32,
+        'double': torch.double
+    }
+    tensor_type = tensor_type_map[tensor_type_name]
+    assert tensor.dtype is tensor_type

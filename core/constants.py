@@ -8,6 +8,7 @@ KEY_LABEL_ORIENTS = 'label_orients'
 KEY_IMAGE_PATH = 'image_path'
 KEY_IMAGE_INFO = 'image_info'
 KEY_NUM_INSTANCES = 'num_instances'
+KEY_OBJECTNESS = 'objectness'
 
 KEY_STEREO_CALIB_P2 = 'stereo_calib_p2'
 KEY_STEREO_CALIB_P2_ORIG = 'stereo_calib_p2_orig'
@@ -36,14 +37,15 @@ KEY_ORIENTS = 'orients'
 KEY_ORIENTS_V2 = 'orients_v2'
 KEY_ORIENTS_V3 = 'orients_v3'
 KEY_REAR_SIDE = 'rear_side'
+KEY_BOXES_2D_REFINE = 'boxes_2d_refine'
 KEY_DIMS = 'dims'
+KEY_FINAL_PROBS = 'final_probs'
 
 # key of stats
 KEY_STATS_RECALL = 'stats_recall'
 KEY_STATS_PRECISION = 'stats_precision'
 KEY_STATS_THRESH_RECALL = 'stats_thresh_recall'
 KEY_STATS = 'stats'
-
 
 # auxiliary dict
 KEY_PROPOSALS = 'proposals'
@@ -52,3 +54,4 @@ KEY_IGNORED_MATCH = 'ignored_match'
 KEY_BG_THRESH = 'bg_thresh'
 KEY_ASSIGNED_OVERLAPS = 'assigned_overlaps'
 KEY_MEAN_DIMS = 'mean_dims'
+KEY_FAKE_MATCH = 'fake_match'

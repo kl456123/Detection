@@ -101,7 +101,7 @@ class Trainer(object):
                 # save model
                 checkpoint_name = 'detector_{}.pth'.format(step)
                 params_dict = {
-                    'start_iters': step + 1,
+                    'start_iters': step + batch_size,
                     'model': model,
                     'optimizer': optimizer,
                     'scheduler': scheduler

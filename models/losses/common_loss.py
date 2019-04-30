@@ -47,10 +47,10 @@ def calc_loss(module, targets, normalize=True):
         raise ValueError('can not assume any possible loss type')
 
     if normalize:
-        num_valid = (weight > 0).float().sum(dim=-1).clamp(min=1)
-        return loss.sum(dim=-1) / num_valid
+        num_valid = (weight > 0).float().sum().clamp(min=1)
+        return loss.sum() / num_valid
     else:
-        return loss.sum(dim=-1)
+        return loss.sum()
 
 
 # CrossEntropyLoss = WeightedLossWrapper(nn.CrossEntropyLoss)

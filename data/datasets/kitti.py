@@ -4,7 +4,6 @@ import os
 from PIL import Image
 import numpy as np
 from data.det_dataset import DetDataset
-import logging
 
 # wavedata for kitti
 from wavedata.tools.core import calib_utils

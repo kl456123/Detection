@@ -27,18 +27,21 @@ class TargetGenerator(object):
         self.bg_thresh = target_generator_config['bg_thresh']
         self.fg_thresh = target_generator_config['fg_thresh']
 
+        self.fake_fg_thresh = target_generator_config.get('fake_fg_thresh',
+                                                          0.7)
+
         # self.stats = {}
 
-    def suppress_ignored_case(self, match, num_instances):
-        """
-        Args:
-            match: shape(N, M)
-            num_instances: shape(N, ), it determines the num of valid instances,
-            it refers to the last dim of match_quality_matrix
-        """
-        m = match.clone()
-        m[match == -1] = 0
-        return m
+    #  def suppress_ignored_case(self, match, num_instances):
+    #  """
+    #  Args:
+    #  match: shape(N, M)
+    #  num_instances: shape(N, ), it determines the num of valid instances,
+    #  it refers to the last dim of match_quality_matrix
+    #  """
+    #  m = match.clone()
+    #  m[match == -1] = 0
+    #  return m
 
     def generate_targets(self,
                          proposals_dict,
@@ -63,21 +66,24 @@ class TargetGenerator(object):
         proposals_primary = proposals_dict[constants.KEY_PRIMARY].detach()
         gt_primary = gt_dict[constants.KEY_PRIMARY].detach()
 
+        num_instances = auxiliary_dict[constants.KEY_NUM_INSTANCES]
         match_quality_matrix = self.similarity_calc.compare_batch(
             proposals_primary, gt_primary)
 
         match, assigned_overlaps_batch = self.matcher.match_batch(
-            match_quality_matrix, self.fg_thresh)
+            match_quality_matrix, num_instances, self.fg_thresh)
 
         # get recall stats
         num_instances = auxiliary_dict[constants.KEY_NUM_INSTANCES]
-        fake_match, _ = self.matcher.match_batch(match_quality_matrix, 0.7)
+        fake_match, _ = self.matcher.match_batch(
+            match_quality_matrix, num_instances, self.fake_fg_thresh)
         # remove appended gts
         append_num_gt = gt_primary.shape[-2]
         stats.update(
             Analyzer.analyze_recall(fake_match, num_instances, append_num_gt))
+        auxiliary_dict[constants.KEY_FAKE_MATCH] = fake_match
 
-        ignored_match = self.suppress_ignored_case(match, num_instances)
+        # ignored_match = self.suppress_ignored_case(match, num_instances)
 
         ##########################
         # assigner
@@ -94,7 +100,7 @@ class TargetGenerator(object):
                 constants.KEY_BG_THRESH: self.bg_thresh,
                 # no any ignored case will be assigned
                 constants.KEY_MATCH: match,
-                constants.KEY_IGNORED_MATCH: ignored_match,
+                # constants.KEY_IGNORED_MATCH: ignored_match,
                 constants.KEY_ASSIGNED_OVERLAPS: assigned_overlaps_batch
             }
             kwargs.update(auxiliary_dict)
@@ -141,8 +147,10 @@ class TargetGenerator(object):
         # generate pred
         # add pred for loss_unit
         for key in proposals_dict:
-            if key == constants.KEY_PRIMARY:
-                continue
-            loss_units[key]['pred'] = proposals_dict[key]
+            # if key == constants.KEY_PRIMARY:
+            # continue
+            if key in loss_units:
+                # maybe key is not in loss_units
+                loss_units[key]['pred'] = proposals_dict[key]
 
         return proposals_dict, loss_units, stats

@@ -9,6 +9,7 @@ from PIL import Image
 from data.det_dataset import DetDataset
 from core import constants
 from utils.registry import DATASETS
+from data import transforms
 
 
 @DATASETS.register('bdd')
@@ -18,16 +19,29 @@ class BDDDataset(DetDataset):
         # import ipdb
         # ipdb.set_trace()
         self.transforms = transform
-        self.root_path = dataset_config['root_path']
-        self.data_path = os.path.join(self.root_path,
-                                      dataset_config['data_path'])
-        self.label_path = os.path.join(self.root_path,
-                                       dataset_config['label_path'])
-
         self.classes = ['bg'] + dataset_config['classes']
-        self.sample_names = self.make_label_list(
-            os.path.join(self.label_path, dataset_config['dataset_file']))
-        self.imgs = self.make_image_list()
+
+        if dataset_config.get('img_dir') is not None:
+            self.image_dir = dataset_config['img_dir']
+            # directory
+            self.sample_names = self.load_sample_names_from_image_dir(
+                self.image_dir)
+            self.imgs = self.sample_names
+        elif dataset_config.get('demo_file') is not None:
+            # file
+            self.sample_names = [dataset_config['demo_file']]
+            self.imgs = self.sample_names
+        else:
+            # val dataset
+            self.root_path = dataset_config['root_path']
+            self.data_path = os.path.join(self.root_path,
+                                          dataset_config['data_path'])
+            self.label_path = os.path.join(self.root_path,
+                                           dataset_config['label_path'])
+
+            self.sample_names = self.make_label_list(
+                os.path.join(self.label_path, dataset_config['dataset_file']))
+            self.imgs = self.make_image_list()
 
         self.max_num_boxes = 100
 
@@ -155,11 +169,26 @@ if __name__ == '__main__':
         'dataset_file': 'bdd100k_labels_images_val.json',
         'data_path': 'images/100k/val',
         'label_path': 'labels',
-        'classes': ['car', 'person', 'bus']
+        'classes': ["person", "bus", "motor", "rider", "train", "truck"]
     }
-    dataset = BDDDataset(dataset_config, training=False)
+    transform_config = [{
+        "type": "color_jitter"
+    }, {
+        "type": "random_sample_crop_v2"
+    }, {
+        "type": "random_horizontal_flip_v2"
+    }, {
+        "type": "random_gray"
+    }, {
+        "type": "fix_shape_resize",
+        "size": [384, 768]
+    }, {
+        "type": "to_tensor"
+    }]
+    transform = transforms.build(transform_config)
+    dataset = BDDDataset(dataset_config, transform=transform, training=True)
     for sample in dataset:
-        img = sample[constants.KEY_IMAGE]
+        img = sample[constants.KEY_IMAGE].permute(1, 2, 0)*255
         bbox = sample[constants.KEY_LABEL_BOXES_2D]
         num_instances = sample[constants.KEY_NUM_INSTANCES]
         bbox = bbox[:num_instances]

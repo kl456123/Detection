@@ -437,15 +437,17 @@ def torch_points_3d_to_points_2d(points_3d, p2):
 
 def torch_xyxy_to_xywh(boxes):
     format_checker.check_tensor_shape(boxes, [None, None, 4])
+    format_checker.check_tensor_type(boxes, 'float')
     xymin = boxes[:, :, :2]
     xymax = boxes[:, :, 2:4]
     xy = (xymin + xymax) / 2
-    wh = xymax - xymin + 1
+    wh = xymax - xymin
     return torch.cat([xy, wh], dim=-1)
 
 
 def torch_xywh_to_xyxy(boxes):
     format_checker.check_tensor_shape(boxes, [None, None, 4])
+    format_checker.check_tensor_type(boxes, 'float')
     xy = boxes[:, :, :2]
     wh = boxes[:, :, 2:4]
     xymin = xy - wh / 2

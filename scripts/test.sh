@@ -2,6 +2,7 @@
 
 rm results/data/*
 rm results/fv/*
+rm results/box_2d/*
 
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkpoint 3257 \
@@ -55,11 +56,15 @@ rm results/fv/*
     # --net rfcn \
     # --load_dir /data/object/liangxiong/rfcn
 
-# CUDA_VISIBLE_DEVICES=1 python test_net.py --cuda \
+# CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
     # --net fpn \
-    # --checkpoint 3257 \
-    # --checkepoch 38 \
-    # --load_dir /data/object/liangxiong/fpn
+    # --checkpoint 4000 \
+    # --load_dir /data/object/liangxiong/fpn_kitti \
+    # --thresh 0.5 \
+    # --dataset kitti \
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
+
 
 # CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --net semantic_sinet \
@@ -194,11 +199,12 @@ rm results/fv/*
 
 #FPN_KITTI
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 216000 \
+    # --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth \
+    # --config ./configs/fpn_kitti_config.json \
     # --net fpn \
-    # --load_dir /data/object/liangxiong/fpn_kitti_pretrained \
-    # --dataset kitti \
-    # --thresh 0.5
+    # --thresh 0.5 \
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
 
 # FPN_COCO
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
@@ -226,15 +232,15 @@ rm results/fv/*
     # --calib_file ./000004.txt
 
 # FPN_MONO_3D_REAR
-CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 56000 \
-    --net fpn_mono_3d_rear \
-    --load_dir /data/object/liangxiong/fpn_mono_3d_rear \
-    --dataset kitti \
-    --thresh 0.5 \
-    --calib_file ./000004.txt \
-    --img_path /data/dm202_3w/left_img/007890.png
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 400000 \
+    # --net fpn_mono_3d_rear \
+    # --load_dir /data/object/liangxiong/fpn_mono_3d_rear \
+    # --dataset kitti \
+    # --thresh 0.5 \
+    # --calib_file ./000004.txt \
     # --img_dir /data/dm202_3w/left_img
+    # --img_path /data/dm202_3w/left_img/007890.png
 
 # FPN FPN_MULTIBIN
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
@@ -245,3 +251,41 @@ CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
     # --thresh 0.5 \
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
+
+# PRNET_KITTI
+# CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
+    # --checkpoint 16000 \
+    # --net prnet \
+    # --load_dir /data/object/liangxiong/prnet \
+    # --dataset kitti \
+    # --thresh 0.3 \
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
+
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --model /data/object/liangxiong/prnet_bdd/prnet/bdd/detector_800.pth \
+    # --config ./configs/prnet_bdd_config.json \
+    # --net prnet \
+    # --thresh 0.1 \
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
+
+# PRNET_BDD
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 20000 \
+    # --load_dir /data/object/liangxiong/prnet_bdd_ohem \
+    # --net prnet \
+    # --thresh 0.3 \
+    # --dataset bdd \
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
+
+CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    --checkpoint 8000 \
+    --load_dir /data/object/liangxiong/prnet_mono_3d \
+    --net prnet_mono_3d \
+    --thresh 0.3 \
+    --dataset mono_3d_kitti
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
+

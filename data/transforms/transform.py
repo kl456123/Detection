@@ -473,6 +473,7 @@ class FixShapeResize(object):
         self.interpolation = self.interpolate_map[interpolate]
         # h, w
         self.size = config['size']
+        self.normalize_bbox = config.get('normalize_bbox', False)
 
     def __call__(self, sample):
         """
@@ -504,6 +505,10 @@ class FixShapeResize(object):
             bbox = sample[constants.KEY_LABEL_BOXES_2D]
             bbox[:, ::2] *= image_scale[1]
             bbox[:, 1::2] *= image_scale[0]
+
+            if self.normalize_bbox:
+                bbox[:, ::2] /= self.size[1]
+                bbox[:, 1::2] /= self.size[0]
 
             sample[constants.KEY_LABEL_BOXES_2D] = bbox
 
@@ -604,4 +609,356 @@ class ToTensor(Transform):
         image = F.to_tensor(image)
         sample[constants.KEY_IMAGE] = image
 
+        return sample
+
+
+@TRANSFORMS.register('color_jitter')
+class ColorJitter(Transform):
+    """Randomly distort image color space.
+    Note that input image should in original range [0, 255].
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.hue_delta = 18
+        self.contrast_low = 0.5
+        self.contrast_high = 1.5
+        self.saturation_low = 0.5
+        self.saturation_high = 1.5
+        self.brightness_delta = 32
+
+    @staticmethod
+    def brightness(src, delta, p=0.5):
+        """Brightness distortion."""
+        if np.random.uniform(0, 1) > p:
+            delta = np.random.uniform(-delta, delta)
+            src += delta
+            return src
+        return src
+
+    @staticmethod
+    def contrast(src, low, high, p=0.5):
+        """Contrast distortion"""
+        if np.random.uniform(0, 1) > p:
+            alpha = np.random.uniform(low, high)
+            src *= alpha
+            return src
+        return src
+
+    @staticmethod
+    def saturation(src, low, high, p=0.5):
+        """Saturation distortion."""
+        if np.random.uniform(0, 1) > p:
+            alpha = np.random.uniform(low, high)
+            gray = src * np.array([[[0.299, 0.587, 0.114]]])
+            gray = np.sum(gray, axis=2, keepdims=True)
+            gray *= (1.0 - alpha)
+            src *= alpha
+            src += gray
+            return src
+        return src
+
+    @staticmethod
+    def hue(src, delta, p=0.5):
+        """Hue distortion"""
+        if np.random.uniform(0, 1) > p:
+            alpha = random.uniform(-delta, delta)
+            u = np.cos(alpha * np.pi)
+            w = np.sin(alpha * np.pi)
+            bt = np.array([[1.0, 0.0, 0.0], [0.0, u, -w], [0.0, w, u]])
+            tyiq = np.array([[0.299, 0.587, 0.114], [0.596, -0.274, -0.321],
+                             [0.211, -0.523, 0.311]])
+            ityiq = np.array([[1.0, 0.956, 0.621], [1.0, -0.272, -0.647],
+                              [1.0, -1.107, 1.705]])
+            t = np.dot(np.dot(ityiq, bt), tyiq).T
+            src = np.dot(src, np.array(t))
+            return src
+
+        return src
+
+    def __call__(self, sample):
+        image = sample[constants.KEY_IMAGE]
+        image = np.array(image, dtype=float)
+
+        # brightness
+        image = self.brightness(image, self.brightness_delta)
+
+        # color jitter
+        if np.random.randint(0, 2):
+            image = self.contrast(image, self.contrast_low, self.contrast_high)
+            image = self.saturation(image, self.saturation_low,
+                                    self.saturation_high)
+            image = self.hue(image, self.hue_delta)
+        else:
+            image = self.saturation(image, self.saturation_low,
+                                    self.saturation_high)
+            image = self.hue(image, self.hue_delta)
+            image = self.contrast(image, self.contrast_low, self.contrast_high)
+
+        image = np.around(image)
+        image = np.clip(image, a_min=0, a_max=255)
+        image = Image.fromarray(image.astype(np.uint8))
+
+        sample[constants.KEY_IMAGE] = image
+        return sample
+
+
+@TRANSFORMS.register('random_sample_crop_v2')
+class RandomSampleCropV2(Transform):
+    """
+    Args:
+        img (Image): the image being input during training
+        boxes (Tensor): the original bounding boxes in pt form
+        labels (Tensor): the class labels for each bbox
+        mode (float tuple): the min and max jaccard overlaps
+    Returns:
+        (img, boxes, classes)
+            img (Image): the cropped image
+            boxes (Tensor): the adjusted bounding boxes in pt form
+            labels (Tensor): the class labels for each bbox
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.resize_max = config.get('resize_max', 3.)
+        self.resize_min = config.get('resize_min', 0.8)
+        self.min_aspect = 0.5
+        self.max_aspect = 2
+        self.keep_aspect = True
+
+        self.sample_options = (
+            'keep_same',  # Using entire original input image.
+            'zoom_out',
+            'random_crop',  # Randomly sample a patch.
+        )
+
+    def __call__(self, sample):
+        image = sample[constants.KEY_IMAGE]
+        labels = sample[constants.KEY_LABEL_CLASSES]
+        boxes = sample[constants.KEY_LABEL_BOXES_2D]
+        while True:
+            # Randomly choose a mode.
+            mode = random.choice(self.sample_options)
+            if mode is 'keep_same':
+                return sample
+            elif mode is 'zoom_out':
+                image, boxes, labels = self.__random_zoom_out(
+                    image, boxes, labels, max_ratio=self.resize_max)
+            elif mode is 'random_crop':
+                image, boxes, labels = self.__random_crop(
+                    image, boxes, labels, resize_min=self.resize_min)
+            else:
+                image, boxes, labels = self.__random_sample(
+                    image, boxes, labels, resize_min=self.resize_min)
+
+            sample[constants.KEY_IMAGE] = image
+            sample[constants.KEY_LABEL_BOXES_2D] = boxes
+            sample[constants.KEY_LABEL_CLASSES] = labels
+            return sample
+
+    @staticmethod
+    def __random_zoom_out(image,
+                          boxes=None,
+                          labels=None,
+                          masks=None,
+                          max_ratio=1.5):
+        width, height, = image.size
+        # place the image on a 1.5X mean pic
+        # 0.485, 0.456, 0.406
+        ratio = np.random.uniform(1., max_ratio)
+        mean_img = np.ones(
+            (int(ratio * height), int(ratio * width), 3), dtype=np.uint8)
+
+        mean_img[:, :, 0] *= np.uint8(0.485 * 255)
+        mean_img[:, :, 1] *= np.uint8(0.456 * 255)
+        mean_img[:, :, 2] *= np.uint8(0.406 * 255)
+
+        left = np.random.uniform(0, ratio - 1) * width
+        top = np.random.uniform(0, ratio - 1) * height
+        rect = np.array(
+            [int(left), int(top), int(left + width), int(top + height)])
+        mean_img[rect[1]:rect[3], rect[0]:rect[2], :] = np.array(
+            image, dtype=np.uint8)
+
+        current_boxes = boxes.copy()
+        current_labels = labels.copy()
+        # adjust to crop (by substracting crop's left,top)
+        current_boxes[:, :2] += rect[:2]
+        current_boxes[:, 2:] += rect[:2]
+
+        if masks is not None:
+            zero_img = np.zeros(
+                (int(ratio * height), int(ratio * width)), dtype=np.uint8)
+            zero_img[rect[1]:rect[3], rect[0]:rect[2]] = masks
+            return Image.fromarray(mean_img.astype(
+                np.uint8)), current_boxes, current_labels, zero_img
+
+        else:
+            return Image.fromarray(
+                mean_img.astype(np.uint8)), current_boxes, current_labels
+
+    @staticmethod
+    def __random_crop(image,
+                      boxes=None,
+                      labels=None,
+                      masks=None,
+                      resize_min=0.1):
+        width, height, = image.size
+        for _ in range(20):
+            patch_size = int(
+                np.random.uniform(resize_min, 1) * min(width, height))
+
+            left = np.random.uniform(0, width - patch_size)
+            top = np.random.uniform(0, height - patch_size)
+
+            rect = np.array([
+                int(left), int(top), int(left + patch_size),
+                int(top + patch_size)
+            ])
+
+            # Keep overlap with gt box IF center in sampled patch.
+            centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
+            # Mask in all gt boxes that above and to the left of centers.
+            m1 = (rect[0] < centers[:, 0]) * (rect[1] < centers[:, 1])
+            # Mask in all gt boxes that under and to the right of centers.
+            m2 = (rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
+            # mask in that both m1 and m2 are true
+            mask = m1 * m2
+            # have any valid boxes? try again if not
+            if not mask.any():
+                continue
+
+            # Cut the crop from the image.
+            current_image = np.array(image)
+            current_image = current_image[rect[1]:rect[3], rect[0]:rect[2], :]
+
+            current_boxes = boxes[mask, :].copy()  # take only matching gt boxes
+            current_labels = labels[mask]  # take only matching gt labels
+
+            # should we use the box left and top corner or the crop's
+            current_boxes[:, :2] = np.maximum(current_boxes[:, :2], rect[:2])
+            # adjust to crop (by substracting crop's left,top)
+            current_boxes[:, :2] -= rect[:2]
+            current_boxes[:, 2:] = np.minimum(current_boxes[:, 2:], rect[2:])
+            # adjust to crop (by substracting crop's left,top)
+            current_boxes[:, 2:] -= rect[:2]
+
+            if masks is not None:
+                masks = masks[rect[1]:rect[3], rect[0]:rect[2]]
+                return Image.fromarray(
+                    current_image), current_boxes, current_labels, masks
+            else:
+                return Image.fromarray(
+                    current_image), current_boxes, current_labels
+
+        if masks is not None:
+            return image, boxes, labels, masks
+        else:
+            return image, boxes, labels
+
+    def __random_sample(self, image, boxes=None, labels=None, resize_min=0.8):
+        width, height, = image.size
+
+        for _ in range(20):
+            min_iou = random.choice([0.1, 0.3, 0.5, 0.7, 0.9])
+            current_image = np.array(image)
+
+            if self.keep_aspect:
+                current_image = np.array(image)
+                w = np.random.uniform(resize_min * width, width)
+                h = w * height / float(width)
+
+                # Convert to integer rect x1,y1,x2,y2.
+                left = np.random.uniform(width - w)
+                top = left / width * height
+            else:
+                w = np.random.uniform(resize_min * width, width)
+                h = np.random.uniform(resize_min * height, height)
+                # Aspect ratio constraint b/t .5 & 2.
+                if h / w < self.min_aspect or h / w > self.max_aspect:
+                    continue
+
+                # Convert to integer rect x1,y1,x2,y2.
+                left = np.random.uniform(width - w)
+                top = np.random.uniform(height - h)
+
+            rect = np.array([int(left), int(top), int(left + w), int(top + h)])
+            # Calculate IoU (jaccard overlap) b/t the cropped and gt boxes.
+            overlap = jaccard_numpy(boxes, rect)
+            # Is min and max overlap constraint satisfied? if not try again.
+            if overlap.min() < min_iou:
+                continue
+
+            # Cut the crop from the image.
+            current_image = current_image[rect[1]:rect[3], rect[0]:rect[2], :]
+            # Keep overlap with gt box IF center in sampled patch.
+            centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
+            # Mask in all gt boxes that above and to the left of centers.
+            m1 = (rect[0] < centers[:, 0]) * (rect[1] < centers[:, 1])
+            # Mask in all gt boxes that under and to the right of centers.
+            m2 = (rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
+            # mask in that both m1 and m2 are true
+            mask = m1 * m2
+            # have any valid boxes? try again if not
+            if not mask.any():
+                continue
+
+            current_boxes = boxes[mask, :].copy()  # take only matching gt boxes
+            current_labels = labels[mask]  # take only matching gt labels
+
+            # should we use the box left and top corner or the crop's
+            current_boxes[:, :2] = np.maximum(current_boxes[:, :2], rect[:2])
+            # adjust to crop (by substracting crop's left,top)
+            current_boxes[:, :2] -= rect[:2]
+            current_boxes[:, 2:] = np.minimum(current_boxes[:, 2:], rect[2:])
+            # adjust to crop (by substracting crop's left,top)
+            current_boxes[:, 2:] -= rect[:2]
+
+            return Image.fromarray(
+                current_image), current_boxes, current_labels
+
+        return image, boxes, labels
+
+
+@TRANSFORMS.register('random_horizontal_flip_v2')
+class RandomHorizontalFlipV2(Transform):
+    """Horizontally flip the given PIL.Image randomly with a probability of 0.5."""
+
+    def __call__(self, sample):
+        """
+        Args:
+            img (PIL.Image): Image to be flipped.
+            bbox[np.array]: bbox to be flipped
+
+        Returns:
+            PIL.Image: Randomly flipped image.
+        """
+        img = sample[constants.KEY_IMAGE]
+        bbox = sample[constants.KEY_LABEL_BOXES_2D]
+        if random.random() < 0.5:
+            w, h = img.size
+            xmin = w - bbox[:, 2]
+            xmax = w - bbox[:, 0]
+            bbox[:, 0] = xmin
+            bbox[:, 2] = xmax
+            sample[constants.KEY_IMAGE] = img.transpose(Image.FLIP_LEFT_RIGHT)
+            sample[constants.KEY_LABEL_BOXES_2D] = bbox
+            return sample
+
+        return sample
+
+
+@TRANSFORMS.register('random_gray')
+class RandomGray(object):
+    def __init__(self, config):
+        self.random_ratio = config.get('random_ratio', 8)
+
+    def __call__(self, sample):
+        img = sample[constants.KEY_IMAGE]
+        num = np.random.uniform(0, 1)
+        if num < float(1 / self.random_ratio):
+            img = img.convert('L')
+            img = img.convert('RGB')
+
+        sample[constants.KEY_IMAGE] = img
         return sample

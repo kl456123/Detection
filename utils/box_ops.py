@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 import torch
+import similarity_calcs
+from utils import geometry_utils
+import numpy as np
 
 # from similarity_calcs.center_similarity_calc import CenterSimilarityCalc
 
@@ -120,7 +123,8 @@ def super_nms(bboxes, nms_thresh=0.8, nms_num=2, loop_time=1):
     Args:
         bboxes: shape(N,4)
     """
-    similarity_calc = CenterSimilarityCalc()
+    similarity_calc_config = {"type": "center"}
+    similarity_calc = similarity_calcs.build(similarity_calc_config)
     # expand batch dim
     bboxes = bboxes.unsqueeze(0)
     # shape(N,M,M)
@@ -149,3 +153,64 @@ def super_nms(bboxes, nms_thresh=0.8, nms_num=2, loop_time=1):
         remain_match_inds = remain_match_inds[:, 0]
 
     return remain_match_inds
+
+
+def single_iou(box1, box2):
+    """
+    Args:
+        box1: [x1,y1,x2,y2]
+        box2: [x1,y1,x2,y2]
+    """
+    xmin = np.maximum(box1[0], box2[0])
+    ymin = np.maximum(box1[1], box2[1])
+    xmax = np.minimum(box1[2], box2[2])
+    ymax = np.minimum(box1[3], box2[3])
+    w = np.maximum(xmax - xmin, 0)
+    h = np.maximum(ymax - ymin, 0)
+
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+    return w * h / (area1 + area2)
+
+
+def filter_by_center(boxes_centers, cluster_centers, min_dist=100):
+    dist = torch.norm(boxes_centers - cluster_centers, dim=-1)
+    return dist < min_dist
+
+
+def super_nms_faster(boxes):
+    """
+    Args:
+        boxes: shape(N, 4)
+    Returns:
+        keep
+    """
+    # min_iou = 0.8  # min iou
+    # boxes_np = boxes.cpu().numpy()
+    # import scipy.cluster.hierarchy as hcluster
+    # clusters_np = hcluster.fclusterdata(boxes_np, min_iou, metric=single_iou)
+    boxes_xy = geometry_utils.torch_xyxy_to_xywh(boxes.unsqueeze(0)).squeeze(0)
+    xmin = boxes[:, ::2].min()
+    xmax = boxes[:, ::2].max()
+    ymin = boxes[:, 1::2].min()
+    ymax = boxes[:, 1::2].max()
+
+    x_slices = 10
+    y_slices = 10
+    x_stride = (xmax - xmin) / x_slices
+    y_stride = (ymax - ymin) / y_slices
+    cluster_x = torch.arange(0, x_slices) * x_stride
+    cluster_y = torch.arange(0, y_slices) * y_stride
+    xv, yv = torch.meshgrid([cluster_x, cluster_y])
+    cluster = torch.stack(
+        [xv.contiguous().view(-1), yv.contiguous().view(-1)],
+        dim=-1).cuda().float()
+
+    remain_boxes = []
+    for i in range(cluster.shape[0]):
+        mask = filter_by_center(boxes_xy[:, :2], cluster[i])
+        cluster_boxes = boxes[mask]
+        keep = super_nms(cluster_boxes, nms_thresh=0.8, nms_num=4, loop_time=1)
+        if keep.numel() > 0:
+            remain_boxes.append(keep)
+    return torch.cat(remain_boxes, dim=0)

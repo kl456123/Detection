@@ -171,8 +171,8 @@ class FPNMono3DREAR(FPNFasterRCNN):
                 feed_dict[constants.KEY_STEREO_CALIB_P2]).detach()
 
             # final ry
-            rcnn_orient_preds[rear_valid_cond] = rcnn_rear_preds[
-                rear_valid_cond]
+            # rcnn_orient_preds[rear_valid_cond] = rcnn_rear_preds[
+                # rear_valid_cond]
 
             # final decision combine rcnn_rear_preds with rcnn_orient_preds
 

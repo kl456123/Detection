@@ -11,6 +11,7 @@ from core import constants
 import sys
 import os
 from utils import geometry_utils
+from utils import box_ops
 
 
 class Tester(object):
@@ -71,7 +72,7 @@ class Tester(object):
                 # z, alpha, cf))
             f.write('\n'.join(res_str))
 
-    def test(self, dataloader, model, logger):
+    def test_3d(self, dataloader, model, logger):
         self.logger.info('Start testing')
         num_samples = len(dataloader)
 
@@ -175,3 +176,168 @@ class Tester(object):
                 sys.stdout.flush()
 
                 end_time = time.time()
+
+    def test_2d(self, dataloader, model, logger):
+        self.logger.info('Start testing')
+        num_samples = len(dataloader)
+
+        if self.feat_vis:
+            # enable it before forward pass
+            model.enable_feat_vis()
+        end_time = 0
+
+        for step, data in enumerate(dataloader):
+            # start_time = time.time()
+            data = common.to_cuda(data)
+            image_path = data[constants.KEY_IMAGE_PATH]
+
+            with torch.no_grad():
+                prediction = model(data)
+            # duration_time = time.time() - start_time
+
+            if self.feat_vis:
+                featmaps_dict = model.get_feat()
+                from utils.visualizer import FeatVisualizer
+                feat_visualizer = FeatVisualizer()
+                feat_visualizer.visualize_maps(featmaps_dict)
+
+            # initialize dets for each classes
+            # dets = [[] for class_ind in range(self.n_classes)]
+            dets = [[]]
+
+            scores = prediction[constants.KEY_CLASSES]
+            boxes_2d = prediction[constants.KEY_BOXES_2D]
+
+            batch_size = scores.shape[0]
+            # scores = scores.view(-1, self.n_classes)
+            # new_scores = torch.zeros_like(scores)
+            # _, scores_argmax = scores.max(dim=-1)
+            # row = torch.arange(0, scores_argmax.numel()).type_as(scores_argmax)
+            # new_scores[row, scores_argmax] = scores[row, scores_argmax]
+            # scores = new_scores.view(batch_size, -1, self.n_classes)
+
+            #  if step == 6:
+            #  import ipdb
+            #  ipdb.set_trace()
+
+            for batch_ind in range(batch_size):
+                boxes_2d_per_img = boxes_2d[batch_ind]
+                scores_per_img = scores[batch_ind]
+                for class_ind in range(1, self.n_classes):
+                    # cls thresh
+                    inds = torch.nonzero(
+                        scores_per_img[:, class_ind] > self.thresh).view(-1)
+                    threshed_scores_per_img = scores_per_img[inds, class_ind]
+                    if inds.numel() > 0:
+                        # if self.class_agnostic:
+                        threshed_boxes_2d_per_img = boxes_2d_per_img[inds]
+                        # else:
+                        # threshed_boxes_2d_per_img = boxes_2d_per_img[
+                        # inds, class_ind * 4:class_ind * 4 + 4]
+                        # concat boxes and scores
+                        threshed_dets_per_img = torch.cat([
+                            threshed_boxes_2d_per_img,
+                            threshed_scores_per_img.unsqueeze(-1),
+                        ],
+                                                          dim=-1)
+
+                        # sort by scores
+                        _, order = torch.sort(threshed_scores_per_img, 0, True)
+                        threshed_dets_per_img = threshed_dets_per_img[order]
+
+                        # nms
+                        keep = nms(threshed_dets_per_img[:, :4],
+                                   threshed_dets_per_img[:, 4],
+                                   self.nms).view(-1).long()
+                        nms_dets_per_img = threshed_dets_per_img[keep].detach(
+                        ).cpu().numpy()
+
+                        dets.append(nms_dets_per_img)
+                    else:
+                        dets.append([])
+
+                duration_time = time.time() - end_time
+                label_path = self._generate_label_path(image_path[batch_ind])
+                self.save_dets(dets, label_path)
+                sys.stdout.write('\r{}/{},duration: {}'.format(
+                    step + 1, num_samples, duration_time))
+                sys.stdout.flush()
+
+                end_time = time.time()
+
+    def test_super_nms(self, dataloader, model, logger):
+        self.logger.info('Start testing')
+        num_samples = len(dataloader)
+
+        if self.feat_vis:
+            # enable it before forward pass
+            model.enable_feat_vis()
+        end_time = 0
+
+        for step, data in enumerate(dataloader):
+            # start_time = time.time()
+            data = common.to_cuda(data)
+            image_path = data[constants.KEY_IMAGE_PATH]
+
+            with torch.no_grad():
+                prediction = model(data)
+            # duration_time = time.time() - start_time
+
+            if self.feat_vis:
+                featmaps_dict = model.get_feat()
+                from utils.visualizer import FeatVisualizer
+                feat_visualizer = FeatVisualizer()
+                feat_visualizer.visualize_maps(featmaps_dict)
+
+            # initialize dets for each classes
+            # dets = [[] for class_ind in range(self.n_classes)]
+            dets = [[]]
+
+            scores = prediction[constants.KEY_CLASSES]
+            boxes_2d = prediction[constants.KEY_BOXES_2D]
+
+            batch_size = scores.shape[0]
+            # scores = scores.view(-1, self.n_classes)
+            # new_scores = torch.zeros_like(scores)
+            # _, scores_argmax = scores.max(dim=-1)
+            # row = torch.arange(0, scores_argmax.numel()).type_as(scores_argmax)
+            # new_scores[row, scores_argmax] = scores[row, scores_argmax]
+            # scores = new_scores.view(batch_size, -1, self.n_classes)
+
+            #  if step == 6:
+            #  import ipdb
+            #  ipdb.set_trace()
+
+            for batch_ind in range(batch_size):
+                boxes_2d_per_img = boxes_2d[batch_ind]
+                scores_per_img = scores[batch_ind]
+                for class_ind in range(1, self.n_classes):
+                    # cls thresh
+
+
+                    # index = torch.randperm(boxes_2d_per_img.shape[0])[:100].cuda().long()
+                    # boxes_2d_per_img = boxes_2d_per_img[:2000]
+                    # scores_per_img = scores_per_img[:2000,:]
+                    dets_per_img = torch.cat(
+                        [boxes_2d_per_img, scores_per_img[:,:1]], dim=-1)
+                    # import ipdb
+                    # ipdb.set_trace()
+                    keep = box_ops.super_nms_faster(boxes_2d_per_img)
+                    dets_per_img = dets_per_img[keep].detach().cpu().numpy()
+                    # import ipdb
+                    # ipdb.set_trace()
+                    dets.append(dets_per_img)
+
+                duration_time = time.time() - end_time
+                label_path = self._generate_label_path(image_path[batch_ind])
+                self.save_dets(dets, label_path)
+                sys.stdout.write('\r{}/{},duration: {}'.format(
+                    step + 1, num_samples, duration_time))
+                sys.stdout.flush()
+
+                end_time = time.time()
+
+    def test(self, dataloader, model, logger):
+        # self.test_super_nms(dataloader, model, logger)
+        # self.test_2d(dataloader, model, logger)
+        self.test_3d(dataloader, model, logger)

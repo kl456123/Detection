@@ -33,6 +33,8 @@ class Analyzer(object):
 
     @staticmethod
     def analyze_precision(match, rcnn_cls_probs, num_instances, thresh=0.5):
+        # import ipdb
+        # ipdb.set_trace()
         batch_size = match.shape[0]
         num_dets = 0
         num_gt = num_instances.sum()
@@ -45,8 +47,8 @@ class Analyzer(object):
             num_tp = torch.nonzero((cls_probs_per_img > thresh) & (
                 match_per_img > -1)).numel()
             num_tps = num_tp + num_tps
-            match_thresh = match[(cls_probs_per_img > thresh) & (match_per_img
-                                                                 > -1)]
+            match_thresh = match_per_img[(cls_probs_per_img > thresh) & (
+                match_per_img > -1)]
 
             gt_mask = torch.zeros(
                 num_instances[batch_ind]).type_as(match_thresh)
@@ -56,8 +58,9 @@ class Analyzer(object):
             num_dets = num_det + num_dets
 
         stats = {}
+        num_dets = max(num_dets, 1)
         stats[constants.KEY_STATS_PRECISION] = torch.tensor(
-            num_tps, num_dets).to('cuda').float().unsqueeze(0)
-        stats[constants.KEY_STATS_THRESH_RECALL] = torch(
-            num_matched_thresh, num_gt).to('cuda').float().unsqueeze(0)
+            [num_tps, num_dets]).to('cuda').float().unsqueeze(0)
+        stats[constants.KEY_STATS_THRESH_RECALL] = torch.tensor(
+            [num_matched_thresh, num_gt]).to('cuda').float().unsqueeze(0)
         return stats

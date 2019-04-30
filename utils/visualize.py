@@ -5,6 +5,7 @@ and ratios
 """
 
 import cv2
+import os
 import numpy as np
 import argparse
 import pickle
@@ -39,14 +40,15 @@ def visualize_bbox(img,
                    save=False,
                    title='test',
                    keypoints=None,
-                   display=True):
+                   display=False,
+                   image_path='demo.jpg'):
     """
     Args:
         bboxes: non-normalized(N,4)
         img: non-noramlized (H,W,C)(bgr)
     """
 
-    print(("img shape: ", img.shape))
+    # print(("img shape: ", img.shape))
     #################################
     # Image
     ################################
@@ -119,8 +121,9 @@ def visualize_bbox(img,
             cv2.waitKey(0)
 
         if save:
-            img_path = 'res_%d.jpg' % idx
-            cv2.imwrite(img_path, img)
+            # import ipdb
+            # ipdb.set_trace()
+            cv2.imwrite(image_path, img)
 
 
 def visualize_points(img, keypoints):
@@ -248,8 +251,33 @@ def parser_args():
         default='test')
     parser.add_argument(
         '--keypoint', dest='keypoint', help='file of keypoints')
+    parser.add_argument(
+        '--save_dir',
+        help='directory of saving',
+        dest='save_dir',
+        default='results/box_2d')
     args = parser.parse_args()
     return args
+
+
+def main(image, label, kitti, save_dir='./results/box_2d'):
+    img = read_img(image)
+    if label is not None:
+        gt_boxes, class_names = read_kitti(label)
+    else:
+        gt_boxes = []
+        class_names = []
+    boxes, class_names = read_kitti(kitti)
+    image_name = os.path.splitext(os.path.basename(image))[0]
+
+    image_path = os.path.join(save_dir, '{}.jpg'.format(image_name))
+    visualize_bbox(
+        img,
+        boxes,
+        gt_boxes,
+        class_names,
+        save=True,
+        image_path=image_path)
 
 
 if __name__ == '__main__':
@@ -286,6 +314,9 @@ if __name__ == '__main__':
         keypoints = read_keypoints(args.keypoint)
     else:
         keypoints = None
+    image_name = os.path.splitext(os.path.basename(args.img))[0]
+
+    image_path = os.path.join(args.save_dir, '{}.jpg'.format(image_name))
     visualize_bbox(
         img,
         boxes,
@@ -293,4 +324,5 @@ if __name__ == '__main__':
         class_names,
         save=True,
         title=args.title,
-        keypoints=keypoints)
+        keypoints=keypoints,
+        image_path=image_path)
