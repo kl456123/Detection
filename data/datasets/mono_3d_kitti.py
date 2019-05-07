@@ -5,6 +5,8 @@ from core import constants
 from utils import geometry_utils
 import numpy as np
 from utils.registry import DATASETS
+from utils.box_vis import compute_box_3d
+import torch
 
 KITTI_MEAN_DIMS = {
     'Car': [3.88311640418, 1.62856739989, 1.52563191462],
@@ -18,12 +20,56 @@ KITTI_MEAN_DIMS = {
 }
 
 
+def modify_cls_orient(cls_orient, left_side, right_side):
+    """
+    For special case, classifiy it from common case
+    """
+    left_dir = (left_side[0] - left_side[1])
+    right_dir = (right_side[0] - right_side[1])
+    cond = left_dir[0] * right_dir[0] < 0
+    if cond:
+        return 2
+    else:
+        return cls_orient
+
+
+def truncate_box(box_2d, line, normalize=True):
+    """
+    Args:
+        dims_2d:
+        line:
+    Return: cls_orient:
+            reg_orient:
+    """
+    # import ipdb
+    # ipdb.set_trace()
+    direction = (line[0] - line[1])
+    if direction[0] * direction[1] == 0:
+        cls_orient = -1
+    else:
+        cls_orient = direction[1] / direction[0] > 0
+        cls_orient = cls_orient.astype(np.int32)
+    # cls_orient = direction[0] > 0
+    reg_orient = np.abs(direction)
+
+    # normalize
+    if normalize:
+        # w, h = dims_2d
+        h = box_2d[3] - box_2d[1] + 1
+        w = box_2d[2] - box_2d[0] + 1
+
+        reg_orient[0] /= w
+        reg_orient[1] /= h
+        # reg_orient = np.log(reg_orient)
+    return cls_orient, reg_orient
+
+
 @DATASETS.register('mono_3d_kitti')
 class Mono3DKITTIDataset(KITTIDataset):
     def _generate_mean_dims(self):
         mean_dims = []
         for class_type in self.classes[1:]:
-            mean_dims.append(KITTI_MEAN_DIMS[class_type])
+            mean_dims.append(KITTI_MEAN_DIMS[class_type][::-1])
         return np.stack(mean_dims, axis=0).astype(np.float32)
 
     def get_sample(self, index):
@@ -35,30 +81,70 @@ class Mono3DKITTIDataset(KITTIDataset):
             # use boxes_3d_proj rather than boxes 2d
             label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
             p2 = sample[constants.KEY_STEREO_CALIB_P2]
-            boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d, p2)
+            boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d,
+                                                                p2)
             sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj
 
         if not self.training:
             sample[constants.KEY_STEREO_CALIB_P2_ORIG] = np.copy(
                 sample[constants.KEY_STEREO_CALIB_P2])
         return sample
-        # shape(M, 7)
-        # label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
-        # num_instances = sample[constants.KEY_NUM_INSTANCES]
+
+    def pad_sample(self, sample):
+        sample = super().pad_sample(sample)
+        # boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
+        # boxes_2d_proj = sample[constants.KEY_LABEL_BOXES_2D]
         # p2 = sample[constants.KEY_STEREO_CALIB_P2]
-        # label_corners_2d = geometry_utils.boxes_3d_to_corners_2d(
 
-    # label_boxes_3d, p2)
+        # cls_orients = []
+        # reg_orients = []
+        # dims = np.stack(
+            # [boxes_3d[:, 4], boxes_3d[:, 5], boxes_3d[:, 3]], axis=-1)
 
-    # shape(N, 2, 2)
-    # center_side = self._get_center_side(label_corners_2d)
+        # for i in range(boxes_3d.shape[0]):
+            # target = {}
+            # target['ry'] = boxes_3d[i, -1]
 
-    # label_boxes_2d_proj = geometry_utils.corners_2d_to_boxes_2d(
-    # label_corners_2d)
+            # target['dimension'] = dims[i]
+            # target['location'] = boxes_3d[i, :3]
 
-    # label_orients = self._generate_orients(center_side)
-    # sample[constants.KEY_LABEL_ORIENTS] = label_orients
-    # return sample
+            # corners_xy, points_3d = compute_box_3d(target, p2, True)
+
+            # # some labels for estimating orientation
+            # left_side_points_2d = corners_xy[[0, 3]]
+            # right_side_points_2d = corners_xy[[1, 2]]
+            # left_side_points_3d = points_3d.T[[0, 3]]
+            # right_side_points_3d = points_3d.T[[1, 2]]
+
+            # # which one is visible
+            # mid_left_points_3d = left_side_points_3d.mean(axis=0)
+            # mid_right_points_3d = right_side_points_3d.mean(axis=0)
+            # # K*T
+            # KT = p2[:, -1]
+            # K = p2[:3, :3]
+            # T = np.dot(np.linalg.inv(K), KT)
+            # C = -T
+            # mid_left_dist = np.linalg.norm((C - mid_left_points_3d))
+            # mid_right_dist = np.linalg.norm((C - mid_right_points_3d))
+            # if mid_left_dist > mid_right_dist:
+                # visible_side = right_side_points_2d
+            # else:
+                # visible_side = left_side_points_2d
+
+            # cls_orient, reg_orient = truncate_box(boxes_2d_proj[i],
+                                                  # visible_side)
+            # cls_orient = modify_cls_orient(cls_orient, left_side_points_2d,
+                                           # right_side_points_2d)
+
+            # cls_orients.append(cls_orient)
+            # reg_orients.append(reg_orient)
+
+        # sample['cls_orient'] = np.stack(cls_orients, axis=0).astype(np.int32)
+        # sample['reg_orient'] = np.stack(reg_orients, axis=0).astype(np.float32)
+        sample[constants.KEY_LABEL_CLASSES] = torch.from_numpy(
+            sample[constants.KEY_LABEL_CLASSES]).long()
+
+        return sample
 
     def _generate_orients(self, center_side):
         """
@@ -78,18 +164,18 @@ class Mono3DKITTIDataset(KITTIDataset):
         return np.concatenate(
             [cls_orients[..., np.newaxis], reg_orients], axis=-1)
 
-    def _get_center_side(self, corners_xy):
-        """
-        Args:
-            corners_xy: shape(N, 8, 2)
-        """
-        point0 = corners_xy[:, 0]
-        point1 = corners_xy[:, 1]
-        point2 = corners_xy[:, 2]
-        point3 = corners_xy[:, 3]
-        mid0 = (point0 + point1) / 2
-        mid1 = (point2 + point3) / 2
-        return np.stack([mid0, mid1], axis=1)
+    # def _get_center_side(self, corners_xy):
+    # """
+    # Args:
+    # corners_xy: shape(N, 8, 2)
+    # """
+    # point0 = corners_xy[:, 0]
+    # point1 = corners_xy[:, 1]
+    # point2 = corners_xy[:, 2]
+    # point3 = corners_xy[:, 3]
+    # mid0 = (point0 + point1) / 2
+    # mid1 = (point2 + point3) / 2
+    # return np.stack([mid0, mid1], axis=1)
 
     def visuliaze_sample(self, sample):
         image = sample[constants.KEY_IMAGE]
@@ -125,8 +211,8 @@ if __name__ == '__main__':
     }, {
         "type": "fix_ratio_resize",
         "size": [384, 1280],
-        "min_size":500,
-        "max_size":1280
+        "min_size": 500,
+        "max_size": 1280
     }]
     from data import transforms
     transform = transforms.build(transforms_config)

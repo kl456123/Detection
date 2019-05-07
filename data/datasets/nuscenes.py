@@ -13,11 +13,11 @@ from utils.registry import DATASETS
 
 @DATASETS.register('nuscenes')
 class NuscenesDataset(DetDataset):
-    calib_matrix = np.asarray(
-        [[1.26641720e+03, 0.00000000e+00, 8.16267020e+02, 0.00000000e+00],
-         [0.00000000e+00, 1.26641720e+03, 4.91507066e+02, 0.00000000e+00],
-         [0.00000000e+00, 0.00000000e+00, 1.00000000e+00, 0.00000000e+00]],
-        dtype=np.float32).reshape((3, 4))
+    # calib_matrix = np.asarray(
+    # [[1.26641720e+03, 0.00000000e+00, 8.16267020e+02, 0.00000000e+00],
+    # [0.00000000e+00, 1.26641720e+03, 4.91507066e+02, 0.00000000e+00],
+    # [0.00000000e+00, 0.00000000e+00, 1.00000000e+00, 0.00000000e+00]],
+    # dtype=np.float32).reshape((3, 4))
 
     def __init__(self, dataset_config, transform=None, training=True):
         super().__init__(training)
@@ -35,12 +35,30 @@ class NuscenesDataset(DetDataset):
             os.path.join(self.label_path, dataset_config['dataset_file']))
         self.imgs = sorted(self.make_image_list())
 
+        if dataset_config.get('calib_file'):
+            self._calib_file = dataset_config['calib_file']
+        else:
+            self._calib_file = None
+        self.calib_dir = self.root_path + '/calibs'
+
         self.max_num_boxes = 100
 
         # self.calif_file = dataset_config.get('calib_file')
 
     def _check_class(self, label):
         return label in self.classes
+
+    def load_projection_matrix(self, calib_file):
+        """Load the camera project matrix."""
+        assert os.path.isfile(calib_file)
+        with open(calib_file) as f:
+            lines = f.readlines()
+            line = lines[2]
+            line = line.split()
+            assert line[0] == 'P2:'
+            p = [float(x) for x in line[1:]]
+            p = np.array(p).reshape(3, 4)
+        return p
 
     def _check_anno(self, anno):
         cats = anno['category']
@@ -104,8 +122,13 @@ class NuscenesDataset(DetDataset):
         sample[constants.KEY_LABEL_BOXES_2D] = all_label_boxes_2d.astype(
             np.float32)
         sample[constants.KEY_LABEL_CLASSES] = all_label_classes
-        sample[constants.KEY_STEREO_CALIB_P2] = self.calib_matrix
         return sample
+
+    def get_calib_path(self, sample_name):
+        if self._calib_file is not None:
+            return self._calib_file
+        else:
+            return os.path.join(self.calib_dir, '{}.txt'.format(sample_name))
 
     def get_training_sample(self, index):
         image_path = self.imgs[index]
@@ -116,9 +139,14 @@ class NuscenesDataset(DetDataset):
         w, h = image.size
         image_info = np.asarray([h, w, 1.0, 1.0])
 
+        calib_path = self.get_calib_path(sample_name[:-4])
+        stereo_calib_p2 = self.load_projection_matrix(calib_path)
+
         sample = {}
         sample[constants.KEY_IMAGE] = image
         sample[constants.KEY_LABEL_BOXES_2D] = label_boxes_2d.astype(
+            np.float32)
+        sample[constants.KEY_STEREO_CALIB_P2] = stereo_calib_p2.astype(
             np.float32)
         sample[constants.KEY_LABEL_CLASSES] = label_classes.astype(np.int32)
         sample[constants.KEY_IMAGE_PATH] = image_path
@@ -148,24 +176,9 @@ class NuscenesDataset(DetDataset):
         bbox = bbox[:num_instances]
         image_path = sample[constants.KEY_IMAGE_PATH]
 
-        # import ipdb
-        # ipdb.set_trace()
-        z = bbox[:, 0]
-        x = -bbox[:, 1]
-        y = -bbox[:, 2]
-        l = bbox[:, 3]
-        w = bbox[:, 4]
-        h = bbox[:, 5]
-
-        new_bbox = np.zeros_like(bbox)
-        new_bbox[:, 0] = bbox[:, 6]
-        # (hwl)
-        new_bbox[:, 1:4] = np.stack([h, w, l], axis=-1)
-        new_bbox[:, 4:7] = bbox[:, :3]
-        # np.stack([y, z, x], axis=-1)
         draw_boxes(
             img,
-            new_bbox,
+            bbox,
             p2,
             save_path=os.path.basename(image_path),
             box_3d_gt=None)
@@ -185,13 +198,16 @@ class NuscenesDataset(DetDataset):
 
 
 if __name__ == '__main__':
+    import sys
     dataset_config = {
         'root_path': '/data/nuscenes',
-        'dataset_file': 'nuscenes_3d.json',
+        'dataset_file': 'trainval.json',
         'data_path': 'samples/CAM_FRONT',
         'label_path': '.',
         'classes': ['car', 'pedestrian', 'truck']
     }
     dataset = NuscenesDataset(dataset_config, training=True)
-    for sample in dataset:
+    for ind, sample in enumerate(dataset):
         dataset.visualize_bbox(sample)
+        sys.stdout.write('\r{}/{}'.format(ind, 1000))
+        sys.stdout.flush()

@@ -6,7 +6,7 @@ from core import constants
 from utils import geometry_utils
 
 
-@BBOX_CODERS.register(constants.KEY_BOXES_2D)
+@BBOX_CODERS.register('corner')
 class CornerCoder(object):
     @staticmethod
     def decode_batch(deltas, anchors):

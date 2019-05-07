@@ -45,6 +45,7 @@ KEY_FINAL_PROBS = 'final_probs'
 KEY_STATS_RECALL = 'stats_recall'
 KEY_STATS_PRECISION = 'stats_precision'
 KEY_STATS_THRESH_RECALL = 'stats_thresh_recall'
+KEY_STATS_ORIENTS_PRECISION = 'stats_orients_precision'
 KEY_STATS = 'stats'
 
 # auxiliary dict
@@ -55,3 +56,4 @@ KEY_BG_THRESH = 'bg_thresh'
 KEY_ASSIGNED_OVERLAPS = 'assigned_overlaps'
 KEY_MEAN_DIMS = 'mean_dims'
 KEY_FAKE_MATCH = 'fake_match'
+KEY_TARGET_GENERATOR_CONFIG = 'target_generator_config'

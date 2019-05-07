@@ -5,7 +5,7 @@ from utils.registry import BBOX_CODERS
 from core import constants
 
 
-# @BBOX_CODERS.register(constants.KEY_BOXES_2D_CENTER)
+@BBOX_CODERS.register('center')
 class CenterCoder(object):
     @staticmethod
     def decode_batch(deltas, boxes):

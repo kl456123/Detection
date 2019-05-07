@@ -29,6 +29,7 @@ class TargetGenerator(object):
 
         self.fake_fg_thresh = target_generator_config.get('fake_fg_thresh',
                                                           0.7)
+        self.target_generator_config = target_generator_config
 
         # self.stats = {}
 
@@ -97,6 +98,9 @@ class TargetGenerator(object):
             target_assigner = coders.build(target_assigner_config)
             # some match results used for encoding
             kwargs = {
+                # some params used for coders
+                constants.KEY_TARGET_GENERATOR_CONFIG:
+                self.target_generator_config,
                 constants.KEY_BG_THRESH: self.bg_thresh,
                 # no any ignored case will be assigned
                 constants.KEY_MATCH: match,

@@ -259,10 +259,10 @@ class TwoStageRetinaLayer(Model):
         cls_probs = F.softmax(cls_preds.detach(), dim=-1)
         os_probs = F.softmax(os_preds.detach(), dim=-1)[:, :, 1:]
         os_probs[os_probs <= 0.4] = 0
-        final_probs = cls_probs * os_probs
+        # final_probs = cls_probs * os_probs
         # import ipdb
         # ipdb.set_trace()
-        #  final_probs = cls_probs
+        final_probs = cls_probs * os_probs
         image_info = feed_dict[constants.KEY_IMAGE_INFO].unsqueeze(
             -1).unsqueeze(-1)
 

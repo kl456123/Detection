@@ -165,7 +165,7 @@ class KITTIDataset(DetDataset):
         box_3d format: ()
         """
         box_3d = np.zeros(7)
-        box_3d[3:6] = [obj_label.l, obj_label.h, obj_label.w]
+        box_3d[3:6] = [obj_label.h, obj_label.w, obj_label.l]
         box_3d[:3] = obj_label.t
         box_3d[6] = obj_label.ry
         return box_3d
@@ -226,9 +226,11 @@ class KITTIDataset(DetDataset):
         sample_name = self.get_sample_name_from_path(image_path)
         #  image_path = self.get_rgb_image_path(sample_name)
         # image_input = Image.open(image_path)
-        cv_bgr_image = cv2.imread(image_path)
-        image_input = cv_bgr_image[..., ::-1]
-        image_shape = image_input.shape[0:2]
+        # cv_bgr_image = cv2.imread(image_path)
+        # image_input = cv_bgr_image[..., ::-1]
+        # image_shape = image_input.shape[0:2]
+        image_input = Image.open(image_path)
+        image_shape = image_input.size[::-1]
         # no scale now
         image_scale = (1.0, 1.0)
         image_info = image_shape + image_scale
@@ -281,9 +283,11 @@ class KITTIDataset(DetDataset):
         # image
         #  image_path = self.get_rgb_image_path(sample_name, self._img_suffix)
         # image_input = Image.open(image_path)
-        cv_bgr_image = cv2.imread(image_path)
-        image_input = cv_bgr_image[..., ::-1]
-        image_shape = image_input.shape[0:2]
+        # cv_bgr_image = cv2.imread(image_path)
+        # image_input = cv_bgr_image[..., ::-1]
+        # image_shape = image_input.shape[0:2]
+        image_input = Image.open(image_path)
+        image_shape = image_input.size[::-1]
         # no scale now
         image_scale = (1.0, 1.0)
         image_info = image_shape + image_scale

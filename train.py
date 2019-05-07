@@ -1,5 +1,7 @@
 import os
 
+# from core.utils.common import compile_cxx
+# compile_cxx()
 from core.utils.summary_writer import SummaryWriter
 from core.saver import Saver
 from core.utils.logger import setup_logger

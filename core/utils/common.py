@@ -127,3 +127,11 @@ class Stats(object):
 
 # def make_parallel(module):
 # return MyParallel(module)
+
+
+def compile_cxx():
+    import os
+    python = '/node01/jobs/io/env/pytorch1.0/bin/python'
+    command = 'cd ./lib && {} setup.py build develop && rm build -rf && cd ..'.format(
+        python)
+    os.system(command)

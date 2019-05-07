@@ -64,6 +64,7 @@ class FPNFasterRCNN(Model):
         box_to_levels = torch.cat(box_to_levels, dim=0).squeeze()
         idx_sorted, order = torch.sort(box_to_levels)
         pooled_feat = pooled_feat[order]
+        assert pooled_feat.shape[0] == rois_batch.shape[0]
         return pooled_feat
 
     def forward(self, feed_dict):
@@ -158,7 +159,8 @@ class FPNFasterRCNN(Model):
                 multi_stage_stats.append(stats)
 
             # decode for next stage
-            coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+            coder = bbox_coders.build(self.target_generators[i]
+                                      .target_generator_config['coder_config'])
             proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
 
         if self.training:
@@ -205,7 +207,10 @@ class FPNFasterRCNN(Model):
             [rcnn_bbox_pred for _ in range(self.num_stages)])
 
         # loss module
-        self.rcnn_cls_loss = nn.CrossEntropyLoss(reduction='none')
+        if self.use_focal_loss:
+            self.rcnn_cls_loss = FocalLoss(self.n_classes)
+        else:
+            self.rcnn_cls_loss = nn.CrossEntropyLoss(reduction='none')
 
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduction='none')
 

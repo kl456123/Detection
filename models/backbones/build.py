@@ -4,13 +4,15 @@ Utils for generating backbone
 """
 from torchvision import models
 from utils.registry import BACKBONES
+from models.backbones.resnet18_pruned import resnet18
 
 _net_arch_model_map = {
     'res18': models.resnet18,
     'res34': models.resnet34,
     'res50': models.resnet50,
     'res101': models.resnet101,
-    'res152': models.resnet152
+    'res152': models.resnet152,
+    'res18_pruned': resnet18
 }
 
 _net_arch_fn_map = {
@@ -19,6 +21,7 @@ _net_arch_fn_map = {
     'res50': 'resnet50-19c8e357.pth',
     'res101': 'resnet101-5d3b4d8f.pth',
     'res152': 'resnet152-b121ed2d.pth',
+    'res18_pruned': 'resnet18_pruned0.5.pth'
 }
 
 

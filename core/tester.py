@@ -13,6 +13,8 @@ import os
 from utils import geometry_utils
 from utils import box_ops
 
+# from tmp.utils.postprocess import mono_3d_postprocess_bbox
+
 
 class Tester(object):
     def __init__(self, eval_config, logger=None):
@@ -42,7 +44,8 @@ class Tester(object):
         with open(label_path, 'w') as f:
             for cls_ind, dets_per_classes in enumerate(dets):
                 for det in dets_per_classes:
-                    xmin, ymin, xmax, ymax, cf, l, h, w, ry, x, y, z = det
+                    # xmin, ymin, xmax, ymax, cf, l, h, w, ry, x, y, z = det
+                    xmin, ymin, xmax, ymax, cf, h, w, l, x, y, z, ry = det
                     res_str.append(
                         kitti_template.format(self.classes[cls_ind], xmin,
                                               ymin, xmax, ymax, h, w, l, x, y,
@@ -106,6 +109,7 @@ class Tester(object):
             orients = prediction[constants.KEY_ORIENTS_V2]
             p2 = data[constants.KEY_STEREO_CALIB_P2_ORIG]
 
+            # rcnn_3d = prediction['rcnn_3d']
             batch_size = scores.shape[0]
             # scores = scores.view(-1, self.n_classes)
             # new_scores = torch.zeros_like(scores)
@@ -124,6 +128,7 @@ class Tester(object):
                 dims_per_img = dims[batch_ind]
                 orients_per_img = orients[batch_ind]
                 p2_per_img = p2[batch_ind]
+                # rcnn_3d_per_img = rcnn_3d[batch_ind]
                 for class_ind in range(1, self.n_classes):
                     # cls thresh
                     inds = torch.nonzero(
@@ -134,6 +139,7 @@ class Tester(object):
                         threshed_boxes_2d_per_img = boxes_2d_per_img[inds]
                         threshed_dims_per_img = dims_per_img[inds]
                         threshed_orients_per_img = orients_per_img[inds]
+                        # threshed_rcnn_3d_per_img = rcnn_3d_per_img[inds]
                         # else:
                         # threshed_boxes_2d_per_img = boxes_2d_per_img[
                         # inds, class_ind * 4:class_ind * 4 + 4]
@@ -149,6 +155,7 @@ class Tester(object):
                         # sort by scores
                         _, order = torch.sort(threshed_scores_per_img, 0, True)
                         threshed_dets_per_img = threshed_dets_per_img[order]
+                        # threshed_rcnn_3d_per_img = threshed_rcnn_3d_per_img[order]
 
                         # nms
                         keep = nms(threshed_dets_per_img[:, :4],
@@ -156,13 +163,21 @@ class Tester(object):
                                    self.nms).view(-1).long()
                         nms_dets_per_img = threshed_dets_per_img[keep].detach(
                         ).cpu().numpy()
+                        # nms_rcnn_3d_per_img = threshed_rcnn_3d_per_img[keep].detach().cpu().numpy()
 
                         # calculate location
                         location = geometry_utils.calc_location(
-                            nms_dets_per_img[:, 5:8], nms_dets_per_img[:, :5],
-                            nms_dets_per_img[:, 8], p2_per_img.cpu().numpy())
+                        nms_dets_per_img[:, 5:8], nms_dets_per_img[:, :5],
+                        nms_dets_per_img[:, 8], p2_per_img.cpu().numpy())
+                        # import ipdb
+                        # ipdb.set_trace()
+                        # location, _ = mono_3d_postprocess_bbox(
+                            # nms_rcnn_3d_per_img, nms_dets_per_img[:, :5],
+                            # p2_per_img.cpu().numpy())
                         nms_dets_per_img = np.concatenate(
-                            [nms_dets_per_img, location], axis=-1)
+                            [nms_dets_per_img[:, :5],nms_dets_per_img[:,5:8], location, nms_dets_per_img[:,-1:]], axis=-1)
+                        # nms_dets_per_img = np.concatenate(
+                            # [nms_dets_per_img[:, :5], location], axis=-1)
 
                         dets.append(nms_dets_per_img)
                     else:
@@ -313,20 +328,43 @@ class Tester(object):
                 scores_per_img = scores[batch_ind]
                 for class_ind in range(1, self.n_classes):
                     # cls thresh
-
-
-                    # index = torch.randperm(boxes_2d_per_img.shape[0])[:100].cuda().long()
-                    # boxes_2d_per_img = boxes_2d_per_img[:2000]
-                    # scores_per_img = scores_per_img[:2000,:]
-                    dets_per_img = torch.cat(
-                        [boxes_2d_per_img, scores_per_img[:,:1]], dim=-1)
                     # import ipdb
                     # ipdb.set_trace()
-                    keep = box_ops.super_nms_faster(boxes_2d_per_img)
-                    dets_per_img = dets_per_img[keep].detach().cpu().numpy()
-                    # import ipdb
-                    # ipdb.set_trace()
-                    dets.append(dets_per_img)
+                    inds = torch.nonzero(
+                        scores_per_img[:, class_ind] > 0.01).view(-1)
+                    threshed_scores_per_img = scores_per_img[inds, class_ind]
+                    if inds.numel() > 0:
+                        # if self.class_agnostic:
+                        threshed_boxes_2d_per_img = boxes_2d_per_img[inds]
+                        # else:
+                        # threshed_boxes_2d_per_img = boxes_2d_per_img[
+                        # inds, class_ind * 4:class_ind * 4 + 4]
+                        # concat boxes and scores
+                        threshed_dets_per_img = torch.cat([
+                            threshed_boxes_2d_per_img,
+                            threshed_scores_per_img.unsqueeze(-1),
+                        ],
+                                                          dim=-1)
+
+                        # sort by scores
+                        _, order = torch.sort(threshed_scores_per_img, 0, True)
+                        threshed_dets_per_img = threshed_dets_per_img[order]
+
+                        # nms
+                        # keep = nms(threshed_dets_per_img[:, :4],
+                        # threshed_dets_per_img[:, 4],
+                        # self.nms).view(-1).long()
+                        keep = box_ops.super_nms(
+                            threshed_dets_per_img[:, :4],
+                            0.8,
+                            nms_num=3,
+                            loop_time=2)
+                        nms_dets_per_img = threshed_dets_per_img[keep].detach(
+                        ).cpu().numpy()
+
+                        dets.append(nms_dets_per_img)
+                    else:
+                        dets.append([])
 
                 duration_time = time.time() - end_time
                 label_path = self._generate_label_path(image_path[batch_ind])

@@ -47,10 +47,11 @@
     # --config configs/mono_3d_config.json
 
 # FPN_MONO_3D
-# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
-    # --net fpn_mono_3d_rear \
-    # --out_path /data/object/liangxiong/test \
-    # --config configs/test_config.json
+CUDA_VISIBLE_DEVICES=0,1 python train.py --cuda \
+    --net fpn_mono_3d \
+    --out_path /data/object/liangxiong/fpn_mono_3d \
+    --config configs/fpn_mono_3d_kitti_config.json \
+    --mGPUs
     # --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth
     # --mGPUs
 # --resume True \
@@ -74,11 +75,18 @@
 
 
 # PRNET_MONO
-CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
-    --net prnet_mono_3d \
-    --out_path /data/object/liangxiong/prnet_mono_3d \
-    --config configs/prnet_mono_3d_config.json \
-    --mGPUs
+# CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
+    # --net prnet_mono_3d \
+    # --out_path /data/object/liangxiong/test \
+    # --config configs/test_config.json \
+    # --mGPUs
     # --model /data/object/liangxiong/prnet_bdd/prnet/bdd/detector_300000.pth
     # --resume True
     # --checkpoint 24000 \
+
+
+# CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
+    # --net mono_3d_better \
+    # --out_path /data/object/liangxiong/mono_3d_better \
+    # --config configs/coco_mono_3d_config.json \
+    # --mGPUs

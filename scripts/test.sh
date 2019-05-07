@@ -222,14 +222,15 @@ rm results/box_2d/*
     # --thresh 0.5
 
 # FPN_MONO_3D
-# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 300000 \
-    # --net fpn_mono_3d \
-    # --load_dir /data/object/liangxiong/fpn_mono_3d \
-    # --dataset kitti \
-    # --thresh 0.5 \
-    # --img_dir /data/dm202_3w/left_img \
-    # --calib_file ./000004.txt
+CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    --checkpoint 600000 \
+    --net fpn_mono_3d \
+    --load_dir /data/object/liangxiong/fpn_mono_3d \
+    --dataset kitti \
+    --thresh 0.05 \
+    --img_path /data/dm202_3w/left_img/007575.png \
+    --calib_file ./000004.txt
+# --img_dir /data/dm202_3w/left_img \
 
 # FPN_MONO_3D_REAR
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
@@ -280,12 +281,21 @@ rm results/box_2d/*
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
 
-CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 8000 \
-    --load_dir /data/object/liangxiong/prnet_mono_3d \
-    --net prnet_mono_3d \
-    --thresh 0.3 \
-    --dataset mono_3d_kitti
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 300000 \
+    # --load_dir /data/object/liangxiong/test \
+    # --net prnet_mono_3d \
+    # --thresh 0.3 \
+    # --dataset mono_3d_kitti \
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
+
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 16000 \
+    # --load_dir /data/object/liangxiong/mono_3d_better \
+    # --net mono_3d_better \
+    # --thresh 0.5 \
+    # --dataset kitti \
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
 

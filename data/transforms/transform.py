@@ -408,7 +408,7 @@ class FixRatioResize(object):
     def __init__(self, config):
         self.min_size = config['min_size']
         self.max_size = config['max_size']
-        interpolate = config.get('interpolate', 'bilinear')
+        interpolate = config.get('interpolate', 'bicubic')
         self.interpolation = self.interpolate_map[interpolate]
 
     def __call__(self, sample):

@@ -37,6 +37,8 @@ class StridePoolBlock(nn.Sequential):
 @FEATURE_EXTRACTORS.register('prnet')
 class PRNetFeatureExtractor(Model):
     def init_weights(self):
+        self.logger.info(
+            ("Loading pretrained weights from %s" % (self.model_path)))
         state_dict = torch.load(self.model_path)
         self.features.load_state_dict(state_dict, strict=False)
 

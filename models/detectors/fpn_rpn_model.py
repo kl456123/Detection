@@ -43,7 +43,8 @@ class RPNModel(_RPNModel):
 
         batch_size = rpn_bbox_preds.shape[0]
 
-        coders = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+        coders = bbox_coders.build(
+            self.target_generators.target_generator_config['coder_config'])
         proposals = coders.decode_batch(rpn_bbox_preds, anchors)
 
         # filer and clip
@@ -92,8 +93,6 @@ class RPNModel(_RPNModel):
         return proposals_batch, proposals_order
 
     def forward(self, bottom_blobs):
-        # import ipdb
-        # ipdb.set_trace()
         rpn_feat_maps = bottom_blobs['rpn_feat_maps']
         batch_size = rpn_feat_maps[0].shape[0]
         im_info = bottom_blobs[constants.KEY_IMAGE_INFO]
@@ -146,6 +145,7 @@ class RPNModel(_RPNModel):
         ]
         anchors = self.anchor_generator.generate_pyramid(feature_map_list,
                                                          im_info[0][:-1])
+        anchors = anchors.unsqueeze(0).repeat(batch_size, 1, 1)
 
         ###############################
         # Proposal
@@ -163,7 +163,7 @@ class RPNModel(_RPNModel):
         predict_dict = {
             'proposals': proposals_batch,
             'rpn_cls_scores': rpn_cls_scores,
-            'anchors': anchors.unsqueeze(0).repeat(batch_size, 1, 1),
+            'anchors': anchors,
 
             # used for loss
             'rpn_bbox_preds': rpn_bbox_preds,

@@ -154,9 +154,9 @@ def calc_location(dims, dets_2d, ry, p2):
         ],
         axis=-1).reshape(num, 3, 3)
 
-    l = dims[:, 0]
-    h = dims[:, 1]
-    w = dims[:, 2]
+    h = dims[:, 0]
+    w = dims[:, 1]
+    l = dims[:, 2]
     zeros = np.zeros_like(w)
     x_corners = np.stack(
         [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2], axis=-1)
@@ -262,14 +262,14 @@ def ry_to_rotation_matrix(rotation_y):
 def boxes_3d_to_corners_3d(boxes):
     """
     Args:
-    boxes: shape(N, 7), (xyz,lhw, ry)
+    boxes: shape(N, 7), (xyz,hwl, ry)
     corners_3d: shape()
     """
     ry = boxes[:, -1]
     location = boxes[:, :3]
-    l = boxes[:, 3]
-    h = boxes[:, 4]
-    w = boxes[:, 5]
+    h = boxes[:, 3]
+    w = boxes[:, 4]
+    l = boxes[:, 5]
     zeros = np.zeros_like(l)
     rotation_matrix = ry_to_rotation_matrix(ry)
 
@@ -355,9 +355,9 @@ def torch_boxes_3d_to_corners_3d(boxes):
     """
     ry = boxes[:, -1]
     location = boxes[:, :3]
-    l = boxes[:, 3]
-    h = boxes[:, 4]
-    w = boxes[:, 5]
+    h = boxes[:, 3]
+    w = boxes[:, 4]
+    l = boxes[:, 5]
     zeros = torch.zeros_like(l).type_as(l)
     rotation_matrix = torch_ry_to_rotation_matix(ry)
 

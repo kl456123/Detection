@@ -2,23 +2,24 @@
     "data_config": {
         "dataloader_config": {
             "batch_size": 1,
-            "num_workers": 1,
+            "num_workers": 2,
             "shuffle": true
         },
         "dataset_config": {
             "type":"mono_3d_kitti",
-            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+            "classes":["Car","Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
             "dataset_file": "data/demo.txt",
             "root_path": "/data"
         },
-        "name": "mono_3d_kitti",
+        "name": "kitti",
         "transform_config":[
-            {"type":"to_pil"},
             {"type":"random_hsv"
-            },{
-            "type":"fix_shape_resize",
-            "size":[384, 1280]
+            },{"type":"random_brightness"},
+            {"type":"random_horizontal_flip"},
+            {
+                "type":"fix_shape_resize",
+                "size":[384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -51,8 +52,8 @@
         ],
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
-        "class_agnostic": false,
-        "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+        "class_agnostic": true,
+        "classes":["Car","Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
@@ -69,17 +70,18 @@
         },
         "dataset_config": {
             "type":"mono_3d_kitti",
-            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+            "classes":["Car","Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
             "cache_bev": false,
             "dataset_file": "data/demo.txt",
             "root_path": "/data"
         },
-        "name": "mono_3d_kitti",
+        "name": "kitti",
         "transform_config":[
-            {"type":"to_pil"},
             {
-                "type":"fix_shape_resize",
-                "size":[384, 1280]
+            "type": "fix_ratio_resize",
+            "min_size":384,
+            "max_size":1280,
+            "size": [384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -97,27 +99,20 @@
         ]
     },
     "model_config": {
-        "input_size":[384, 1280],
-        "anchor_generator_config": {
-                "type":"retina",
-                "aspect_ratio":[[1.5, 3.5], [1.5, 3.5], [1.5, 3.5], [1.5, 3.5], [1.5, 3.5], [1.5, 3.5]],
-                "default_ratio":[0.02, 0.04, 0.08, 0.16, 0.32],
-                "output_scale":[8, 16, 32, 64, 128]
-            },
+        "num_bins":2,
         "batch_size":512,
-        "class_agnostic": false,
+        "class_agnostic": true,
         "num_stages":1,
-        "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
-        "target_generator_config": {
-            "fake_fg_thresh":0.7,
+        "classes":["Car","Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+        "target_generator_config": [{
             "type": "faster_rcnn",
             "similarity_calc_config": {
                 "type": "center"
             },
             "fg_thresh": 0.5,
-            "bg_thresh": 0.4,
+            "bg_thresh": 0.5,
             "coder_config": {
-                "type": "center",
+                "type": "corner",
                 "bbox_normalize_targets_precomputed": false
             },
             "matcher_config": {
@@ -129,32 +124,47 @@
                 "fg_fraction": 0.5
             },
             "analyzer_config": {}
-        },
+        }],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
-            "type":"prnet",
+            "type":"fpn",
             "pretrained_path": "./data/pretrained_model",
-            "net_arch":"res18_pruned",
+            "pooling_size":7,
+            "net_arch":"res50",
             "separate_feat":false,
-            "use_cascade":true,
-            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
-            "img_channels": 3,
-            "pretrained_model": "",
-            "pretrained": true,
-            "det_features": 128,
-            "layer_structure": [2, 2, 2, 2],
-            "dla_input": [128, 256, 512],
-            "output_scale":[8, 16, 32, 64, 128]
+            "pretrained": true
         },
         "pooling_mode": "align",
         "pooling_size": 7,
-        "rcnn_batch_size": 512,
         "rpn_config": {
-            "type":"rpn",
+            "type":"fpn_rpn",
             "use_score":false,
             "use_iou":false,
             "use_focal_loss":true,
-            
+            "anchor_generator_config": {
+                "use_pyramid":true,
+                "type":"default",
+                "anchor_offset": [
+                    0,
+                    0
+                ],
+                "anchor_stride": [
+                    16,
+                    16
+                ],
+                "aspect_ratios": [
+                    0.5,
+                    0.8,
+                    1
+                ],
+                "base_anchor_size": 16,
+                "scales": [
+                    2,
+                    4,
+                    8,
+                    16
+                ]
+            },
             "target_generator_config": {
                 "type": "faster_rcnn",
                 "similarity_calc_config": {
@@ -167,7 +177,7 @@
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "bipartitle"
+                    "type": "argmax"
                 },
                 "sampler_config": {
                     "num_samples":512,
@@ -176,14 +186,11 @@
                 },
                 "analyzer_config": {}
             },
-            "din": 1024,
+            "din": 256,
             "min_size": 16,
             "nms_thresh": 0.7,
-            "post_nms_topN": 1000,
-            "pre_nms_topN": 12000,
-            "rpn_batch_size": 1024,
-            "num_reg_samples":1024,
-            "num_cls_samples":512
+            "post_nms_topN": 2000,
+            "pre_nms_topN": 12000
         },
         "num_cls_samples":256,
         "num_reg_samples":512,
@@ -215,7 +222,7 @@
             "lr_decay_gamma": 0.1,
             "lr_decay_step": 60000,
             "milestones":[60000, 120000, 240000],
-            "type": "multi_step",
+            "type": "step",
             "warmup_method":"linear",
             "warmup_iters":2000,
             "warmup_factor":0.333

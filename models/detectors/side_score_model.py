@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+"""
+Modify from pr_model
+"""
 
 from core.model import Model
 import torch.nn as nn
@@ -16,7 +19,6 @@ from utils.registry import DETECTORS
 import bbox_coders
 import torch.nn.functional as F
 from core.utils.analyzer import Analyzer
-from models.losses.orientation_loss import OrientationLoss
 
 
 def one_hot_embedding(labels, num_classes):
@@ -55,7 +57,7 @@ def focal_loss_alt(num_classes):
     return focal_loss_alt
 
 
-@DETECTORS.register('prnet_mono_3d')
+@DETECTORS.register('side_score')
 class TwoStageRetinaLayer(Model):
     def init_param(self, model_config):
         # including bg
@@ -71,7 +73,10 @@ class TwoStageRetinaLayer(Model):
 
         self.num_anchors = self.anchor_generator.num_anchors
         input_size = torch.tensor(model_config['input_size']).float()
-        self.anchors = self.anchor_generator.generate(input_size)
+
+        self.normlize_anchor = False
+        self.anchors = self.anchor_generator.generate(
+            input_size, normalize=self.normlize_anchor)
 
         self.use_focal_loss = model_config['use_focal_loss']
 
@@ -115,26 +120,6 @@ class TwoStageRetinaLayer(Model):
                 in_channels, in_channels, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True), )
 
-        self.dim_feature = nn.Sequential(
-            nn.Conv2d(
-                in_channels, in_channels, kernel_size=1, stride=1),
-            nn.Conv2d(
-                in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(
-                in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(inplace=True), )
-
-        self.orient_feature = nn.Sequential(
-            nn.Conv2d(
-                in_channels, in_channels, kernel_size=1, stride=1),
-            nn.Conv2d(
-                in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(
-                in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(inplace=True), )
-
         self.os_out = nn.Conv2d(
             in_channels=in_channels,
             out_channels=self.num_anchors * 2,
@@ -149,10 +134,6 @@ class TwoStageRetinaLayer(Model):
             in_channels,
             out_channels=self.num_anchors * self.num_regress,
             kernel_size=1)
-        self.dim_out = nn.Conv2d(
-            in_channels, out_channels=self.num_anchors * 3, kernel_size=1)
-        self.orient_out = nn.Conv2d(
-            in_channels, out_channels=self.num_anchors * 5, kernel_size=1)
 
         self.feature_extractor = PRNetFeatureExtractor(
             self.feature_extractor_config)
@@ -170,20 +151,12 @@ class TwoStageRetinaLayer(Model):
 
         self.retina_loss = RetinaNetLoss(self.num_classes)
 
-        self.rcnn_orient_preds = nn.Linear(1024, 5)
-
-        self.rcnn_dim_preds = nn.Linear(1024, 3)
-
-        self.rcnn_orient_loss = OrientationLoss()
-
     def forward(self, feed_dict):
         features = self.feature_extractor(feed_dict[constants.KEY_IMAGE])
         y_locs1 = []
         y_locs2 = []
         y_os = []
         y_cls = []
-        y_dims = []
-        y_orients = []
 
         for i, x in enumerate(features):
             # location out
@@ -221,26 +194,53 @@ class TwoStageRetinaLayer(Model):
             cls_out = cls_out.view(N, -1, self.num_classes)
             y_cls.append(cls_out)
 
-            # dim out
-            dim_feature = self.dim_feature(x)
-            dim_out = self.dim_out(dim_feature)
-            dim_out = dim_out.permute(0, 2, 3, 1).contiguous()
-            dim_out = dim_out.view(N, -1, 3)
-            y_dims.append(dim_out)
-
-            # orient out
-            orient_feature = self.orient_feature(x)
-            orient_out = self.orient_out(orient_feature)
-            orient_out = orient_out.permute(0, 2, 3, 1).contiguous()
-            orient_out = orient_out.view(N, -1, 5)
-            y_orients.append(orient_out)
-
         loc1_preds = torch.cat(y_locs1, dim=1)
         loc2_preds = torch.cat(y_locs2, dim=1)
         os_preds = torch.cat(y_os, dim=1)
         cls_preds = torch.cat(y_cls, dim=1)
-        orient_preds = torch.cat(y_orients, dim=1)
-        dim_preds = torch.cat(y_dims, dim=1)
+
+        # if self.training:
+        # prediction_dict = {
+        # 'loc1_preds': loc1_preds,
+        # 'loc2_preds': loc2_preds,
+        # 'os_preds': os_preds,
+        # 'cls_preds': cls_preds
+        # }
+
+        # stats = {
+        # 'recall': torch.tensor([1, 1]).to('cuda').float().unsqueeze(0)
+        # }
+        # prediction_dict[constants.KEY_STATS] = [stats]
+        # else:
+        # prediction_dict = {}
+        # cls_probs = F.softmax(cls_preds, dim=-1)
+        # os_probs = F.softmax(os_preds, dim=-1)[:, :, 1:]
+        # os_probs[os_probs <= 0.4] = 0
+        # prediction_dict[constants.KEY_CLASSES] = cls_probs * os_probs
+        # # prediction_dict[constants.KEY_OBJECTNESS] = os_preds
+
+        # image_info = feed_dict[constants.KEY_IMAGE_INFO]
+        # variances = [0.1, 0.2]
+        # default_boxes = feed_dict['default_boxes'][0]
+        # new_default_boxes = torch.cat([
+        # default_boxes[:, :2] - default_boxes[:, 2:] / 2,
+        # default_boxes[:, :2] + default_boxes[:, 2:] / 2
+        # ], 1)
+        # xymin = loc2_preds[0, :, :2] * variances[
+        # 0] * default_boxes[:, 2:] + new_default_boxes[:, :2]
+        # xymax = loc2_preds[0, :, 2:] * variances[
+        # 0] * default_boxes[:, 2:] + new_default_boxes[:, 2:]
+        # proposals = torch.cat([xymin, xymax], 1).unsqueeze(0)  # [8732,4]
+
+        # image_info = image_info.unsqueeze(-1).unsqueeze(-1)
+        # proposals[:, :, ::
+        # 2] = proposals[:, :, ::
+        # 2] * image_info[:, 1] / image_info[:, 3]
+        # proposals[:, :, 1::
+        # 2] = proposals[:, :, 1::
+        # 2] * image_info[:, 0] / image_info[:, 2]
+        # prediction_dict[constants.KEY_BOXES_2D] = proposals
+        # return prediction_dict
 
         image_info = feed_dict[constants.KEY_IMAGE_INFO]
 
@@ -252,6 +252,13 @@ class TwoStageRetinaLayer(Model):
         coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
         proposals = coder.decode_batch(loc2_preds, anchors).detach()
 
+        # if self.normlize_anchor:
+        # denormalize
+        # h = image_info[:, 0].unsqueeze(-1).unsqueeze(-1)
+        # w = image_info[:, 1].unsqueeze(-1).unsqueeze(-1)
+        # proposals[:, :, ::2] = proposals[:, :, ::2] * w
+        # proposals[:, :, 1::2] = proposals[:, :, 1::2] * h
+
         cls_probs = F.softmax(cls_preds.detach(), dim=-1)
         os_probs = F.softmax(os_preds.detach(), dim=-1)[:, :, 1:]
         os_probs[os_probs <= 0.4] = 0
@@ -259,16 +266,8 @@ class TwoStageRetinaLayer(Model):
         # import ipdb
         # ipdb.set_trace()
         #  final_probs = cls_probs
-
-        coder = bbox_coders.build({'type': constants.KEY_DIMS})
-        decoded_dim_preds = coder.decode_batch(dim_preds,
-                                       feed_dict[constants.KEY_MEAN_DIMS],
-                                       final_probs).detach()
-        coder = bbox_coders.build({'type': constants.KEY_ORIENTS_V2})
-        # use rpn proposals to decode
-        decoded_orient_preds = coder.decode_batch(
-            orient_preds, proposals,
-            feed_dict[constants.KEY_STEREO_CALIB_P2]).detach()
+        image_info = feed_dict[constants.KEY_IMAGE_INFO].unsqueeze(
+            -1).unsqueeze(-1)
 
         prediction_dict = {}
         if self.training:
@@ -280,9 +279,6 @@ class TwoStageRetinaLayer(Model):
             anchors_dict[constants.KEY_BOXES_2D_REFINE] = loc2_preds
             anchors_dict[constants.KEY_CLASSES] = cls_preds
             anchors_dict[constants.KEY_OBJECTNESS] = os_preds
-            anchors_dict[constants.KEY_DIMS] = dim_preds
-            anchors_dict[constants.KEY_ORIENTS_V2] = orient_preds
-
             # anchors_dict[constants.KEY_FINAL_PROBS] = final_probs
 
             gt_dict = {}
@@ -292,23 +288,21 @@ class TwoStageRetinaLayer(Model):
             gt_dict[constants.KEY_BOXES_2D] = None
             gt_dict[constants.KEY_OBJECTNESS] = None
             gt_dict[constants.KEY_BOXES_2D_REFINE] = None
-            gt_dict[constants.KEY_ORIENTS_V2] = None
-            gt_dict[constants.KEY_DIMS] = None
 
             auxiliary_dict = {}
-            auxiliary_dict[constants.KEY_BOXES_2D] = feed_dict[
-                constants.KEY_LABEL_BOXES_2D]
-            auxiliary_dict[constants.KEY_STEREO_CALIB_P2] = feed_dict[
-                constants.KEY_STEREO_CALIB_P2]
-            auxiliary_dict[constants.KEY_BOXES_3D] = feed_dict[
-                constants.KEY_LABEL_BOXES_3D]
+            label_boxes_2d = feed_dict[constants.KEY_LABEL_BOXES_2D]
+            if self.normlize_anchor:
+                label_boxes_2d[:, :, ::2] = label_boxes_2d[:, :, ::
+                                                           2] / image_info[:, 1]
+                label_boxes_2d[:, :, 1::2] = label_boxes_2d[:, :, 1::
+                                                            2] / image_info[:,
+                                                                            0]
+            auxiliary_dict[constants.KEY_BOXES_2D] = label_boxes_2d
             gt_labels = feed_dict[constants.KEY_LABEL_CLASSES]
             auxiliary_dict[constants.KEY_CLASSES] = gt_labels
             auxiliary_dict[constants.KEY_NUM_INSTANCES] = feed_dict[
                 constants.KEY_NUM_INSTANCES]
             auxiliary_dict[constants.KEY_PROPOSALS] = anchors
-            auxiliary_dict[constants.KEY_MEAN_DIMS] = feed_dict[constants.
-                                                                KEY_MEAN_DIMS]
 
             proposals_dict, targets, stats = self.target_generators.generate_targets(
                 anchors_dict, gt_dict, auxiliary_dict, subsample=False)
@@ -334,19 +328,42 @@ class TwoStageRetinaLayer(Model):
 
             prediction_dict[constants.KEY_CLASSES] = final_probs
             # prediction_dict[constants.KEY_OBJECTNESS] = os_preds
-            prediction_dict[constants.KEY_ORIENTS_V2] = decoded_orient_preds
-            prediction_dict[constants.KEY_DIMS] = decoded_dim_preds
 
-            image_info = feed_dict[constants.KEY_IMAGE_INFO]
-            proposals[:, :, ::2] = proposals[:, :, ::
-                                             2] / image_info[:, 3].unsqueeze(
-                                                 -1).unsqueeze(-1)
-            proposals[:, :, 1::2] = proposals[:, :, 1::
-                                              2] / image_info[:, 2].unsqueeze(
-                                                  -1).unsqueeze(-1)
+            proposals[:, :, ::2] = proposals[:, :, ::2] / image_info[:, 3]
+            proposals[:, :, 1::2] = proposals[:, :, 1::2] / image_info[:, 2]
             prediction_dict[constants.KEY_BOXES_2D] = proposals
-            prediction_dict['rcnn_3d'] = torch.ones_like(proposals)
         return prediction_dict
+
+    # def loss(self, prediction_dict, feed_dict):
+    # # import ipdb
+    # # ipdb.set_trace()
+
+    # target = feed_dict['gt_target']
+    # loc1_preds = prediction_dict['loc1_preds']
+    # loc2_preds = prediction_dict['loc2_preds']
+    # conf_preds = prediction_dict['cls_preds']
+    # os_preds = prediction_dict['os_preds']
+    # bbox, labels, os_gt, _ = target
+
+    # loc_loss, os_loss, conf_loss = self.two_step_loss(
+    # loc1_preds,
+    # loc2_preds,
+    # bbox,
+    # conf_preds,
+    # labels.long(),
+    # os_preds,
+    # os_gt,
+    # is_print=False)
+
+    # # loss
+    # loss_dict = {}
+
+    # # loss_dict['total_loss'] = total_loss
+    # loss_dict['loc_loss'] = loc_loss
+    # loss_dict['os_loss'] = os_loss
+    # loss_dict['conf_loss'] = conf_loss
+
+    # return loss_dict
 
     def loss(self, prediction_dict, feed_dict):
         loss_dict = {}
@@ -357,8 +374,6 @@ class TwoStageRetinaLayer(Model):
         loc1_target = targets[constants.KEY_BOXES_2D]
         loc2_target = targets[constants.KEY_BOXES_2D_REFINE]
         os_target = targets[constants.KEY_OBJECTNESS]
-        dims_target = targets[constants.KEY_DIMS]
-        orients_target = targets[constants.KEY_ORIENTS_V2]
 
         loc1_preds = loc1_target['pred']
         loc2_preds = loc2_target['pred']
@@ -387,19 +402,12 @@ class TwoStageRetinaLayer(Model):
             os_target_,
             is_print=False)
 
-        # 3d loss
-        rpn_dims_loss = common_loss.calc_loss(self.rpn_bbox_loss, dims_target)
-        rpn_orients_loss = common_loss.calc_loss(self.rcnn_orient_loss,
-                                                 orients_target)
-
         # loss
 
         # loss_dict['total_loss'] = total_loss
         loss_dict['loc_loss'] = loc_loss
         loss_dict['os_loss'] = os_loss
         loss_dict['conf_loss'] = conf_loss
-        loss_dict['dims_loss'] = rpn_dims_loss
-        loss_dict['orients_loss'] = rpn_orients_loss
 
         return loss_dict
 
@@ -412,8 +420,6 @@ class TwoStageRetinaLayer(Model):
         loc1_target = targets[constants.KEY_BOXES_2D]
         loc2_target = targets[constants.KEY_BOXES_2D_REFINE]
         os_target = targets[constants.KEY_OBJECTNESS]
-        dims_target = targets[constants.KEY_DIMS]
-        orients_target = targets[constants.KEY_ORIENTS_V2]
 
         rpn_cls_loss = common_loss.calc_loss(
             focal_loss_alt(self.num_classes), cls_target, normalize=False)
@@ -421,10 +427,6 @@ class TwoStageRetinaLayer(Model):
         rpn_os_loss = common_loss.calc_loss(
             focal_loss_alt(2), os_target, normalize=False)
         rpn_loc2_loss = common_loss.calc_loss(self.rpn_bbox_loss, loc2_target)
-
-        rpn_dims_loss = common_loss.calc_loss(self.rpn_bbox_loss, dims_target)
-        rpn_orients_loss = common_loss.calc_loss(self.rcnn_orient_loss,
-                                                 orients_target)
 
         cls_targets = cls_target['target']
         pos = cls_targets > 0  # [N,#anchors]
@@ -438,9 +440,7 @@ class TwoStageRetinaLayer(Model):
             'rpn_cls_loss': cls_loss,
             'rpn_loc1_loss': rpn_loc1_loss * 0.35,
             'rpn_loc2_loss': rpn_loc2_loss * 0.5,
-            'rpn_os_loss': os_loss * 10,
-            'rpn_dims_loss': rpn_dims_loss,
-            'rpn_orients_loss': rpn_orients_loss
+            'rpn_os_loss': os_loss * 10
         })
 
         return loss_dict

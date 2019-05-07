@@ -222,7 +222,7 @@
         "disp_interval": 800,
         "mGPUs": true,
         "optimizer_config": {
-            "base_lr": 0.01,
+            "base_lr": 0.02,
             "bias_lr_factor":1,
             "weight_decay_bias":0,
             "weight_decay":0.0001,

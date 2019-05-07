@@ -137,7 +137,8 @@ class FPNMono3D(FPNFasterRCNN):
                 multi_stage_stats.append(stats)
 
             # decode for next stage
-            coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+            coder = bbox_coders.build(self.target_generators[i]
+                                      .target_generator_config['coder_config'])
             proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
             coder = bbox_coders.build({'type': constants.KEY_DIMS})
             rcnn_dim_preds = coder.decode_batch(

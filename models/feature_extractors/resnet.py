@@ -23,7 +23,10 @@ class ResNetFeatureExtractor(Model):
         self.net_arch = model_config['net_arch']
         self.use_cascade = model_config['use_cascade']
         self.pretrained_path = model_config['pretrained_path']
-        self.net_arch_path_map = {'res50': 'resnet50-19c8e357.pth'}
+        self.net_arch_path_map = {
+            'res50': 'resnet50-19c8e357.pth',
+            'res18_pruned': 'resnet18_pruned0.5.pth'
+        }
         self.model_path = os.path.join(self.pretrained_path,
                                        self.net_arch_path_map[self.net_arch])
         self.logger = logging.getLogger(__name__)
@@ -40,10 +43,16 @@ class ResNetFeatureExtractor(Model):
                 if k in resnet.state_dict()
             })
 
-        base_features = [
-            resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,
-            resnet.layer1, resnet.layer2, resnet.layer3
-        ]
+        if self.net_arch == 'res18_pruned':
+            base_features = [
+                resnet.conv1, resnet.bn1, resnet.maxpool, resnet.layer1,
+                resnet.layer2, resnet.layer3
+            ]
+        else:
+            base_features = [
+                resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,
+                resnet.layer1, resnet.layer2, resnet.layer3
+            ]
 
         # if not image(e.g lidar)
         if not self.img_channels == 3:

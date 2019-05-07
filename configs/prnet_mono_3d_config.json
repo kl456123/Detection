@@ -14,7 +14,6 @@
         },
         "name": "mono_3d_kitti",
         "transform_config":[
-            {"type":"to_pil"},
             {"type":"random_horizontal_flip"},
             {"type":"random_hsv"
             },{
@@ -77,7 +76,6 @@
         },
         "name": "mono_3d_kitti",
         "transform_config":[
-            {"type":"to_pil"},
             {
                 "type":"fix_shape_resize",
                 "size":[384, 1280]

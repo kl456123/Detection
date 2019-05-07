@@ -116,7 +116,10 @@ class Box2DTargetAssigner(RegTargetAssigner):
         assigned_gt = cls.generate_assigned_label(
             cls, kwargs[constants.KEY_MATCH], gt)
         # prepare coder
-        coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+        # 2d coder config
+        bbox_coder_config = kwargs[constants.KEY_TARGET_GENERATOR_CONFIG][
+            'coder_config']
+        coder = bbox_coders.build(bbox_coder_config)
         reg_targets_batch = coder.encode_batch(proposals, assigned_gt)
         reg_targets_batch[match == -1] = 0
         # no need grad_fn
