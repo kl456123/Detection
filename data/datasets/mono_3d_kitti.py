@@ -66,6 +66,10 @@ def truncate_box(box_2d, line, normalize=True):
 
 @DATASETS.register('mono_3d_kitti')
 class Mono3DKITTIDataset(KITTIDataset):
+    def __init__(self, config, transform=None, training=True, logger=None):
+        super().__init__(config, transform, training, logger)
+        self.use_proj_2d = config.get('use_proj_2d', True)
+
     def _generate_mean_dims(self):
         mean_dims = []
         for class_type in self.classes[1:]:
@@ -77,7 +81,7 @@ class Mono3DKITTIDataset(KITTIDataset):
         mean_dims = self._generate_mean_dims()
         sample[constants.KEY_MEAN_DIMS] = mean_dims
 
-        if self.training:
+        if self.training and self.use_proj_2d:
             # use boxes_3d_proj rather than boxes 2d
             label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
             p2 = sample[constants.KEY_STEREO_CALIB_P2]
@@ -99,45 +103,45 @@ class Mono3DKITTIDataset(KITTIDataset):
         # cls_orients = []
         # reg_orients = []
         # dims = np.stack(
-            # [boxes_3d[:, 4], boxes_3d[:, 5], boxes_3d[:, 3]], axis=-1)
+        # [boxes_3d[:, 4], boxes_3d[:, 5], boxes_3d[:, 3]], axis=-1)
 
         # for i in range(boxes_3d.shape[0]):
-            # target = {}
-            # target['ry'] = boxes_3d[i, -1]
+        # target = {}
+        # target['ry'] = boxes_3d[i, -1]
 
-            # target['dimension'] = dims[i]
-            # target['location'] = boxes_3d[i, :3]
+        # target['dimension'] = dims[i]
+        # target['location'] = boxes_3d[i, :3]
 
-            # corners_xy, points_3d = compute_box_3d(target, p2, True)
+        # corners_xy, points_3d = compute_box_3d(target, p2, True)
 
-            # # some labels for estimating orientation
-            # left_side_points_2d = corners_xy[[0, 3]]
-            # right_side_points_2d = corners_xy[[1, 2]]
-            # left_side_points_3d = points_3d.T[[0, 3]]
-            # right_side_points_3d = points_3d.T[[1, 2]]
+        # # some labels for estimating orientation
+        # left_side_points_2d = corners_xy[[0, 3]]
+        # right_side_points_2d = corners_xy[[1, 2]]
+        # left_side_points_3d = points_3d.T[[0, 3]]
+        # right_side_points_3d = points_3d.T[[1, 2]]
 
-            # # which one is visible
-            # mid_left_points_3d = left_side_points_3d.mean(axis=0)
-            # mid_right_points_3d = right_side_points_3d.mean(axis=0)
-            # # K*T
-            # KT = p2[:, -1]
-            # K = p2[:3, :3]
-            # T = np.dot(np.linalg.inv(K), KT)
-            # C = -T
-            # mid_left_dist = np.linalg.norm((C - mid_left_points_3d))
-            # mid_right_dist = np.linalg.norm((C - mid_right_points_3d))
-            # if mid_left_dist > mid_right_dist:
-                # visible_side = right_side_points_2d
-            # else:
-                # visible_side = left_side_points_2d
+        # # which one is visible
+        # mid_left_points_3d = left_side_points_3d.mean(axis=0)
+        # mid_right_points_3d = right_side_points_3d.mean(axis=0)
+        # # K*T
+        # KT = p2[:, -1]
+        # K = p2[:3, :3]
+        # T = np.dot(np.linalg.inv(K), KT)
+        # C = -T
+        # mid_left_dist = np.linalg.norm((C - mid_left_points_3d))
+        # mid_right_dist = np.linalg.norm((C - mid_right_points_3d))
+        # if mid_left_dist > mid_right_dist:
+        # visible_side = right_side_points_2d
+        # else:
+        # visible_side = left_side_points_2d
 
-            # cls_orient, reg_orient = truncate_box(boxes_2d_proj[i],
-                                                  # visible_side)
-            # cls_orient = modify_cls_orient(cls_orient, left_side_points_2d,
-                                           # right_side_points_2d)
+        # cls_orient, reg_orient = truncate_box(boxes_2d_proj[i],
+        # visible_side)
+        # cls_orient = modify_cls_orient(cls_orient, left_side_points_2d,
+        # right_side_points_2d)
 
-            # cls_orients.append(cls_orient)
-            # reg_orients.append(reg_orient)
+        # cls_orients.append(cls_orient)
+        # reg_orients.append(reg_orient)
 
         # sample['cls_orient'] = np.stack(cls_orients, axis=0).astype(np.int32)
         # sample['reg_orient'] = np.stack(reg_orients, axis=0).astype(np.float32)

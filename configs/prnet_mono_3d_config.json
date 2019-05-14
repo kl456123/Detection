@@ -116,7 +116,7 @@
             "fg_thresh": 0.5,
             "bg_thresh": 0.4,
             "coder_config": {
-                "type": "center",
+                "type": "corner",
                 "bbox_normalize_targets_precomputed": false
             },
             "matcher_config": {
@@ -153,7 +153,6 @@
             "use_score":false,
             "use_iou":false,
             "use_focal_loss":true,
-            
             "target_generator_config": {
                 "type": "faster_rcnn",
                 "similarity_calc_config": {
@@ -162,7 +161,7 @@
                 "fg_thresh": 0.3,
                 "bg_thresh": 0.3,
                 "coder_config": {
-                    "type": "center",
+                    "type": "corner",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {

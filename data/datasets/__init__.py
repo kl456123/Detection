@@ -5,7 +5,7 @@ from core.utils.common import build as _build
 import os
 from utils.registry import DATASETS
 
-include = ['coco', 'kitti', 'mono_3d_kitti', 'bdd', 'bdd_better']
+include = ['coco', 'kitti', 'mono_3d_kitti', 'bdd', 'bdd_better', 'nuscenes']
 
 import_dir(os.path.dirname(__file__), include=include)
 

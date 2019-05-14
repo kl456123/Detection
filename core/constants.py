@@ -40,6 +40,9 @@ KEY_REAR_SIDE = 'rear_side'
 KEY_BOXES_2D_REFINE = 'boxes_2d_refine'
 KEY_DIMS = 'dims'
 KEY_FINAL_PROBS = 'final_probs'
+KEY_CORNERS_2D = 'corners_2d'
+KEY_CORNERS_3D = 'corners_3d'
+KEY_CORNERS_VISIBILITY = 'corners_visibility'
 
 # key of stats
 KEY_STATS_RECALL = 'stats_recall'

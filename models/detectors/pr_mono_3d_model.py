@@ -249,7 +249,8 @@ class TwoStageRetinaLayer(Model):
         anchors = self.anchors.cuda()
         anchors = anchors.repeat(batch_size, 1, 1)
 
-        coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+        coder = bbox_coders.build(
+            self.target_generators.target_generator_config['coder_config'])
         proposals = coder.decode_batch(loc2_preds, anchors).detach()
 
         cls_probs = F.softmax(cls_preds.detach(), dim=-1)
@@ -261,9 +262,9 @@ class TwoStageRetinaLayer(Model):
         #  final_probs = cls_probs
 
         coder = bbox_coders.build({'type': constants.KEY_DIMS})
-        decoded_dim_preds = coder.decode_batch(dim_preds,
-                                       feed_dict[constants.KEY_MEAN_DIMS],
-                                       final_probs).detach()
+        decoded_dim_preds = coder.decode_batch(
+            dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
+            final_probs).detach()
         coder = bbox_coders.build({'type': constants.KEY_ORIENTS_V2})
         # use rpn proposals to decode
         decoded_orient_preds = coder.decode_batch(
@@ -346,7 +347,12 @@ class TwoStageRetinaLayer(Model):
                                                   -1).unsqueeze(-1)
             prediction_dict[constants.KEY_BOXES_2D] = proposals
             prediction_dict['rcnn_3d'] = torch.ones_like(proposals)
-        return prediction_dict
+
+        if self.training:
+            loss_dict = self.loss(prediction_dict, feed_dict)
+            return prediction_dict, loss_dict
+        else:
+            return prediction_dict
 
     def loss(self, prediction_dict, feed_dict):
         loss_dict = {}
@@ -388,9 +394,10 @@ class TwoStageRetinaLayer(Model):
             is_print=False)
 
         # 3d loss
-        rpn_dims_loss = common_loss.calc_loss(self.rpn_bbox_loss, dims_target)
+        rpn_dims_loss = common_loss.calc_loss(self.rpn_bbox_loss,
+                                              dims_target) * 100
         rpn_orients_loss = common_loss.calc_loss(self.rcnn_orient_loss,
-                                                 orients_target)
+                                                 orients_target) * 100
 
         # loss
 
@@ -398,8 +405,8 @@ class TwoStageRetinaLayer(Model):
         loss_dict['loc_loss'] = loc_loss
         loss_dict['os_loss'] = os_loss
         loss_dict['conf_loss'] = conf_loss
-        loss_dict['dims_loss'] = rpn_dims_loss
-        loss_dict['orients_loss'] = rpn_orients_loss
+        # loss_dict['dims_loss'] = rpn_dims_loss
+        # loss_dict['orients_loss'] = rpn_orients_loss
 
         return loss_dict
 

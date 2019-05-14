@@ -28,7 +28,7 @@ class Model(nn.Module):
         if self._enable_feat_vis:
             self.featmaps_dict[key] = value
         #  else:
-            #  print("please enable feat vis if you want to visualize featmaps")
+        #  print("please enable feat vis if you want to visualize featmaps")
 
     def get_feat(self, key=None):
         if key is None:
@@ -53,3 +53,15 @@ class Model(nn.Module):
 
     def unloaded_parameters(self):
         return []
+
+    @staticmethod
+    def freeze_bn(module):
+        for m in module.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eval()
+
+    @staticmethod
+    def unfreeze_bn(module):
+        for m in module.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.train()

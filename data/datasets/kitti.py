@@ -43,6 +43,8 @@ class KITTIDataset(DetDataset):
         if config.get('calib_file'):
             self._calib_file = config['calib_file']
         else:
+            if config.get('calib_dir'):
+                self.calib_dir = config['calib_dir']
             self._calib_file = None
 
         self.transforms = transform
@@ -211,6 +213,8 @@ class KITTIDataset(DetDataset):
             assert line[0] == 'P2:'
             p = [float(x) for x in line[1:]]
             p = np.array(p).reshape(3, 4)
+
+        f.close()
         return p
 
     def get_calib_path(self, sample_name):

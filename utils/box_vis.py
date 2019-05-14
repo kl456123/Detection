@@ -15,7 +15,11 @@ sys.path.append('.')
 fv_dir = 'results/fv'
 bev_dir = 'results/bev'
 
-class_names = ['Car', 'Van', 'Truck', 'Pedestrian', 'Cyclist', 'Tram']
+#  class_names = ['Car', 'Van', 'Truck', 'Pedestrian', 'Cyclist', 'Tram']
+class_names = [
+    "bus", "bicycle", "car", "motorcycle", "pedestrian", "truck", "trailer",
+    "construction_vehicle"
+]
 
 
 def parse_kitti_3d(label_path):
@@ -23,7 +27,7 @@ def parse_kitti_3d(label_path):
     objs = [Object3d(line) for line in lines]
 
     # class filter
-    objs = [obj for obj in objs if obj.type in class_names]
+    #  objs = [obj for obj in objs if obj.type in class_names]
 
     boxes_3d = [obj.box3d for obj in objs]
     boxes_2d = [obj.box2d for obj in objs]
@@ -219,6 +223,8 @@ def draw_boxes(img,
                             fill=(255, 0, 0),
                             width=10)
 
+    import ipdb
+    ipdb.set_trace()
     for i in range(box_3d.shape[0]):
         target = {}
         target['ry'] = box_3d[i, 0]

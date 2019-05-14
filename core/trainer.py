@@ -52,9 +52,9 @@ class Trainer(object):
             data = common.to_cuda(data)
 
             # forward and backward
-            prediction = model(data)
+            prediction, loss_dict = model(data)
             # loss
-            loss_dict = model.loss(prediction, data)
+            #  loss_dict = model.loss(prediction, data)
 
             loss = 0
             for loss_key, loss_val in loss_dict.items():

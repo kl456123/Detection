@@ -1,4 +1,3 @@
-
 {
     "data_config": {
         "dataloader_config": {
@@ -7,24 +6,21 @@
             "shuffle": true
         },
         "dataset_config": {
-            "type":"bdd",
-            "root_path": "/data/bdd/bdd100k/",
-            "dataset_file": "bdd100k_labels_images_train.json",
-            "data_path": "images/train",
-            "label_path": "labels",
-            "classes": ["car", "person", "bus", "motor","rider","train","truck"]
+            "type":"mono_3d_kitti",
+            "classes":["Car"],
+            "cache_bev": false,
+            "dataset_file": "data/trainval.txt",
+            "root_path": "/data",
+            "use_proj_2d":false
         },
-        "name": "bdd",
+        "name": "kitti",
         "transform_config":[
+            {"type":"random_hsv"
+            },{"type":"random_brightness"},
+            {"type":"random_horizontal_flip"},
             {
-            "type": "random_hsv"
-            }, {
-            "type": "random_brightness"
-            }, {
-            "type": "random_horizontal_flip"
-            },{
-            "type":"fix_shape_resize",
-            "size":[384, 768]
+                "type":"fix_shape_resize",
+                "size":[384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -42,6 +38,7 @@
         ]
     },
     "eval_config": {
+        "batch_size": 2,
         "bbox_normalize_means": [
             0.0,
             0.0,
@@ -56,8 +53,8 @@
         ],
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
-        "class_agnostic": false,
-        "classes": ["car", "person", "bus", "motor","rider","train","truck"],
+        "class_agnostic": true,
+        "classes":["Car"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
@@ -69,22 +66,23 @@
     "eval_data_config": {
         "dataloader_config": {
             "batch_size": 1,
-            "num_workers": 2,
+            "num_workers": 1,
             "shuffle": false
         },
         "dataset_config": {
-            "type":"bdd",
-            "root_path": "/data/bdd/bdd100k/",
-            "dataset_file": "bdd100k_labels_images_val.json",
-            "data_path": "images/100k/val",
-            "label_path": "labels",
-            "classes": ["car", "person", "bus", "motor","rider","train","truck"]
+            "type":"mono_3d_kitti",
+            "classes":["Car"],
+            "cache_bev": false,
+            "dataset_file": "data/val.txt",
+            "root_path": "/data"
         },
-        "name": "bdd",
+        "name": "kitti",
         "transform_config":[
             {
-                "type":"fix_shape_resize",
-                "size":[384, 768]
+            "type": "fix_ratio_resize",
+            "min_size":384,
+            "max_size":1280,
+            "size": [384, 1280]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -102,10 +100,12 @@
         ]
     },
     "model_config": {
+        "use_filter":true,
+        "num_bins":2,
         "batch_size":512,
         "class_agnostic": true,
         "num_stages":1,
-        "classes": ["car", "person", "bus", "motor","rider","train","truck"],
+        "classes":["Car"],
         "target_generator_config": [{
             "type": "faster_rcnn",
             "similarity_calc_config": {
@@ -123,7 +123,7 @@
             "sampler_config": {
                 "num_samples":512,
                 "type": "balanced",
-                "fg_fraction": 0.25
+                "fg_fraction": 0.5
             },
             "analyzer_config": {}
         }],
@@ -135,7 +135,6 @@
             "net_arch":"res18_pruned",
             "separate_feat":false,
             "pretrained": true,
-            "truncated":false,
             "ndin":[64, 128, 256, 512]
         },
         "pooling_mode": "align",
@@ -174,19 +173,19 @@
                 "similarity_calc_config": {
                     "type": "center"
                 },
-                "fg_thresh": 0.7,
+                "fg_thresh": 0.3,
                 "bg_thresh": 0.3,
                 "coder_config": {
                     "type": "center",
                     "bbox_normalize_targets_precomputed": false
                 },
                 "matcher_config": {
-                    "type": "bipartitle"
+                    "type": "argmax"
                 },
                 "sampler_config": {
                     "num_samples": 1024,
                     "type": "balanced",
-                    "fg_fraction": 0.5
+                    "fg_fraction": 0.25
                 },
                 "analyzer_config": {}
             },
@@ -203,7 +202,7 @@
         "use_focal_loss": true
     },
     "train_config": {
-        "num_iters":300000,
+        "num_iters": 600000,
         "checkpoint_interval": 4000,
         "clip_gradient": 10,
         "device_ids": [
@@ -228,7 +227,7 @@
             "milestones":[60000, 120000, 240000],
             "type": "multi_step",
             "warmup_method":"linear",
-            "warmup_iters":500,
+            "warmup_iters":2000,
             "warmup_factor":0.333
         },
         "start_epoch": 1

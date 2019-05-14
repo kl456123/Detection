@@ -9,7 +9,7 @@ import torch
 class MeanCoder(object):
     @staticmethod
     def encode_batch(gt_dims, mean_dims):
-        return gt_dims - mean_dims
+        return torch.log(gt_dims / mean_dims)
 
     @staticmethod
     def decode_batch(pred_dims, mean_dims, probs):
@@ -25,4 +25,4 @@ class MeanCoder(object):
         mean_dims = torch.cat([bg_dim, mean_dims], dim=1)
         mean_dims = mean_dims[0][probs_argmax]
 
-        return pred_dims + mean_dims
+        return torch.exp(pred_dims) * mean_dims

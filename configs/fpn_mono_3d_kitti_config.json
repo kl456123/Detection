@@ -1,7 +1,7 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 16,
+            "batch_size": 32,
             "num_workers": 32,
             "shuffle": true
         },
@@ -78,10 +78,10 @@
         "name": "kitti",
         "transform_config":[
             {
-            "type": "fix_ratio_resize",
+            "type": "fix_shape_resize",
             "min_size":384,
             "max_size":1280,
-            "size": [384, 1280]
+            "size": [384, 768]
             },
             {"type":"to_tensor"},
             {"type":"normalize",
@@ -130,9 +130,10 @@
             "type":"fpn",
             "pretrained_path": "./data/pretrained_model",
             "pooling_size":7,
-            "net_arch":"res50",
+            "net_arch":"res18_pruned",
             "separate_feat":false,
-            "pretrained": true
+            "pretrained": true,
+            "ndin":[64, 128, 256, 512]
         },
         "pooling_mode": "align",
         "pooling_size": 7,
@@ -180,9 +181,9 @@
                     "type": "argmax"
                 },
                 "sampler_config": {
-                    "num_samples":512,
+                    "num_samples": 1024,
                     "type": "balanced",
-                    "fg_fraction": 0.5
+                    "fg_fraction": 0.25
                 },
                 "analyzer_config": {}
             },
@@ -208,7 +209,7 @@
         "disp_interval": 800,
         "mGPUs": true,
         "optimizer_config": {
-            "base_lr": 0.02,
+            "base_lr": 0.005,
             "bias_lr_factor":1,
             "weight_decay_bias":0,
             "weight_decay":0,

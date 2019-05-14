@@ -59,82 +59,7 @@ def py_iou(boxes_a, boxes_b):
     return iou
 
 
-def match(boxes_2d, corners, trans_3d, r, p, thresh=None):
-    """
-    Args:
-        boxes_2d: shape(4)
-        corners: shape(8, 3)
-        trans_3d: shape(64,3)
-        ry: shape(3, 3)
-    """
-    corners_3d = np.dot(r, corners.T)
-    trans_3d = np.repeat(np.expand_dims(trans_3d.T, axis=1), 8, axis=1)
-    corners_3d = corners_3d.transpose((1, 2, 0)) + trans_3d
-    corners_3d = corners_3d.reshape(3, -1)
-    corners_3d_homo = np.vstack((corners_3d, np.ones(
-        (1, corners_3d.shape[1]))))
-
-    corners_2d = np.dot(p, corners_3d_homo)
-    corners_2d_xy = corners_2d[:2, :] / corners_2d[2, :]
-
-    corners_2d_xy = corners_2d_xy.reshape(2, 8, -1)
-    xmin = corners_2d_xy[0, :, :].min(axis=0)
-    ymin = corners_2d_xy[1, :, :].min(axis=0)
-    xmax = corners_2d_xy[0, :, :].max(axis=0)
-    ymax = corners_2d_xy[1, :, :].max(axis=0)
-
-    boxes_2d_proj = np.stack([xmin, ymin, xmax, ymax], axis=-1)
-    #  import ipdb
-    #  ipdb.set_trace()
-    bbox_overlaps = py_iou(boxes_2d[np.newaxis, ...], boxes_2d_proj)
-    if thresh is None:
-        idx = bbox_overlaps.argmax(axis=-1)
-        return idx
-    else:
-        keep = np.where(bbox_overlaps > thresh)[1]
-        return keep
-
-
-def final_decision(errors, box_2d, corner, trans, r, p2):
-    """
-    Two steps to filter final results:
-    1. box_2d iou match
-    2. errors from svd
-    How to combine two constraintions to refine the result
-    Args:
-    """
-
-    # some parameters
-    iou_thresh = None
-    error_top_n = 30
-    error_filter = False
-
-    # filtered by real condition
-    #  z_filter = trans[:, -1] > 0
-    #  trans = trans[z_filter]
-    #  errors = errors[z_filter]
-
-    if error_filter:
-        keep = np.argsort(errors.flatten())[:error_top_n]
-
-        # filtered by errors
-        trans = trans[keep]
-
-    # box_2d match
-    idx = match(box_2d, corner, trans, r, p2, thresh=iou_thresh)
-
-    return trans[idx]
-
-
 def calc_location(dims, dets_2d, ry, p2):
-    """
-    May be we can improve performance angle prediction by enumerating
-    Args:
-        dims: shape(N,3) (lhw)
-        ry: shape(N,)
-        dets_2d: shape(N,5) (xyxyc)
-        p2: shape(4,3)
-    """
     K = p2[:3, :3]
     K_homo = np.eye(4)
     K_homo[:3, :3] = K
@@ -143,7 +68,7 @@ def calc_location(dims, dets_2d, ry, p2):
     KT = p2[:, -1]
     T = np.dot(np.linalg.inv(K), KT)
 
-    num = dims.shape[0]
+    num = dets_2d.shape[0]
 
     zeros = np.zeros_like(ry)
     ones = np.ones_like(ry)
@@ -172,6 +97,11 @@ def calc_location(dims, dets_2d, ry, p2):
     top_corners = corners[:, -4:]
     bottom_corners = corners[:, :4]
     diag_corners = bottom_corners[:, [2, 3, 0, 1]]
+    #  left_side_corners = bottom_corners[:, [1, 2, 3, 0]]
+    #  right_side_corners = bottom_corners[:, [3, 0, 1, 2]]
+
+    # meshgrid
+    # 4x4x4 in all
 
     num_top = top_corners.shape[1]
     num_bottom = bottom_corners.shape[1]
@@ -190,61 +120,98 @@ def calc_location(dims, dets_2d, ry, p2):
     right_side_corners = diag_corners[:, side_index.ravel()]
 
     num_cases = top_side_corners.shape[1]
-    rcnn_3d = []
+    # shape(N, 4)
+    zeros = np.zeros_like(dets_2d[:, 0])
+
+    coeff_left = np.stack([zeros, zeros, dets_2d[:, 0]], axis=-1) - K[0]
+    M = bmm(bmm(K[np.newaxis, ...], R), left_side_corners.transpose(0, 2, 1))
+    M = M.transpose(0, 2, 1)
+    bias_left = M[:, :, 0] - M[:, :, 2] * dets_2d[:, 0][..., None]
+
+    coeff_right = np.stack([zeros, zeros, dets_2d[:, 2]], axis=-1) - K[0]
+    M = bmm(bmm(K[np.newaxis, ...], R), right_side_corners.transpose(0, 2, 1))
+    M = M.transpose(0, 2, 1)
+    bias_right = M[:, :, 0] - M[:, :, 2] * dets_2d[:, 2][..., None]
+
+    coeff_top = np.stack([zeros, zeros, dets_2d[:, 1]], axis=-1) - K[1]
+    M = bmm(bmm(K[np.newaxis, ...], R), top_side_corners.transpose(0, 2, 1))
+    M = M.transpose(0, 2, 1)
+    bias_top = M[:, :, 1] - M[:, :, 2] * dets_2d[:, 1][..., None]
+
+    coeff_bottom = np.stack([zeros, zeros, dets_2d[:, 3]], axis=-1) - K[1]
+    M = bmm(bmm(K[np.newaxis, ...], R), bottom_side_corners.transpose(0, 2, 1))
+    M = M.transpose(0, 2, 1)
+    bias_bottom = M[:, :, 1] - M[:, :, 2] * dets_2d[:, 3][..., None]
+
+    # shape(N, 4, 3)
+    A = np.stack([coeff_left, coeff_top, coeff_right, coeff_bottom], axis=-2)
+    A = np.expand_dims(A, axis=1)
+    # shape(N, 64, 4, 3)
+    A = np.repeat(A, num_cases, axis=1)
+    # shape(N, 64, 4)
+    b = np.stack([bias_left, bias_top, bias_right, bias_bottom], axis=-1)
+
+    results_x = []
+    errors = []
     for i in range(num):
-        # for each detection result
-
-        dets_2d_per = dets_2d[i]
-        results_x = []
-        errors = []
         for j in range(num_cases):
-            # four equations so that four coeff matries
-            left_side_corners_per = left_side_corners[i, j]
-            right_side_corners_per = right_side_corners[i, j]
-            top_side_corners_per = top_side_corners[i, j]
-            bottom_side_corners_per = bottom_side_corners[i, j]
-            R_per = R[i]
-
-            # left, xmin
-            coeff_left = np.asarray([0, 0, dets_2d_per[0]]) - K[0]
-            M = np.dot(np.dot(K, R_per), left_side_corners_per)
-            bias_left = M[0] - M[2] * dets_2d_per[0]
-
-            # right, xmax
-            coeff_right = np.asarray([0, 0, dets_2d_per[2]]) - K[0]
-            M = np.dot(np.dot(K, R_per), right_side_corners_per)
-            bias_right = M[0] - M[2] * dets_2d_per[2]
-
-            # top, ymin
-            coeff_top = np.asarray([0, 0, dets_2d_per[1]]) - K[1]
-            M = np.dot(np.dot(K, R_per), top_side_corners_per)
-            bias_top = M[1] - M[2] * dets_2d_per[1]
-
-            # bottom, ymax
-            coeff_bottom = np.asarray([0, 0, dets_2d_per[3]]) - K[1]
-            M = np.dot(np.dot(K, R_per), bottom_side_corners_per)
-            bias_bottom = M[1] - M[2] * dets_2d_per[3]
-
-            A = np.vstack([coeff_left, coeff_top, coeff_right, coeff_bottom])
-            b = np.asarray([bias_left, bias_top, bias_right, bias_bottom])
-
-            # svd reconstruction error
-            res = np.linalg.lstsq(A, b)
-            # origin of object frame
+            res = np.linalg.lstsq(A[i, j], b[i, j])
             results_x.append(res[0] - T)
-            # errors
-            if len(res[1]):
+            if (len(res[1])):
                 errors.append(res[1])
             else:
                 errors.append(np.zeros(1))
 
-        results_x = np.stack(results_x, axis=0)
-        errors = np.stack(errors, axis=0)
-        X = final_decision(errors, dets_2d[i, :-1], corners[i], results_x,
-                           R[i][np.newaxis, ...], p2)
-        rcnn_3d.append(X)
-    translation = np.vstack(rcnn_3d)
+    results_x = np.stack(results_x, axis=0).reshape(num, num_cases, -1)
+    errors = np.stack(errors, axis=0).reshape(num, num_cases)
+    # idx = errors.argmax(axis=-1)
+    # translation = results_x[np.arange(num), idx]
+    idx = match(dets_2d, corners, results_x, R, p2)
+    translation = results_x[np.arange(num), idx]
+
     return translation
+
+
+def match(boxes_2d, corners, trans_3d, r, p):
+    """
+    Args:
+        boxes_2d: shape(N, 4)
+        corners: shape(N, 8, 3)
+        trans_3d: shape(N, 64,3)
+        ry: shape(N, 3, 3)
+    """
+
+    corners_3d = bmm(r, corners.transpose(0, 2, 1))
+    trans_3d = np.repeat(np.expand_dims(trans_3d, axis=-2), 8, axis=-2)
+    corners_3d = np.expand_dims(
+        corners_3d.transpose((0, 2, 1)), axis=1) + trans_3d
+    corners_3d = corners_3d.reshape(-1, 3)
+    corners_3d_homo = np.hstack((corners_3d, np.ones(
+        (corners_3d.shape[0], 1))))
+
+    corners_2d = np.dot(p, corners_3d_homo.T)
+    corners_2d_xy = corners_2d[:2, :] / corners_2d[2, :]
+
+    corners_2d_xy = corners_2d_xy.reshape(2, -1, 8)
+    xmin = corners_2d_xy[0, :, :].min(axis=-1)
+    ymin = corners_2d_xy[1, :, :].min(axis=-1)
+    xmax = corners_2d_xy[0, :, :].max(axis=-1)
+    ymax = corners_2d_xy[1, :, :].max(axis=-1)
+
+    batch_size = boxes_2d.shape[0]
+    boxes_2d_proj = np.stack(
+        [xmin, ymin, xmax, ymax], axis=-1).reshape(batch_size, -1, 4)
+    # import ipdb
+    # ipdb.set_trace()
+    # import ipdb
+    # ipdb.set_trace()
+    bbox_overlaps = []
+    for i in range(batch_size):
+        bbox_overlaps.append(
+            py_iou(boxes_2d[i][np.newaxis, ...], boxes_2d_proj[i]))
+    bbox_overlaps = np.concatenate(bbox_overlaps, axis=0)
+    idx = bbox_overlaps.argmax(axis=-1)
+    return idx
 
 
 def ry_to_rotation_matrix(rotation_y):
@@ -262,9 +229,10 @@ def ry_to_rotation_matrix(rotation_y):
 def boxes_3d_to_corners_3d(boxes):
     """
     Args:
-    boxes: shape(N, 7), (xyz,hwl, ry)
-    corners_3d: shape()
+        boxes: shape(N, 7), (xyz,hwl, ry)
+        corners_3d: shape()
     """
+    assert boxes.shape[-1] == 7
     ry = boxes[:, -1]
     location = boxes[:, :3]
     h = boxes[:, 3]
@@ -359,7 +327,7 @@ def torch_boxes_3d_to_corners_3d(boxes):
     w = boxes[:, 4]
     l = boxes[:, 5]
     zeros = torch.zeros_like(l).type_as(l)
-    rotation_matrix = torch_ry_to_rotation_matix(ry)
+    rotation_matrix = torch_ry_to_rotation_matrix(ry)
 
     x_corners = torch.stack(
         [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2], dim=0)
@@ -378,7 +346,12 @@ def torch_boxes_3d_to_corners_3d(boxes):
     return corners_3d.permute(0, 2, 1)
 
 
-def torch_ry_to_rotation_matix(rotation_y):
+def torch_ry_to_rotation_matrix(rotation_y):
+    """
+    Args:
+        rotation_y: shape(N,)
+    """
+    format_checker.check_tensor_shape(rotation_y, [None])
     zeros = torch.zeros_like(rotation_y)
     ones = torch.ones_like(rotation_y)
     rotation_matrix = torch.stack(
@@ -427,6 +400,8 @@ def torch_points_3d_to_points_2d(points_3d, p2):
 
     # import ipdb
     # ipdb.set_trace()
+    format_checker.check_tensor_shape(points_3d, [None, 3])
+    format_checker.check_tensor_shape(p2, [3, 4])
     points_3d_homo = torch.cat((points_3d, torch.ones_like(points_3d[:, -1:])),
                                dim=-1)
     points_2d_homo = torch.matmul(p2, points_3d_homo.transpose(
@@ -563,3 +538,55 @@ def torch_line_to_orientation(points1, points2):
 
     deltas = points1 - points2
     return deltas[:, 1] * deltas[:, 0]
+
+
+def torch_window_filter(points_2d, window_shape, deltas=0):
+    """
+    Args:
+        points_2d: shape(N, M, 2)
+        window_shape: shape(N, 4),
+        each item is like (xmin,ymin, xmax, ymax)
+        deltas: soft interval
+    """
+    # if len(window_shape.shape) == 1:
+    # window_shape = window_shape.unsqueeze(0)
+    # else:
+    # assert window_shape.shape[0] == points_2d.shape[0]
+
+    format_checker.check_tensor_shape(points_2d, [None, None, 2])
+    format_checker.check_tensor_shape(window_shape, [None, 4])
+
+    window_shape = window_shape.unsqueeze(1)
+
+    x_filter = (points_2d[:, :, 0] >= window_shape[:, :, 0] - deltas) & (
+        points_2d[:, :, 0] <= window_shape[:, :, 2] + deltas)
+    y_filter = (points_2d[:, :, 1] >= window_shape[:, :, 1] - deltas) & (
+        points_2d[:, :, 1] <= window_shape[:, :, 3] + deltas)
+
+    return x_filter & y_filter
+
+
+def torch_points_2d_to_points_3d(points_2d, depth, p2):
+    """
+    Args:
+        points_2d: shape(N, 2)
+        depth: shape(N, ) or shape(N, 1)
+        p2: shape(3, 4)
+    """
+    if len(depth.shape) == 1:
+        depth = depth.unsqueeze(-1)
+    format_checker.check_tensor_shape(points_2d, [None, 2])
+    format_checker.check_tensor_shape(depth, [None, 1])
+    format_checker.check_tensor_shape(p2, [3, 4])
+
+    points_2d_homo = torch.cat([points_2d, torch.ones_like(points_2d[:, -1:])],
+                               dim=-1)
+    K = p2[:3, :3]
+    KT = p2[:, 3]
+    T = torch.matmul(torch.inverse(K), KT)
+    K_inv = torch.inverse(K)
+    points_3d = torch.matmul(K_inv, (depth * points_2d_homo).permute(
+        1, 0)).permute(1, 0)
+
+    # no rotation
+    return points_3d - T

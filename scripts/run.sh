@@ -46,17 +46,25 @@
     # --out_path /data/object/liangxiong/mono_3d \
     # --config configs/mono_3d_config.json
 
-# FPN_MONO_3D
-CUDA_VISIBLE_DEVICES=0,1 python train.py --cuda \
-    --net fpn_mono_3d \
-    --out_path /data/object/liangxiong/fpn_mono_3d \
-    --config configs/fpn_mono_3d_kitti_config.json \
-    --mGPUs
+# FPN_MONO_3D (KITTI)
+# CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
+    # --net fpn_mono_3d \
+    # --out_path /data/object/liangxiong/test \
+    # --config configs/test_config.json \
+    # --model /data/object/liangxiong/fpn_mono_3d/fpn_mono_3d/kitti/detector_372000.pth
     # --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth
+    # --mGPUs
     # --mGPUs
 # --resume True \
 # --checkpoint 600
     # --mGPUs
+# FPN_MONO_3D (NUSCENES)
+# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
+    # --net fpn_corners_2d \
+    # --out_path /data/object/liangxiong/test \
+    # --config configs/test_config.json \
+    # --mGPUs
+    # --model /data/object/liangxiong/fpn_mono_3d/fpn_mono_3d/kitti/detector_600000.pth \
 
 # FAIL(not work)
 # FPN_MULTIBIN
@@ -85,8 +93,8 @@ CUDA_VISIBLE_DEVICES=0,1 python train.py --cuda \
     # --checkpoint 24000 \
 
 
-# CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
-    # --net mono_3d_better \
-    # --out_path /data/object/liangxiong/mono_3d_better \
-    # --config configs/coco_mono_3d_config.json \
-    # --mGPUs
+CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
+    --net fpn_corners_2d \
+    --out_path /data/object/liangxiong/test \
+    --config configs/test_config.json \
+    --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth

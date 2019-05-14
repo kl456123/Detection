@@ -39,6 +39,12 @@ def parse_args():
         default='',
         type=str)
     parser.add_argument(
+        '--calib_dir',
+        dest='calib_dir',
+        help='calibration directory using kitti format',
+        default='',
+        type=str)
+    parser.add_argument(
         '--cuda', dest='cuda', help='whether use CUDA', action='store_true')
     parser.add_argument(
         '--mGPUs',
@@ -247,9 +253,14 @@ def generate_config(args, logger):
         # disable dataset file,just use image directly
         dataset_config['dataset_file'] = None
         dataset_config['img_dir'] = args.img_dir
+
     if args.calib_file:
         dataset_config = data_config['dataset_config']
         dataset_config['calib_file'] = args.calib_file
+
+    if args.calib_dir:
+        dataset_config = data_config['dataset_config']
+        dataset_config['calib_dir'] = args.calib_dir
 
     return config
 

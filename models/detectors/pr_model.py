@@ -246,7 +246,8 @@ class TwoStageRetinaLayer(Model):
         anchors = self.anchors.cuda()
         anchors = anchors.repeat(batch_size, 1, 1)
 
-        coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+        coder = bbox_coders.build(
+            self.target_generators.target_generator_config['coder_config'])
         proposals = coder.decode_batch(loc2_preds, anchors).detach()
 
         # if self.normlize_anchor:

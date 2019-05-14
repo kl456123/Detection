@@ -9,6 +9,7 @@ import os
 import torch
 from utils.registry import FEATURE_EXTRACTORS
 from core.filler import Filler
+from models.backbones import build_backbone
 
 
 @FEATURE_EXTRACTORS.register('fpn')
@@ -18,11 +19,17 @@ class FPNFeatureExtractor(Model):
         self.pretrained = model_config['pretrained']
         self.net_arch = model_config['net_arch']
         self.pretrained_path = model_config['pretrained_path']
-        self.net_arch_path_map = {'res50': 'resnet50-19c8e357.pth'}
+        self.net_arch_path_map = {
+            'res50': 'resnet50-19c8e357.pth',
+            'res18_pruned': 'resnet18_pruned0.5.pth'
+        }
         self.model_path = os.path.join(self.pretrained_path,
                                        self.net_arch_path_map[self.net_arch])
         self.truncated = model_config.get('truncated', False)
         self.logger = logging.getLogger(__name__)
+
+        # self.ndin = model_config['ndin']
+        self.ndin = model_config['ndin']
 
     def upsample_add(self, x, y):
         _, _, H, W = y.size()
@@ -30,11 +37,14 @@ class FPNFeatureExtractor(Model):
             x, size=(H, W), mode='bilinear', align_corners=False) + y
 
     def init_modules(self):
-        resnet = resnet50()
-        layer1 = [
-            resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,
-            resnet.layer1
-        ]
+        resnet = build_backbone(self.net_arch)()
+        if self.net_arch == 'res18_pruned':
+            layer1 = [resnet.conv1, resnet.bn1, resnet.maxpool, resnet.layer1]
+        else:
+            layer1 = [
+                resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool,
+                resnet.layer1
+            ]
         if self.training and self.pretrained:
             self.logger.info(
                 ("Loading pretrained weights from %s" % (self.model_path)))
@@ -52,9 +62,9 @@ class FPNFeatureExtractor(Model):
         self.layer5 = resnet.layer4
 
         # lateral layers
-        self.lateral4 = nn.Conv2d(1024, 256, 1, 1, 0)
-        self.lateral3 = nn.Conv2d(512, 256, 1, 1, 0)
-        self.lateral2 = nn.Conv2d(256, 256, 1, 1, 0)
+        self.lateral4 = nn.Conv2d(self.ndin[-2], 256, 1, 1, 0)
+        self.lateral3 = nn.Conv2d(self.ndin[-3], 256, 1, 1, 0)
+        self.lateral2 = nn.Conv2d(self.ndin[-4], 256, 1, 1, 0)
 
         # smooth layers
         # self.smooth1 = nn.Conv2d(256, 256, 3, 1, 1)
@@ -63,7 +73,7 @@ class FPNFeatureExtractor(Model):
         self.smooth4 = nn.Conv2d(256, 256, 3, 1, 1)
 
         # special for layer5
-        self.toplayer = nn.Conv2d(2048, 256, 1, 1, 0)
+        self.toplayer = nn.Conv2d(self.ndin[-1], 256, 1, 1, 0)
         self.maxpool2d = nn.MaxPool2d(1, stride=2)
 
         self.second_stage_feature = nn.Sequential(* [

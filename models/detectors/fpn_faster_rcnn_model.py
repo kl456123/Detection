@@ -178,7 +178,11 @@ class FPNFasterRCNN(Model):
                                                   -1).unsqueeze(-1)
             prediction_dict[constants.KEY_BOXES_2D] = proposals
 
-        return prediction_dict
+        if self.training:
+            loss_dict = self.loss(prediction_dict, feed_dict)
+            return prediction_dict, loss_dict
+        else:
+            return prediction_dict
 
     def init_weights(self):
         # submodule init weights
@@ -208,7 +212,7 @@ class FPNFasterRCNN(Model):
 
         # loss module
         if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(self.n_classes)
+            self.rcnn_cls_loss = FocalLoss(self.n_classes, gamma=2)
         else:
             self.rcnn_cls_loss = nn.CrossEntropyLoss(reduction='none')
 
@@ -257,8 +261,12 @@ class FPNFasterRCNN(Model):
 
         for stage_ind in range(self.num_stages):
             cls_target = targets[stage_ind][0]
+            cls_targets = cls_target['target']
+            pos = cls_targets > 0  # [N,#anchors]
+            num_pos = pos.long().sum().clamp(min=1).float()
+
             rcnn_cls_loss = rcnn_cls_loss + common_loss.calc_loss(
-                self.rcnn_cls_loss, cls_target)
+                self.rcnn_cls_loss, cls_target, normalize=False) / num_pos
 
             reg_target = targets[stage_ind][1]
             rcnn_reg_loss = rcnn_reg_loss + common_loss.calc_loss(
