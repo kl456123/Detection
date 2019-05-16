@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 python infer.py --load_dir /data/object/liangxiong/fpn_mono_3d --checkpoint 516000 --net fpn_mono_3d --dataset kitti
+python infer.py --model /data/object/liangxiong/fpn_mono_3d/fpn_mono_3d/kitti/detector_516000.pth \
+                --config /data/object/liangxiong/fpn_mono_3d/fpn_mono_3d/kitti/fpn_mono_3d_kitti_config.json \
+                --net fpn_mono_3d
 """
 
 import os
