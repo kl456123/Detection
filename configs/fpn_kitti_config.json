@@ -2,20 +2,19 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 4,
-            "num_workers": 8,
+            "batch_size": 32,
+            "num_workers": 48,
             "shuffle": true
         },
         "dataset_config": {
             "type":"kitti",
-            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+            "classes":["Car"],
             "cache_bev": false,
             "dataset_file": "data/trainval.txt",
             "root_path": "/data"
         },
         "name": "kitti",
         "transform_config":[
-            {"type":"to_pil"},
             {"type":"random_hsv"
             },{"type":"random_brightness"},
             {"type":"random_horizontal_flip"},
@@ -55,7 +54,7 @@
         "bbox_normalize_targets_precomputed": true,
         "bbox_reg": true,
         "class_agnostic": true,
-        "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+        "classes":["Car"],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
@@ -72,7 +71,7 @@
         },
         "dataset_config": {
             "type":"kitti",
-            "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+            "classes":["Car"],
             "cache_bev": false,
             "dataset_file": "data/val.txt",
             "root_path": "/data"
@@ -80,8 +79,6 @@
         "name": "kitti",
         "transform_config":[
             {
-                "type": "to_pil"
-            }, {
             "type": "fix_shape_resize",
             "size": [384, 1280]
             },
@@ -104,7 +101,7 @@
         "batch_size":512,
         "class_agnostic": true,
         "num_stages":1,
-        "classes":["Car", "Pedestrian", "Truck", "Van", "Cyclist", "Tram"],
+        "classes":["Car"],
         "target_generator_config": [{
             "type": "faster_rcnn",
             "similarity_calc_config": {
@@ -131,9 +128,10 @@
             "type":"fpn",
             "pretrained_path": "./data/pretrained_model",
             "pooling_size":7,
-            "net_arch":"res50",
+            "net_arch":"res18_pruned",
             "separate_feat":false,
-            "pretrained": true
+            "pretrained": true,
+            "ndin":[64, 128, 256, 512]
         },
         "pooling_mode": "align",
         "pooling_size": 7,
@@ -206,7 +204,7 @@
         "device_ids": [
             0
         ],
-        "disp_interval": 400,
+        "disp_interval": 800,
         "mGPUs": true,
         "optimizer_config": {
             "base_lr": 0.02,

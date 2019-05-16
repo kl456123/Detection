@@ -20,10 +20,24 @@ class Corners3DLoss(nn.Module):
         """
         # N, M = preds.shape[:2]
 
-        # local_corners_3d_preds = preds[:, :, :24]
-        # local_corners_3d_gt = targets[:,:,:24]
+        local_corners_3d_preds = preds[:, :, :24]
+        local_corners_3d_gt = targets[:, :, :24]
 
-        # C_2d_preds = preds[:,:,24:26]
-        # C_2d_targets = preds[:,:,24:]
+        C_2d_preds = preds[:, :, 24:26]
+        C_2d_gt = targets[:, :, 24:26]
 
-        return self.l1_loss(preds, targets)
+        instance_depth_preds = preds[:, :, 26:]
+        instance_depth_gt = targets[:, :, 26:]
+
+        local_corners_3d_loss = self.l1_loss(local_corners_3d_preds,
+                                             local_corners_3d_gt)
+        C_2d_loss = self.l1_loss(C_2d_preds, C_2d_gt)
+        instance_depth_loss = self.l1_loss(instance_depth_preds,
+                                           instance_depth_gt)
+
+        loss = torch.cat(
+            [local_corners_3d_loss, C_2d_loss, instance_depth_loss],
+            dim=-1)
+
+        # return self.l1_loss(preds, targets)
+        return loss

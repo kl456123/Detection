@@ -200,10 +200,13 @@ rm results/images/*
 
 #FPN_KITTI
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth \
-    # --config ./configs/fpn_kitti_config.json \
+    # --load_dir /data/object/liangxiong/fpn_kitti_pretrained \
+    # --checkpoint 76000 \
     # --net fpn \
     # --thresh 0.5 \
+    # --dataset kitti
+    # --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth \
+    # --config ./configs/fpn_kitti_config.json \
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
 
@@ -326,20 +329,22 @@ CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
 
 # CORNERS
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 256000 \
-    # --load_dir /data/object/liangxiong/test2 \
+    # --checkpoint 120000 \
+    # --load_dir /data/object/liangxiong/test \
     # --net fpn_corners_2d \
     # --thresh 0.5 \
-    # --dataset kitti
+    # --dataset kitti \
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
     # --calib_dir /data/nuscenes/calibs \
     # --img_dir /data/nuscenes/samples/CAM_FRONT
 
 # CORNERS_3D
-# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 1000 \
+# CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
+    # --checkpoint 544000 \
     # --load_dir /data/object/liangxiong/test \
     # --net fpn_corners_3d \
-    # --thresh 0.5 \
+    # --thresh 0.3 \
     # --dataset kitti
+    # --calib_dir /data/nuscenes/calibs \
+    # --img_dir /data/nuscenes/samples/CAM_FRONT

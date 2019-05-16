@@ -199,13 +199,12 @@ class FPNGRNetModel(FPNFasterRCNN):
             # rcnn_corners_preds = torch.bmm(
             # feed_dict[constants.KEY_STEREO_CALIB_P2_ORIG],
             # rcnn_corners_preds)
-            assert rcnn_corners_preds.shape[0] == 1
-            rcnn_corners_preds = geometry_utils.torch_points_3d_to_points_2d(
-                rcnn_corners_preds[0].view(-1, 3),
-                feed_dict[constants.KEY_STEREO_CALIB_P2_ORIG][0]).view(-1, 8,
-                                                                       2)
-            prediction_dict[constants.
-                            KEY_CORNERS_2D] = rcnn_corners_preds.unsqueeze(0)
+            # assert rcnn_corners_preds.shape[0] == 1
+            # rcnn_corners_preds = geometry_utils.torch_points_3d_to_points_2d(
+                # rcnn_corners_preds[0].view(-1, 3),
+                # feed_dict[constants.KEY_STEREO_CALIB_P2_ORIG][0]).view(-1, 8,
+                                                                       # 2)
+            prediction_dict[constants.KEY_CORNERS_2D] = rcnn_corners_preds
             prediction_dict[constants.KEY_BOXES_2D] = proposals
             prediction_dict[constants.KEY_DIMS] = rcnn_dim_preds
 
@@ -278,7 +277,7 @@ class FPNGRNetModel(FPNFasterRCNN):
                 self.rcnn_bbox_loss, dim_target, True)
 
         loss_dict.update({
-            'rcnn_corners_loss': rcnn_corners_loss,
+            # 'rcnn_corners_loss': rcnn_corners_loss,
             #  'rcnn_dim_loss': rcnn_dim_loss
         })
 

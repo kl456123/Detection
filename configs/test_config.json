@@ -1,15 +1,15 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 8,
-            "num_workers": 8,
+            "batch_size": 1,
+            "num_workers": 1,
             "shuffle": true
         },
         "dataset_config": {
             "type":"mono_3d_kitti",
             "classes":["Car"],
             "cache_bev": false,
-            "dataset_file": "data/trainval.txt",
+            "dataset_file": "data/demo.txt",
             "root_path": "/data",
             "use_proj_2d":false
         },
@@ -73,7 +73,7 @@
             "type":"mono_3d_kitti",
             "classes":["Car"],
             "cache_bev": false,
-            "dataset_file": "data/val.txt",
+            "dataset_file": "data/demo.txt",
             "root_path": "/data"
         },
         "name": "kitti",
@@ -100,7 +100,7 @@
         ]
     },
     "model_config": {
-        "use_filter":false,
+        "use_filter":true,
         "num_bins":2,
         "batch_size":512,
         "class_agnostic": true,
@@ -202,16 +202,16 @@
         "use_focal_loss": true
     },
     "train_config": {
-        "num_iters": 600000,
-        "checkpoint_interval": 4000,
+        "num_iters": 1000,
+        "checkpoint_interval": 100,
         "clip_gradient": 10,
         "device_ids": [
             0
         ],
-        "disp_interval": 200,
+        "disp_interval": 100,
         "mGPUs": true,
         "optimizer_config": {
-            "base_lr": 0.005,
+            "base_lr": 0.001,
             "bias_lr_factor":1,
             "weight_decay_bias":0,
             "weight_decay":0,
@@ -225,7 +225,7 @@
             "lr_decay_gamma": 0.1,
             "lr_decay_step": 60000,
             "milestones":[60000, 120000, 240000],
-            "type": "multi_step",
+            "type": "step",
             "warmup_method":"linear",
             "warmup_iters":2000,
             "warmup_factor":0.333

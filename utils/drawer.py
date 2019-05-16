@@ -293,8 +293,9 @@ class ImageVisualizer(object):
         sample_name = self.get_sample_name_from_path(results_path)
         obj_labels = self.read_labels(results_dir, sample_name, results)
         if obj_labels is None:
-            return np.zeros((0, 8)), np.zeros((0, 5)), np.zeros(
-                (0, 1)), np.zeros((3, 4))
+            return None, None, None, None
+            # return np.zeros((0, 8)), np.zeros((0, 5)), np.zeros(
+                # (0, 1)), np.zeros((3, 4))
 
         label_boxes_2d = np.asarray(
             [self._obj_label_to_box_2d(obj_label) for obj_label in obj_labels])
@@ -521,7 +522,21 @@ class ImageVisualizer(object):
             saved_path = self.get_saved_path(sample_name)
             cv2.imwrite(saved_path, image)
 
-    def render_image_corners_2d(self, image_path, corners_2d):
+    def render_image_corners_2d(self,
+                                image_path,
+                                corners_2d=None,
+                                boxes_2d=None,
+                                corners_3d=None,
+                                p2=None):
+        color = (255, 255, 0)
+
+        if corners_2d is None:
+            assert corners_3d is not None
+            corners_2d = geometry_utils.points_3d_to_points_2d(
+                corners_3d.reshape(-1, 3), p2).reshape(-1, 8, 2)
+        num_boxes = corners_2d.shape[0]
+        corners_2d = corners_2d.astype(np.int32).tolist()
+
         image = self.parse_image(image_path)
         connected_points = [[2, 4, 5], [1, 3, 6], [2, 4, 7], [1, 3, 8],
                             [1, 6, 8], [2, 5, 7], [3, 6, 8], [4, 5, 7]]
@@ -535,19 +550,38 @@ class ImageVisualizer(object):
         # corners_3d.reshape((-1, 3)), p2).reshape(-1, 8, 2)
 
         # bev image
-        # voxel_size = 0.05
-        # width = 80
-        # height = 75
-        # bev_width = int(height / voxel_size)
-        # bev_height = int(width / voxel_size)
-        # connected_points_2d = [[1, 3], [0, 2], [1, 3], [0, 2]]
-        # bev_image = np.zeros((bev_height, bev_width, 3), np.uint8)
-        # bev_image[...] = 255
+        if corners_3d is not None:
+            # bev image
+            voxel_size = 0.05
+            width = 80
+            height = 75
+            bev_width = int(height / voxel_size)
+            bev_height = int(width / voxel_size)
+            connected_points_2d = [[1, 3], [0, 2], [1, 3], [0, 2]]
+            bev_image = np.zeros((bev_height, bev_width, 3), np.uint8)
+            bev_image[...] = 255
 
-        num_boxes = corners_2d.shape[0]
-        corners_2d = corners_2d.astype(np.int32).tolist()
+            for i in range(corners_3d.shape[0]):
+                corners_bird = corners_3d[i][:4, [0, 2]]
+                corners_bird = corners_bird[:, ::-1]
+                corners_bird[:, 1] = corners_bird[:, 1] + 1 / 2 * width
+                corners_bird = (corners_bird / voxel_size).astype(np.int)
+
+                # render box in bev view
+                for i in range(4):
+                    for j in range(4):
+                        if j in connected_points_2d[i]:
+                            start_point = (corners_bird[i][0],
+                                           corners_bird[i][1])
+                            end_point = (corners_bird[j][0],
+                                         corners_bird[j][1])
+                            cv2.line(bev_image, start_point, end_point, color,
+                                     2)
+            bev_image = cv2.rotate(bev_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        image_corners = copy.deepcopy(image)
+
         for i in range(num_boxes):
-            color = (255, 255, 0)
             corners_image = corners_2d[i]
 
             # render box in image
@@ -557,10 +591,41 @@ class ImageVisualizer(object):
                         start_point = (corners_image[i][0],
                                        corners_image[i][1])
                         end_point = (corners_image[j][0], corners_image[j][1])
-                        cv2.line(image, start_point, end_point, color, 2)
+                        cv2.line(image_corners, start_point, end_point, color,
+                                 2)
 
         # rotate bev_image
         # bev_image = cv2.rotate(bev_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        if boxes_2d is not None:
+            image_2d = copy.deepcopy(image)
+            for i, box in enumerate(boxes_2d):
+                # class_name = self.classes[label_classes[i]]
+                # color = self.colors[label_classes[i]]
+                image = cv2.rectangle(
+                    image_2d, (int(box[0]), int(box[1])),
+                    (int(box[2]), int(box[3])),
+                    color=color,
+                    thickness=2)
+
+            image = np.concatenate((image_2d, image_corners), axis=0)
+        else:
+            image = image_corners
+
+        if corners_3d is not None:
+            # resize bev_image
+            bev_shape = self.get_bev_final_size(image, bev_image)
+            bev_image = cv2.resize(
+                bev_image,
+                tuple(bev_shape[::-1]),
+                interpolation=cv2.INTER_CUBIC)
+            # stack with bev image
+            image = np.concatenate([image, bev_image], axis=1)
+
+        scale = self.get_image_final_size(image)
+        image = cv2.resize(
+            image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+
         if self.online:
             # image postprocess
             cv2.imshow("test", image)

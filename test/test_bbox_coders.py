@@ -207,6 +207,17 @@ def test_corners_coder():
     visualizer.render_image_corners_2d(image_path, decoded_corners_2d[0])
 
 
+def compute_ray_angle(C):
+    """
+    Args:
+        C: shape(N, 3), 3d center of object
+    Returns:
+        alpha: shape(N, ) observe angle
+    """
+    alpha = -torch.atan2(C[:, 2], C[:, 0])
+    return alpha
+
+
 def test_corners_3d_coder():
 
     # import ipdb
@@ -222,6 +233,9 @@ def test_corners_3d_coder():
     proposals = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_2D])
     num_instances = torch.from_numpy(sample[constants.KEY_NUM_INSTANCES])
 
+    # ry = compute_ray_angle(label_boxes_3d[:, :3])
+    # label_boxes_3d[:, -1] += ry
+
     label_boxes_3d = torch.stack(1 * [label_boxes_3d[:num_instances]], dim=0)
     label_boxes_2d = torch.stack(1 * [label_boxes_2d[:num_instances]], dim=0)
     proposals = torch.stack(1 * [proposals[:num_instances]], dim=0)
@@ -229,6 +243,8 @@ def test_corners_3d_coder():
 
     # import ipdb
     # ipdb.set_trace()
+    # label_boxes_3d[:, :, -1] = 0
+
     encoded_corners_3d = bbox_coder.encode_batch(label_boxes_3d,
                                                  label_boxes_2d, p2)
     #  torch.cat([encoded_corners_2d, ])

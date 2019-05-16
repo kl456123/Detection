@@ -94,7 +94,7 @@
 
 
 CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
-    --net fpn_corners_2d \
+    --net fpn_corners_3d \
     --out_path /data/object/liangxiong/test \
     --config configs/test_config.json \
-    --model /data/object/liangxiong/fpn_bdd_pretrained/fpn/bdd/detector_300000.pth
+    --model /data/object/liangxiong/fpn_mono_3d/fpn_mono_3d/kitti/detector_372000.pth

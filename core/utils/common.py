@@ -3,6 +3,7 @@ import torch
 import sys
 import torch.nn as nn
 import copy
+import numpy as np
 
 
 def build_class(config, registry, *args, **kwargs):
@@ -35,6 +36,8 @@ def to_cuda(target):
         return [to_cuda(e) for e in target]
     elif isinstance(target, dict):
         return {key: to_cuda(target[key]) for key in target}
+    elif isinstance(target, np.ndarray):
+        return to_cuda(torch.from_numpy(target))
     elif isinstance(target, torch.Tensor):
         return target.cuda()
     else:

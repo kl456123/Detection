@@ -118,7 +118,7 @@ class Tester(object):
 
             # initialize dets for each classes
             # dets = [[] for class_ind in range(self.n_classes)]
-            dets = [np.zeros((0, 8, 2), dtype=np.float32)]
+            dets = [np.zeros((0, 8, 3), dtype=np.float32)]
 
             scores = prediction[constants.KEY_CLASSES]
             boxes_2d = prediction[constants.KEY_BOXES_2D]
@@ -126,7 +126,7 @@ class Tester(object):
             corners_2d = prediction[constants.KEY_CORNERS_2D]
             #  import ipdb
             #  ipdb.set_trace()
-            #  p2 = data[constants.KEY_STEREO_CALIB_P2_ORIG]
+            p2 = data[constants.KEY_STEREO_CALIB_P2_ORIG]
 
             # rcnn_3d = prediction['rcnn_3d']
             batch_size = scores.shape[0]
@@ -146,7 +146,7 @@ class Tester(object):
                 scores_per_img = scores[batch_ind]
                 dims_per_img = dims[batch_ind]
                 corners_2d_per_img = corners_2d[batch_ind]
-                #  p2_per_img = p2[batch_ind]
+                p2_per_img = p2[batch_ind]
                 # rcnn_3d_per_img = rcnn_3d[batch_ind]
                 for class_ind in range(1, self.n_classes):
                     # cls thresh
@@ -211,10 +211,16 @@ class Tester(object):
                         dets.append(nms_corners_2d_per_img)
                         #  dets.append(nms_dets_per_img)
                     else:
-                        dets.append(np.zeros((0, 8, 2), dtype=np.float32))
+                        nms_dets_per_img = np.zeros((0, 4))
+                        dets.append(np.zeros((0, 8, 3), dtype=np.float32))
 
                 dets = np.concatenate(dets, axis=0)
-                visualizer.render_image_corners_2d(image_path[0], dets)
+
+                visualizer.render_image_corners_2d(
+                    image_path[0],
+                    boxes_2d=nms_dets_per_img[:, :4],
+                    corners_3d=dets,
+                    p2=p2_per_img.cpu().numpy())
 
                 duration_time = time.time() - end_time
                 #  label_path = self._generate_label_path(image_path[batch_ind])
@@ -532,6 +538,6 @@ class Tester(object):
 
     def test(self, dataloader, model, logger):
         # self.test_super_nms(dataloader, model, logger)
-        # self.test_2d(dataloader, model, logger)
+        #  self.test_2d(dataloader, model, logger)
         self.test_3d(dataloader, model, logger)
-        #  self.test_corners_3d(dataloader, model, logger)
+        # self.test_corners_3d(dataloader, model, logger)

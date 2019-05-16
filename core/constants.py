@@ -43,6 +43,7 @@ KEY_FINAL_PROBS = 'final_probs'
 KEY_CORNERS_2D = 'corners_2d'
 KEY_CORNERS_3D = 'corners_3d'
 KEY_CORNERS_VISIBILITY = 'corners_visibility'
+KEY_CORNERS_3D_HM = 'corners_3d_hm'
 
 # key of stats
 KEY_STATS_RECALL = 'stats_recall'

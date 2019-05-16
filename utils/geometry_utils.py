@@ -498,12 +498,15 @@ class ProjectMatrixTransform(object):
         return np.concatenate([K, KT[..., np.newaxis]], axis=-1)
 
 
-def compute_ray_angle(center_2d, p2):
+def compute_ray_angle(center_2d, p2, format='kitti'):
     """
+    Note that in kitti dataset, clockwise is positive direction,
+    But in math(numpy is the same), counterclockwise is positive
     Args:
         center_2d: shape(N, M, 2)
         p2: shape(N, 3, 4)
     """
+    assert format in ['kitti', 'normal'], 'kitti or normal can be accept'
     M = p2[:, :, :3]
     center_2d_homo = torch.cat(
         [center_2d, torch.ones_like(center_2d[:, :, -1:])], dim=-1)
@@ -512,6 +515,9 @@ def compute_ray_angle(center_2d, p2):
         torch.inverse(M), center_2d_homo.permute(0, 2, 1)).permute(0, 2, 1)
     ray_angle = torch.atan2(direction_vector[:, :, 2],
                             direction_vector[:, :, 0])
+
+    if format=='kitti':
+        return -ray_angle
     return ray_angle
 
 

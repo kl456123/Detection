@@ -27,10 +27,10 @@ class Corner3DCoder(object):
         # local to global
         local_corners_3d = encoded_corners_3d_all[:, :24]
         encoded_C_2d = encoded_corners_3d_all[:, 24:26]
-        instance_depth_inv = encoded_corners_3d_all[:, 26:]
+        instance_depth = encoded_corners_3d_all[:, 26:]
 
         # decode them first
-        instance_depth = 1 / (instance_depth_inv + 1e-8)
+        # instance_depth = 1 / (instance_depth_inv + 1e-8)
         final_boxes_2d_xywh = geometry_utils.torch_xyxy_to_xywh(
             final_boxes_2d.unsqueeze(0)).squeeze(0)
         C_2d = encoded_C_2d * final_boxes_2d_xywh[:,
@@ -40,13 +40,16 @@ class Corner3DCoder(object):
         # camera view angle
         alpha = geometry_utils.compute_ray_angle(
             C_2d.unsqueeze(0), p2.unsqueeze(0)).squeeze(0)
-        R = geometry_utils.torch_ry_to_rotation_matrix(
-            alpha.view(-1)).type_as(encoded_corners_3d_all)
-        R_inv = torch.inverse(R)
 
         # loop here
         C = geometry_utils.torch_points_2d_to_points_3d(C_2d, instance_depth,
                                                         p2)
+        R_inv = geometry_utils.torch_ry_to_rotation_matrix(-alpha.view(
+            -1)).type_as(encoded_corners_3d_all)
+
+        # may be slow
+        # R_inv = torch.inverse(R)
+
         local_corners_3d = local_corners_3d.view(-1, 8, 3).permute(0, 2, 1)
         global_corners_3d = torch.matmul(R_inv,
                                          local_corners_3d) + C.unsqueeze(-1)
@@ -89,9 +92,9 @@ class Corner3DCoder(object):
             C_2d - label_boxes_2d_xywh[:, :2]) / label_boxes_2d_xywh[:, 2:]
 
         # instance_depth is encoded just by inverse it
-        instance_depth_inv = 1 / instance_depth
+        # instance_depth_inv = 1 / instance_depth
 
-        return torch.cat([local_corners_3d, encoded_C_2d, instance_depth_inv],
+        return torch.cat([local_corners_3d, encoded_C_2d, instance_depth],
                          dim=-1)
 
     @staticmethod
