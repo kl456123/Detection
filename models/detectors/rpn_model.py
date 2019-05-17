@@ -27,7 +27,6 @@ class RPNModel(Model):
         self.post_nms_topN = model_config['post_nms_topN']
         self.pre_nms_topN = model_config['pre_nms_topN']
         self.nms_thresh = model_config['nms_thresh']
-        self.use_score = model_config['use_score']
         self.use_focal_loss = model_config['use_focal_loss']
 
         # anchor generator
@@ -39,10 +38,6 @@ class RPNModel(Model):
 
         self.target_generators = TargetGenerator(
             model_config['target_generator_config'])
-
-        self.use_iou = model_config.get('use_iou')
-
-        # the same as target_assigner
 
     def init_weights(self):
         self.truncated = False
@@ -60,11 +55,7 @@ class RPNModel(Model):
 
         # define anchor box offset prediction layer
 
-        if self.use_score:
-            bbox_feat_channels = 512 + 2
-            self.nc_bbox_out /= self.num_anchors
-        else:
-            bbox_feat_channels = 512
+        bbox_feat_channels = 512
         self.rpn_bbox_pred = nn.Conv2d(bbox_feat_channels, self.nc_bbox_out, 1,
                                        1, 0)
 
@@ -173,20 +164,7 @@ class RPNModel(Model):
 
         # rpn bbox pred
         # shape(N,4*num_anchors,H,W)
-        if self.use_score:
-            # shape (N,2,num_anchoros*H*W)
-            rpn_cls_scores = rpn_cls_score_reshape.permute(0, 2, 1)
-            rpn_bbox_preds = []
-            for i in range(self.num_anchors):
-                rpn_bbox_feat = torch.cat(
-                    [rpn_conv, rpn_cls_scores[:, ::self.num_anchors, :, :]],
-                    dim=1)
-                rpn_bbox_preds.append(self.rpn_bbox_pred(rpn_bbox_feat))
-            rpn_bbox_preds = torch.cat(rpn_bbox_preds, dim=1)
-        else:
-            # get rpn offsets to the anchor boxes
-            rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
-            # rpn_bbox_preds = [rpn_bbox_preds]
+        rpn_bbox_preds = self.rpn_bbox_pred(rpn_conv)
 
         # generate anchors
         feature_map_list = [base_feat.size()[-2:]]

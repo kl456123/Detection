@@ -118,7 +118,6 @@ class Tester(object):
 
             # initialize dets for each classes
             # dets = [[] for class_ind in range(self.n_classes)]
-            dets = [np.zeros((0, 8, 3), dtype=np.float32)]
 
             scores = prediction[constants.KEY_CLASSES]
             boxes_2d = prediction[constants.KEY_BOXES_2D]
@@ -127,6 +126,8 @@ class Tester(object):
             #  import ipdb
             #  ipdb.set_trace()
             p2 = data[constants.KEY_STEREO_CALIB_P2_ORIG]
+            num_cols = corners_2d.shape[-1]
+            dets = [np.zeros((0, 8, num_cols), dtype=np.float32)]
 
             # rcnn_3d = prediction['rcnn_3d']
             batch_size = scores.shape[0]
@@ -184,42 +185,18 @@ class Tester(object):
                         ).cpu().numpy()
                         nms_corners_2d_per_img = threshed_corners_2d_per_img[
                             keep].detach().cpu().numpy()
-                        #  import ipdb
-                        #  ipdb.set_trace()
-
-                        # visualize all corners here
-
-                        # calculate location
-                        #  location = geometry_utils.calc_location(
-                        #  nms_dets_per_img[:, 5:8], nms_dets_per_img[:, :5],
-                        #  nms_dets_per_img[:, 8], p2_per_img.cpu().numpy())
-                        # import ipdb
-                        # ipdb.set_trace()
-                        # location, _ = mono_3d_postprocess_bbox(
-                        # nms_rcnn_3d_per_img, nms_dets_per_img[:, :5],
-                        # p2_per_img.cpu().numpy())
-                        #  nms_dets_per_img = np.concatenate(
-                        #  [
-                        #  nms_dets_per_img[:, :5],
-                        #  nms_dets_per_img[:, 5:8], location,
-                        #  nms_dets_per_img[:, -1:]
-                        #  ],
-                        #  axis=-1)
-                        # nms_dets_per_img = np.concatenate(
-                        # [nms_dets_per_img[:, :5], location], axis=-1)
 
                         dets.append(nms_corners_2d_per_img)
-                        #  dets.append(nms_dets_per_img)
                     else:
                         nms_dets_per_img = np.zeros((0, 4))
-                        dets.append(np.zeros((0, 8, 3), dtype=np.float32))
+                        dets.append(np.zeros((0, 8, num_cols), dtype=np.float32))
 
                 dets = np.concatenate(dets, axis=0)
 
                 visualizer.render_image_corners_2d(
                     image_path[0],
                     boxes_2d=nms_dets_per_img[:, :4],
-                    corners_3d=dets,
+                    corners_2d=dets,
                     p2=p2_per_img.cpu().numpy())
 
                 duration_time = time.time() - end_time
@@ -538,6 +515,6 @@ class Tester(object):
 
     def test(self, dataloader, model, logger):
         # self.test_super_nms(dataloader, model, logger)
-        #  self.test_2d(dataloader, model, logger)
-        self.test_3d(dataloader, model, logger)
-        # self.test_corners_3d(dataloader, model, logger)
+        # self.test_2d(dataloader, model, logger)
+        #  self.test_3d(dataloader, model, logger)
+        self.test_corners_3d(dataloader, model, logger)

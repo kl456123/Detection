@@ -168,7 +168,7 @@ def test(config, logger):
         assert args.load_dir is not None, 'please choose a directory to load checkpoint'
         eval_config['load_dir'] = args.load_dir
         input_dir = os.path.join(eval_config['load_dir'], model_config['type'],
-                                 data_config['name'])
+                                 data_config['dataset_config']['type'])
         if not os.path.exists(input_dir):
             raise Exception(
                 'There is no input directory for loading network from {}'.

@@ -110,7 +110,8 @@ def train(config, logger):
 
     # some components for logging and saving(saver and summaryer)
     output_dir = os.path.join(train_config['output_path'],
-                              model_config['type'], data_config['name'])
+                              model_config['type'],
+                              data_config['dataset_config']['type'])
     saver = Saver(output_dir)
 
     # resume
@@ -173,7 +174,8 @@ def generate_config(args, logger):
 
     # output dir
     output_dir = os.path.join(train_config['output_path'],
-                              model_config['type'], data_config['name'])
+                              model_config['type'],
+                              data_config['dataset_config']['type'])
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         os.chmod(output_dir, 0o777)

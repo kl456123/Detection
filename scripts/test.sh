@@ -201,7 +201,7 @@ rm results/images/*
 #FPN_KITTI
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
     # --load_dir /data/object/liangxiong/fpn_kitti_pretrained \
-    # --checkpoint 76000 \
+    # --checkpoint 64000 \
     # --net fpn \
     # --thresh 0.5 \
     # --dataset kitti
@@ -219,23 +219,25 @@ rm results/images/*
 
 # FPN_BDD
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 300000 \
+    # --checkpoint 1000 \
     # --net fpn \
-    # --load_dir /data/object/liangxiong/fpn_bdd_pretrained \
+    # --load_dir /data/object/liangxiong/test \
     # --dataset bdd \
-    # --thresh 0.5 \
+    # --thresh 0.3
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
     # --img_path /data/dm202_3w/left_img/007604.png \
     # --calib_file ./000004.txt
 
 # FPN_MONO_3D
-CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 516000 \
-    --net fpn_mono_3d \
-    --load_dir /data/object/liangxiong/fpn_mono_3d \
-    --dataset kitti \
-    --thresh 0.3 \
-    --img_dir /data/dm202_3w/left_img \
-    --calib_file ./000004.txt
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 516000 \
+    # --net fpn_mono_3d \
+    # --load_dir /data/object/liangxiong/fpn_mono_3d \
+    # --dataset kitti \
+    # --thresh 0.3 \
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
     # --calib_dir /data/nuscenes/calibs \
     # --img_dir /data/nuscenes/samples/CAM_FRONT
     
@@ -328,23 +330,27 @@ CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
     # --calib_file ./000004.txt
 
 # CORNERS
-# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 120000 \
-    # --load_dir /data/object/liangxiong/test \
-    # --net fpn_corners_2d \
-    # --thresh 0.5 \
-    # --dataset kitti \
-    # --img_dir /data/dm202_3w/left_img \
-    # --calib_file ./000004.txt
+CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    --checkpoint 120000 \
+    --load_dir /data/object/liangxiong/test \
+    --net fpn_corners_2d \
+    --thresh 0.5 \
+    --dataset mono_3d_kitti \
+    --img_dir /data/dm202_3w/left_img \
+    --calib_file ./000004.txt
     # --calib_dir /data/nuscenes/calibs \
     # --img_dir /data/nuscenes/samples/CAM_FRONT
+    
+    
 
 # CORNERS_3D
 # CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
-    # --checkpoint 544000 \
+    # --checkpoint 208000 \
     # --load_dir /data/object/liangxiong/test \
     # --net fpn_corners_3d \
     # --thresh 0.3 \
-    # --dataset kitti
+    # --dataset mono_3d_kitti
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
     # --calib_dir /data/nuscenes/calibs \
     # --img_dir /data/nuscenes/samples/CAM_FRONT

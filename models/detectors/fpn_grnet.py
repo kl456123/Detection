@@ -201,9 +201,9 @@ class FPNGRNetModel(FPNFasterRCNN):
             # rcnn_corners_preds)
             # assert rcnn_corners_preds.shape[0] == 1
             # rcnn_corners_preds = geometry_utils.torch_points_3d_to_points_2d(
-                # rcnn_corners_preds[0].view(-1, 3),
-                # feed_dict[constants.KEY_STEREO_CALIB_P2_ORIG][0]).view(-1, 8,
-                                                                       # 2)
+            # rcnn_corners_preds[0].view(-1, 3),
+            # feed_dict[constants.KEY_STEREO_CALIB_P2_ORIG][0]).view(-1, 8,
+            # 2)
             prediction_dict[constants.KEY_CORNERS_2D] = rcnn_corners_preds
             prediction_dict[constants.KEY_BOXES_2D] = proposals
             prediction_dict[constants.KEY_DIMS] = rcnn_dim_preds
@@ -232,9 +232,17 @@ class FPNGRNetModel(FPNFasterRCNN):
     def init_weights(self):
         super().init_weights()
 
+        if self.freeze_2d:
+            self.freeze_modules()
+            for param in self.rcnn_corners_preds.parameters():
+                param.requires_grad = True
+
+            self.freeze_bn(self)
+
     def init_param(self, model_config):
         super().init_param(model_config)
         self.class_agnostic_3d = False
+        self.freeze_2d = model_config.get('freeze_2d', False)
 
     def init_modules(self):
         super().init_modules()
@@ -277,8 +285,8 @@ class FPNGRNetModel(FPNFasterRCNN):
                 self.rcnn_bbox_loss, dim_target, True)
 
         loss_dict.update({
-            # 'rcnn_corners_loss': rcnn_corners_loss,
-            #  'rcnn_dim_loss': rcnn_dim_loss
+            'rcnn_corners_loss': rcnn_corners_loss,
+            # 'rcnn_dim_loss': rcnn_dim_loss
         })
 
         return loss_dict

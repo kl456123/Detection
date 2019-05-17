@@ -156,16 +156,38 @@ class FPNFasterRCNN(Model):
                     loss_units[constants.KEY_CLASSES],
                     loss_units[constants.KEY_BOXES_2D]
                 ])
-                multi_stage_stats.append(stats)
+                # multi_stage_stats.append(stats)
 
-            # decode for next stage
-            coder = bbox_coders.build(self.target_generators[i]
-                                      .target_generator_config['coder_config'])
-            proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
+                # decode for next stage
+                coder = bbox_coders.build(
+                    self.target_generators[i]
+                    .target_generator_config['coder_config'])
+                proposals = coder.decode_batch(rcnn_bbox_preds,
+                                               proposals).detach()
+
+                # import ipdb
+                # ipdb.set_trace()
+                proposals_dict[constants.KEY_PRIMARY] = proposals
+                auxiliary_dict[constants.KEY_PROPOSALS] = proposals
+                _, _, second_stage_stats = self.target_generators[
+                    i].generate_targets(
+                        proposals_dict,
+                        gt_dict,
+                        auxiliary_dict,
+                        subsample=False)
+                fg_probs, _ = rcnn_cls_probs[:, :, 1:].max(dim=-1)
+                fake_match = auxiliary_dict[constants.KEY_FAKE_MATCH]
+                second_stage_stats.update(
+                    Analyzer.analyze_precision(
+                        fake_match,
+                        fg_probs,
+                        feed_dict[constants.KEY_NUM_INSTANCES],
+                        thresh=0.3))
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
-            prediction_dict[constants.KEY_STATS] = multi_stage_stats
+            # prediction_dict[constants.KEY_STATS] = multi_stage_stats
+            prediction_dict[constants.KEY_STATS] = [stats, second_stage_stats]
         else:
             prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
 
@@ -261,12 +283,12 @@ class FPNFasterRCNN(Model):
 
         for stage_ind in range(self.num_stages):
             cls_target = targets[stage_ind][0]
-            cls_targets = cls_target['target']
-            pos = cls_targets > 0  # [N,#anchors]
-            num_pos = pos.long().sum().clamp(min=1).float()
+            # cls_targets = cls_target['target']
+            # pos = cls_targets > 0  # [N,#anchors]
+            # num_pos = pos.long().sum().clamp(min=1).float()
 
             rcnn_cls_loss = rcnn_cls_loss + common_loss.calc_loss(
-                self.rcnn_cls_loss, cls_target, normalize=False) / num_pos
+                self.rcnn_cls_loss, cls_target)
 
             reg_target = targets[stage_ind][1]
             rcnn_reg_loss = rcnn_reg_loss + common_loss.calc_loss(

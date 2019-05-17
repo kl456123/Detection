@@ -101,8 +101,10 @@ class ImageVisualizer(object):
         elif self.calib_dir is not None:
             return os.path.join(self.calib_dir, '{}.txt'.format(sample_name))
         else:
-            raise TypeError(
-                'calib file or calib dir should not be None at the same time')
+            # self.logger.warn(
+                # 'calib file or calib dir should not be None at the same time, disable 3d display'
+            # )
+            return None
 
     def visualize_images(self, total_result_files):
         # total_num = Image2DVisualizer.get_num_file_in_dir(self.result_dir)
@@ -295,7 +297,7 @@ class ImageVisualizer(object):
         if obj_labels is None:
             return None, None, None, None
             # return np.zeros((0, 8)), np.zeros((0, 5)), np.zeros(
-                # (0, 1)), np.zeros((3, 4))
+        # (0, 1)), np.zeros((3, 4))
 
         label_boxes_2d = np.asarray(
             [self._obj_label_to_box_2d(obj_label) for obj_label in obj_labels])
@@ -666,13 +668,21 @@ if __name__ == '__main__':
     # label_dir = None
     # calib_file = None
 
-    # DM
-    image_dir = '/data/dm202_3w/left_img'
-    calib_file = './000004.txt'
-    calib_dir = None
-    result_dir = './results/data'
+    # BDD
+    image_dir = '/data/bdd/bdd100k/images/100k/train'
+    result_dir = 'results/data'
     save_dir = 'results/images'
+    calib_dir = None
     label_dir = None
+    calib_file = None
+
+    # DM
+    # image_dir = '/data/dm202_3w/left_img'
+    # calib_file = './000004.txt'
+    # calib_dir = None
+    # result_dir = './results/data'
+    # save_dir = 'results/images'
+    # label_dir = None
 
     visualizer = ImageVisualizer(
         image_dir,

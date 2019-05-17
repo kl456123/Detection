@@ -1,7 +1,7 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 32,
+            "batch_size": 16,
             "num_workers": 32,
             "shuffle": true
         },
@@ -9,7 +9,7 @@
             "type":"mono_3d_kitti",
             "classes":["Car"],
             "cache_bev": false,
-            "dataset_file": "data/trainval.txt",
+            "dataset_file": "data/train.txt",
             "root_path": "/data",
             "use_proj_2d":false
         },
@@ -143,7 +143,7 @@
             "type":"fpn_rpn",
             "use_score":false,
             "use_iou":false,
-            "use_focal_loss":true,
+            "use_focal_loss": false,
             "anchor_generator_config": {
                 "use_pyramid":true,
                 "type":"default",
@@ -199,7 +199,7 @@
         "num_reg_samples":512,
         "subsample_twice": false,
         "truncated": false,
-        "use_focal_loss": true
+        "use_focal_loss": false
     },
     "train_config": {
         "num_iters": 600000,
