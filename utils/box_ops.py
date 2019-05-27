@@ -45,6 +45,26 @@ def clip_boxes(boxes, image_shape):
     return boxes
 
 
+def np_clip_boxes(boxes, image_info):
+    """
+    Args:
+        boxes: shape(N, 4) (x1,y1,x2,y2)
+        image_info: shape(4,) (h,w, sh, sw)
+    """
+    #  import ipdb
+    #  ipdb.set_trace()
+    new_boxes = np.copy(boxes)
+    new_boxes[...] = np.maximum(boxes, 0)
+    # new_boxes[:, 0] = np.maximum(boxes[:, 0], 0)
+    # new_boxes[:, 1] = np.maximum(boxes[:, 1], 0)
+    new_boxes[:, 0] = np.minimum(new_boxes[:, 0], image_info[1])
+    new_boxes[:, 1] = np.minimum(new_boxes[:, 1], image_info[0])
+
+    new_boxes[:, 2] = np.minimum(new_boxes[:, 2], image_info[1])
+    new_boxes[:, 3] = np.minimum(new_boxes[:, 3], image_info[0])
+    return new_boxes
+
+
 def window_filter(anchors, window, allowed_border=0):
     """
     Args:
@@ -203,8 +223,8 @@ def super_nms_faster(boxes):
     cluster_y = torch.arange(0, y_slices) * y_stride
     xv, yv = torch.meshgrid([cluster_x, cluster_y])
     cluster = torch.stack(
-        [xv.contiguous().view(-1), yv.contiguous().view(-1)],
-        dim=-1).cuda().float()
+        [xv.contiguous().view(-1),
+         yv.contiguous().view(-1)], dim=-1).cuda().float()
 
     remain_boxes = []
     for i in range(cluster.shape[0]):

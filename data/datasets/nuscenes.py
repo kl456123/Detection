@@ -10,6 +10,7 @@ from data.det_dataset import DetDataset
 from core import constants
 from utils.registry import DATASETS
 from utils import geometry_utils
+from utils import box_ops
 
 NUSCENES_MEAN_DIMS = {
     'car': [3.88311640418, 1.62856739989, 1.52563191462],
@@ -50,6 +51,7 @@ class NuscenesDataset(DetDataset):
         self.classes = ['bg'] + dataset_config['classes']
 
         #  sample_name = 'n008-2018-05-21-11-06-59-0400__CAM_FRONT__1526915275512465.jpg'
+        # sample_name = 'n015-2018-11-21-19-58-31+0800__CAM_FRONT__1542801715412460.jpg'
         if dataset_config.get('dataset_file') is not None:
             self.sample_names = self.make_label_list(
                 os.path.join(self.label_path, dataset_config['dataset_file']))
@@ -189,6 +191,7 @@ class NuscenesDataset(DetDataset):
         # use boxes_3d_proj rather than boxes 2d
         boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d,
                                                             stereo_calib_p2)
+        #  boxes_2d = box_ops.np_clip_boxes(boxes_3d_proj, image_info)
         sample = {}
         sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj
         sample[constants.KEY_IMAGE] = image

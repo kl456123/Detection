@@ -67,6 +67,9 @@ class TargetGenerator(object):
         proposals_primary = proposals_dict[constants.KEY_PRIMARY].detach()
         gt_primary = gt_dict[constants.KEY_PRIMARY].detach()
 
+        # insanity check
+        assert not torch.isnan(proposals_primary).any()
+
         num_instances = auxiliary_dict[constants.KEY_NUM_INSTANCES]
         match_quality_matrix = self.similarity_calc.compare_batch(
             proposals_primary, gt_primary)

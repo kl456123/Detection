@@ -80,17 +80,23 @@ def read_labels(label_dir, img_idx, results=False):
     obj_list = []
 
     # Extract the list
-    if os.stat(label_dir + "/%06d.txt" % img_idx).st_size == 0:
+    if os.stat(label_dir + "/{}.txt".format(img_idx)).st_size == 0:
         return
 
     if results:
-        p = np.loadtxt(label_dir + "/%06d.txt" % img_idx, delimiter=' ',
-                       dtype=str,
-                       usecols=np.arange(start=0, step=1, stop=16))
+        p = np.loadtxt(
+            label_dir + "/{}.txt".format(img_idx),
+            delimiter=' ',
+            dtype=str,
+            usecols=np.arange(
+                start=0, step=1, stop=16))
     else:
-        p = np.loadtxt(label_dir + "/%06d.txt" % img_idx, delimiter=' ',
-                       dtype=str,
-                       usecols=np.arange(start=0, step=1, stop=15))
+        p = np.loadtxt(
+            label_dir + "/{}.txt".format(img_idx),
+            delimiter=' ',
+            dtype=str,
+            usecols=np.arange(
+                start=0, step=1, stop=15))
 
     # Check if the output is single dimensional or multi dimensional
     if len(p.shape) > 1:
@@ -173,11 +179,15 @@ def build_bbs_from_objects(obj_list, class_needed):
         obj_detections = obj_list
     else:
         if isinstance(class_needed, str):
-            obj_detections = [detections for detections in obj_list if
-                              detections.type == class_needed]
+            obj_detections = [
+                detections for detections in obj_list
+                if detections.type == class_needed
+            ]
         elif isinstance(class_needed, list):
-            obj_detections = [detections for detections in obj_list if
-                              detections.type in class_needed]
+            obj_detections = [
+                detections for detections in obj_list
+                if detections.type in class_needed
+            ]
         else:
             raise TypeError("Invalid type for class_needed, {} should be "
                             "str or list".format(type(class_needed)))
@@ -202,24 +212,19 @@ def build_bbs_from_objects(obj_list, class_needed):
     boxes_3d = np.zeros((num_objs, 7))  # [ry, l, h, w, tx, ty, tz]
 
     for it in range(num_objs):
-        boxes_2d[it] = np.array([x1[it],
-                                 y1[it],
-                                 x2[it],
-                                 y2[it]])
+        boxes_2d[it] = np.array([x1[it], y1[it], x2[it], y2[it]])
 
-        boxes_3d[it] = np.array([ry[it],
-                                 l[it],
-                                 h[it],
-                                 w[it],
-                                 tx[it],
-                                 ty[it],
-                                 tz[it]])
+        boxes_3d[it] = np.array(
+            [ry[it], l[it], h[it], w[it], tx[it], ty[it], tz[it]])
 
     return boxes_2d, boxes_3d, scores
 
 
-def get_lidar_point_cloud(img_idx, calib_dir, velo_dir,
-                          im_size=None, min_intensity=None):
+def get_lidar_point_cloud(img_idx,
+                          calib_dir,
+                          velo_dir,
+                          im_size=None,
+                          min_intensity=None):
     """ Calculates the lidar point cloud, and optionally returns only the
     points that are projected to the image.
 
@@ -252,7 +257,8 @@ def get_lidar_point_cloud(img_idx, calib_dir, velo_dir,
         point_cloud = pts.T
 
         # Project to image frame
-        point_in_im = calib_utils.project_to_image(point_cloud, p=frame_calib.p2).T
+        point_in_im = calib_utils.project_to_image(
+            point_cloud, p=frame_calib.p2).T
 
         # Filter based on the given image size
         image_filter = (point_in_im[:, 0] > 0) & \
@@ -268,8 +274,12 @@ def get_lidar_point_cloud(img_idx, calib_dir, velo_dir,
         point_filter = np.logical_and(image_filter, intensity_filter)
         return pts[point_filter].T
 
-def get_lidar_point_cloud_with_color(img_idx, img_dir, calib_dir, velo_dir,
-                          im_size=None):
+
+def get_lidar_point_cloud_with_color(img_idx,
+                                     img_dir,
+                                     calib_dir,
+                                     velo_dir,
+                                     im_size=None):
     """ Calculates the lidar point cloud, and optionally returns only the
     points that are projected to the image.
 
@@ -302,7 +312,8 @@ def get_lidar_point_cloud_with_color(img_idx, img_dir, calib_dir, velo_dir,
         point_cloud = pts.T
 
         # Project to image frame
-        point_in_im = calib_utils.project_to_image(point_cloud, p=frame_calib.p2).T
+        point_in_im = calib_utils.project_to_image(
+            point_cloud, p=frame_calib.p2).T
 
         # Filter based on the given image size
         image_filter = (point_in_im[:, 0] > 0) & \
@@ -313,7 +324,8 @@ def get_lidar_point_cloud_with_color(img_idx, img_dir, calib_dir, velo_dir,
         img_dir = img_dir + "/%06d.png" % img_idx
         img = Image.open(img_dir)
         img = np.array(img)
-        point_colors = img[point_in_im[image_filter, 1].astype(np.int), point_in_im[image_filter, 0].astype(np.int)]
+        point_colors = img[point_in_im[image_filter, 1].astype(np.int),
+                           point_in_im[image_filter, 0].astype(np.int)]
 
     # return np.vstack((pts[image_filter].T, point_colors[image_filter].T))
     return pts[image_filter].T, point_colors.T
@@ -402,10 +414,24 @@ def project_box3d_to_image(corners_3d, p):
     """
     # index for 3d bounding box face
     # it is converted to 4x4 matrix
-    face_idx = np.array([0, 1, 5, 4,  # front face
-                         1, 2, 6, 5,  # left face
-                         2, 3, 7, 6,  # back face
-                         3, 0, 4, 7]).reshape((4, 4))  # right face
+    face_idx = np.array([
+        0,
+        1,
+        5,
+        4,  # front face
+        1,
+        2,
+        6,
+        5,  # left face
+        2,
+        3,
+        7,
+        6,  # back face
+        3,
+        0,
+        4,
+        7
+    ]).reshape((4, 4))  # right face
     return calib_utils.project_to_image(corners_3d, p), face_idx
 
 
@@ -418,8 +444,7 @@ def compute_orientation_3d(obj, p):
     """
 
     # compute rotational matrix
-    rot = np.array([[+np.cos(obj.ry), 0, +np.sin(obj.ry)],
-                    [0, 1, 0],
+    rot = np.array([[+np.cos(obj.ry), 0, +np.sin(obj.ry)], [0, 1, 0],
                     [-np.sin(obj.ry), 0, +np.cos(obj.ry)]])
 
     orientation3d = np.array([0.0, obj.l, 0.0, 0.0, 0.0, 0.0]).reshape(3, 2)

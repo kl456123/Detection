@@ -9,14 +9,24 @@ from utils.drawer import ImageVisualizer
 from utils import geometry_utils
 
 
-def build_dataset():
-    dataset_config = {
-        "type": "mono_3d_kitti",
-        "classes": ["Car", "Pedestrian"],
-        "cache_bev": False,
-        "dataset_file": "data/demo.txt",
-        "root_path": "/data"
-    }
+def build_dataset(dataset_type='kitti'):
+    if dataset_type == 'kitti':
+        dataset_config = {
+            "type": "mono_3d_kitti",
+            "classes": ["Car", "Pedestrian"],
+            "cache_bev": False,
+            "dataset_file": "data/demo.txt",
+            "root_path": "/data"
+        }
+    elif dataset_type == 'nuscenes':
+        dataset_config = {
+            'type': 'nuscenes',
+            'root_path': '/data/nuscenes',
+            'dataset_file': 'trainval.json',
+            'data_path': 'samples/CAM_FRONT',
+            'label_path': '.',
+            'classes': ['car', 'pedestrian', 'truck']
+        }
 
     dataset = datasets.build(dataset_config, transform=None, training=True)
 
@@ -150,10 +160,10 @@ def test_rear_side_coder():
 
 def test_corners_coder():
 
-    coder_config = {'type': constants.KEY_CORNERS_2D}
+    coder_config = {'type': constants.KEY_CORNERS_2D_NEARESTV2}
     bbox_coder = bbox_coders.build(coder_config)
 
-    dataset = build_dataset()
+    dataset = build_dataset('kitti')
     sample = dataset[0]
     label_boxes_3d = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_3D])
     label_boxes_2d = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_2D])
@@ -282,5 +292,5 @@ if __name__ == '__main__':
     # test_orientv3_coder()
     # test_orientv2_coder()
     #  test_rear_side_coder()
-    # test_corners_coder()
-    test_corners_3d_coder()
+    test_corners_coder()
+    # test_corners_3d_coder()

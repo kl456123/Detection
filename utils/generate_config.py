@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 # SWITCH that you only should care about
-DATASET_TYPE = 'mono_3d_kitti'
-NET_TYPE = 'fpn_corners_3d'
+# DATASET_TYPE = 'mono_3d_kitti'
+DATASET_TYPE = 'nuscenes'
+NET_TYPE = 'fpn_corners_2d'
+# NET_TYPE = 'fpn_mono_3d_better'
 JOBS = True
 DEBUG = False
 
@@ -15,6 +17,9 @@ if DEBUG:
     disp_interval = 100
     training_dataset_file = "data/demo.txt"
     testing_dataset_file = "data/demo.txt"
+    if DATASET_TYPE == 'nuscenes_kitti':
+        training_dataset_file = "data/nuscenes_demo.txt"
+        testing_dataset_file = "data/nuscenes_demo.txt"
 else:
     training_batch_size = 32
     num_workers = 48
@@ -24,6 +29,9 @@ else:
     disp_interval = 800
     training_dataset_file = "data/train.txt"
     testing_dataset_file = "data/val.txt"
+    if DATASET_TYPE == 'nuscenes_kitti':
+        training_dataset_file = 'data/nuscenes_train.txt'
+        testing_dataset_file = 'data/nuscenes_val.txt'
 
 # common config
 testing_batch_size = 1
@@ -52,13 +60,20 @@ elif net_arch == 'res50':
 rpn_ndin = 256
 rpn_min_size = 16
 
-if DATASET_TYPE in ['kitti', 'mono_3d_kitti']:
+if DATASET_TYPE in ['kitti', 'mono_3d_kitti', 'nuscenes_kitti']:
     # KITTI CONFIG
     root_path = '/data'
     classes = ['Car']
+    if DATASET_TYPE == 'nuscenes_kitti':
+        root_path = '/data/nuscenes_kitti'
+        classes = [
+            "bus", "bicycle", "car", "motorcycle",  "truck",
+            "trailer", "construction_vehicle"
+        ]
     dataset_type = DATASET_TYPE
     image_size = [384, 1280]
     freeze_2d = True
+    use_proj_2d = False
 elif DATASET_TYPE == 'bdd':
     # BDD CONFIG
     root_path = '/data'
@@ -83,6 +98,18 @@ elif DATASET_TYPE == 'bdd':
 
     root_path = "/data/bdd/bdd100k/"
     image_size = [384, 768]
+elif DATASET_TYPE == "nuscenes":
+    dataset_type = 'nuscenes'
+    classes = [
+            "bus", "bicycle", "car", "motorcycle", "truck",
+            "trailer", "construction_vehicle", "pedestrian"
+        ]
+    root_path = "/data/nuscenes"
+    training_dataset_file = "trainval.json"
+    testing_dataset_file = training_dataset_file
+    data_path = "samples/CAM_FRONT"
+    label_path = "."
+    image_size = [384, 1280]
 else:
     raise TypeError('dataset type {} is unknown !'.format(DATASET_TYPE))
 
@@ -123,6 +150,8 @@ def generate_dataset_config(training):
     if dataset_type == 'kitti':
         # no need to add anything else
         pass
+    elif dataset_type == 'mono_3d_kitti':
+        dataset_config.update({'use_proj_2d': use_proj_2d})
     elif dataset_type == 'bdd':
         if training:
 
@@ -137,8 +166,8 @@ def generate_dataset_config(training):
             })
     elif dataset_type == 'coco':
         pass
-    elif dataset_config == 'nuscenes':
-        pass
+    elif dataset_type == 'nuscenes':
+        dataset_config.update({"data_path": data_path, "label_path": "."})
     return dataset_config
 
 
@@ -326,7 +355,7 @@ def generate_train_config():
     return train_config
 
 
-def generate_config(json_file):
+def generate_config():
     data_config = generate_data_config(training_transform_names, True)
     eval_data_config = generate_data_config(testing_transform_names, False)
     eval_config = generate_eval_config()
@@ -341,17 +370,13 @@ def generate_config(json_file):
         'train_config': train_config
     }
     import json
-    with open(json_file, 'w') as f:
-        json.dump(config, f, indent=4, sort_keys=True)
-
-
-def generate_kitti_config():
     net = NET_TYPE
     if DEBUG:
         json_file = 'configs/test_config.json'
     else:
         json_file = 'configs/{}_{}_config.json'.format(net, dataset_type)
-    generate_config(json_file)
+    with open(json_file, 'w') as f:
+        json.dump(config, f, indent=4, sort_keys=True)
 
 
 def generate_bdd_config():
@@ -359,7 +384,7 @@ def generate_bdd_config():
 
 
 def main():
-    generate_kitti_config()
+    generate_config()
 
 
 if __name__ == '__main__':

@@ -9,8 +9,8 @@ import torch.nn.functional as F
 from core.utils import format_checker
 
 
-@BBOX_CODERS.register(constants.KEY_CORNERS_2D)
-class Corner2DCoder(object):
+@BBOX_CODERS.register(constants.KEY_CORNERS_2D_NEARESTV2)
+class NearestV2CornerCoder(object):
     @staticmethod
     def decode_batch(encoded_corners_2d_all, final_boxes_2d):
         """
@@ -38,14 +38,14 @@ class Corner2DCoder(object):
         num_boxes = encoded_corners_2d.shape[1]
 
         final_boxes_2d_xywh = geometry_utils.torch_xyxy_to_xywh(final_boxes_2d)
-        # left_top = final_boxes_2d[:, :, :2].unsqueeze(2)
-        mid = final_boxes_2d_xywh[:, :, :2].unsqueeze(2)
+        left_top = final_boxes_2d[:, :, :2].unsqueeze(2)
+        # mid = final_boxes_2d_xywh[:, :, :2].unsqueeze(2)
         wh = final_boxes_2d_xywh[:, :, 2:].unsqueeze(2)
         encoded_corners_2d = encoded_corners_2d.view(batch_size, num_boxes, 8,
                                                      2)
         visibility = visibility.view(batch_size, num_boxes, 8, 2)
         visibility = F.softmax(visibility, dim=-1)[:, :, :, 1]
-        corners_2d = encoded_corners_2d * wh + mid
+        corners_2d = encoded_corners_2d * wh + left_top
 
         # remove invisibility points
         # import ipdb
@@ -67,6 +67,35 @@ class Corner2DCoder(object):
         return occluded_filter
 
     @staticmethod
+    def reorder_boxes_4c(corners_2d):
+        """
+        Args:
+            corners_2d: shape(N, 8, 2)
+        Returns:
+            pass
+        """
+        bottom_corners = corners_2d[:, [0, 1, 2, 3]]
+        top_corners = corners_2d[:, [4, 5, 6, 7]]
+
+        def reorder_part_corners(bottom_corners):
+            left_side = bottom_corners[:, [0,3]]
+            right_side = bottom_corners[:,[1,2]]
+
+            # reorder side by y
+            # cond = (left_side[:, 0, 1] - right_side[:, 1, 1])>0
+            _, left_order = torch.sort(left_side[:, :, 1], descending=True, dim=-1)
+            left_side = tensor_utils.multidim_index(left_side, order)
+
+            _, right_order = torch.sort(right_side[:, :, 1], descending=True, dim=-1)
+            right_side = tensor_utils.multidim_index(right_side, order)
+
+
+        bottom_corners, order = reorder_part_corners(bottom_corners)
+        top_corners = tensor_utils.multidim_index(top_corners, order)
+
+        return corners_2d
+
+    @staticmethod
     def encode(label_boxes_3d, label_boxes_2d, p2, image_info):
         """
             return projections of 3d bbox corners in the inner of 2d bbox.
@@ -83,6 +112,7 @@ class Corner2DCoder(object):
             corners_3d.reshape((-1, 3)), p2).reshape(-1, 8, 2)
         # corners_2d = geometry_utils.torch_boxes_3d_to_corners_2d(
         # label_boxes_3d, p2)
+        corners_2d = NearestV2CornerCoder.reorder_boxes_4c(corners_2d)
 
         image_shape = torch.tensor([0, 0, image_info[1], image_info[0]])
         image_shape = image_shape.type_as(corners_2d).view(1, 4)
@@ -108,9 +138,9 @@ class Corner2DCoder(object):
         label_boxes_2d_xywh = geometry_utils.torch_xyxy_to_xywh(
             label_boxes_2d.unsqueeze(0)).squeeze(0)
         wh = label_boxes_2d_xywh[:, 2:].unsqueeze(1)
-        # left_top = label_boxes_2d[:, :2].unsqueeze(1)
-        mid = label_boxes_2d_xywh[:, :2].unsqueeze(1)
-        encoded_corners_2d = (corners_2d - mid) / wh
+        left_top = label_boxes_2d[:, :2].unsqueeze(1)
+        # mid = label_boxes_2d_xywh[:, :2].unsqueeze(1)
+        encoded_corners_2d = (corners_2d - left_top) / wh
 
         encoded_corners_2d = torch.cat(
             [encoded_corners_2d, visibility.unsqueeze(-1).float()], dim=-1)

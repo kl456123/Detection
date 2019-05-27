@@ -126,8 +126,6 @@ class Tester(object):
             #  import ipdb
             #  ipdb.set_trace()
             p2 = data[constants.KEY_STEREO_CALIB_P2_ORIG]
-            num_cols = corners_2d.shape[-1]
-            dets = [np.zeros((0, 8, num_cols), dtype=np.float32)]
 
             # rcnn_3d = prediction['rcnn_3d']
             batch_size = scores.shape[0]
@@ -148,7 +146,11 @@ class Tester(object):
                 dims_per_img = dims[batch_ind]
                 corners_2d_per_img = corners_2d[batch_ind]
                 p2_per_img = p2[batch_ind]
-                # rcnn_3d_per_img = rcnn_3d[batch_ind]
+
+                num_cols = corners_2d.shape[-1]
+                dets = [np.zeros((0, 8, num_cols), dtype=np.float32)]
+                dets_2d = [np.zeros((0, 4), dtype=np.float32)]
+
                 for class_ind in range(1, self.n_classes):
                     # cls thresh
                     inds = torch.nonzero(
@@ -187,16 +189,29 @@ class Tester(object):
                             keep].detach().cpu().numpy()
 
                         dets.append(nms_corners_2d_per_img)
+                        dets_2d.append(nms_dets_per_img[:, :4])
                     else:
-                        nms_dets_per_img = np.zeros((0, 4))
-                        dets.append(np.zeros((0, 8, num_cols), dtype=np.float32))
+                        dets.append(
+                            np.zeros(
+                                (0, 8, num_cols), dtype=np.float32))
+                        dets_2d.append(np.zeros((0, 4)))
 
-                dets = np.concatenate(dets, axis=0)
+                # import ipdb
+                # ipdb.set_trace()
+                corners = np.concatenate(dets, axis=0)
+                dets_2d = np.concatenate(dets_2d, axis=0)
+                corners_2d = None
+                corners_3d = None
+                if num_cols == 3:
+                    corners_3d = corners
+                else:
+                    corners_2d = corners
 
                 visualizer.render_image_corners_2d(
                     image_path[0],
-                    boxes_2d=nms_dets_per_img[:, :4],
-                    corners_2d=dets,
+                    boxes_2d=dets_2d,
+                    corners_2d=corners_2d,
+                    corners_3d=corners_3d,
                     p2=p2_per_img.cpu().numpy())
 
                 duration_time = time.time() - end_time

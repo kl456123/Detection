@@ -53,6 +53,11 @@ class ImageVisualizer(object):
         self.classes = []
         self.colors = []
 
+        self.side_plane_colors = []
+        # for i in range(6):
+        # self.side_plane_colors.append(self.get_random_color())
+        self.front_side_color = (255, 0, 255)
+
         # display online or just save it
         self.online = online
 
@@ -102,7 +107,7 @@ class ImageVisualizer(object):
             return os.path.join(self.calib_dir, '{}.txt'.format(sample_name))
         else:
             # self.logger.warn(
-                # 'calib file or calib dir should not be None at the same time, disable 3d display'
+            # 'calib file or calib dir should not be None at the same time, disable 3d display'
             # )
             return None
 
@@ -542,7 +547,10 @@ class ImageVisualizer(object):
         image = self.parse_image(image_path)
         connected_points = [[2, 4, 5], [1, 3, 6], [2, 4, 7], [1, 3, 8],
                             [1, 6, 8], [2, 5, 7], [3, 6, 8], [4, 5, 7]]
+        connected_plane = [[0, 1, 5, 4], [0, 4, 7, 3], [3, 7, 6, 2],
+                           [2, 6, 5, 1], [4, 5, 6, 7], [0, 1, 2, 3]]
         connected_points = np.array(connected_points) - 1
+        front_side_line = [0, 1, 4, 5]
         connected_points = connected_points.tolist()
         # connected_points_2d = [[1, 3], [0, 2], [1, 3], [0, 2]]
 
@@ -590,12 +598,21 @@ class ImageVisualizer(object):
             for i in range(8):
                 for j in range(8):
                     if j in connected_points[i]:
+                        if i in front_side_line and j in front_side_line:
+                            color = self.front_side_color
+                        else:
+                            color = (255, 255, 0)
                         start_point = (corners_image[i][0],
                                        corners_image[i][1])
                         end_point = (corners_image[j][0], corners_image[j][1])
                         cv2.line(image_corners, start_point, end_point, color,
                                  2)
 
+            # for i in range(6):
+                # corners_image = np.asarray(corners_image)
+                # side_plane = np.asarray(corners_image[connected_plane[i]])
+                # image_corners = ImageVisualizer.fill(image_corners, side_plane,
+                                                     # self.side_plane_colors[i])
         # rotate bev_image
         # bev_image = cv2.rotate(bev_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
@@ -636,6 +653,13 @@ class ImageVisualizer(object):
             sample_name = self.get_sample_name_from_path(image_path)
             saved_path = self.get_saved_path(sample_name)
             cv2.imwrite(saved_path, image)
+
+    @staticmethod
+    def fill(img, points, color):
+        filler = cv2.convexHull(points)
+        cv2.fillConvexPoly(img, filler, color)
+
+        return img
 
 
 if __name__ == '__main__':

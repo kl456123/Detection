@@ -31,6 +31,10 @@ class FPNFasterRCNN(Model):
         h = rois_batch[:, 4] - rois_batch[:, 2] + 1
         w = rois_batch[:, 3] - rois_batch[:, 1] + 1
         roi_level = torch.log(torch.sqrt(w * h) / 224.0)
+
+        isnan = torch.isnan(roi_level).any()
+        assert not isnan, 'incorrect value in w: {}, h: {}'.format(w, h)
+
         roi_level = torch.round(roi_level + 4)
         roi_level[roi_level < 2] = 2
         roi_level[roi_level > 5] = 5
@@ -92,8 +96,8 @@ class FPNFasterRCNN(Model):
 
                 # gt_dict
                 gt_dict = {}
-                gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
-                                                           KEY_LABEL_BOXES_2D]
+                gt_dict[constants.KEY_PRIMARY] = feed_dict[
+                    constants.KEY_LABEL_BOXES_2D]
                 gt_dict[constants.KEY_CLASSES] = None
                 gt_dict[constants.KEY_BOXES_2D] = None
 
@@ -255,7 +259,8 @@ class FPNFasterRCNN(Model):
         self.use_focal_loss = model_config['use_focal_loss']
 
         # some submodule config
-        self.feature_extractor_config = model_config['feature_extractor_config']
+        self.feature_extractor_config = model_config[
+            'feature_extractor_config']
         self.rpn_config = model_config['rpn_config']
 
         self.num_stages = len(model_config['target_generator_config'])

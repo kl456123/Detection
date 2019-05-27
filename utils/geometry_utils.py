@@ -516,7 +516,7 @@ def compute_ray_angle(center_2d, p2, format='kitti'):
     ray_angle = torch.atan2(direction_vector[:, :, 2],
                             direction_vector[:, :, 0])
 
-    if format=='kitti':
+    if format == 'kitti':
         return -ray_angle
     return ray_angle
 
@@ -596,3 +596,43 @@ def torch_points_2d_to_points_3d(points_2d, depth, p2):
 
     # no rotation
     return points_3d - T
+
+
+def torch_xyxy_to_corner_4c(label_boxes_2d):
+    """
+    Args:
+        boxes_2d: shape(N, M, 4)
+    Returns:
+        boxes_4c: shape(N, M, 4, 2)
+    """
+    format_checker.check_tensor_shape(label_boxes_2d, [None, None, 4])
+    left_top = label_boxes_2d[:, :, :2]
+    right_down = label_boxes_2d[:, :, 2:]
+    left_down = label_boxes_2d[:, :, [0, 3]]
+    right_top = label_boxes_2d[:, :, [2, 1]]
+    label_boxes_4c = torch.stack(
+        [right_down, left_down, left_top, right_top], dim=2)
+
+    format_checker.check_tensor_shape(label_boxes_4c, [None, None, 4, 2])
+    return label_boxes_4c
+
+
+def _reorder_corners_2d(corners_2d):
+    """
+    Args:
+        corners_2d: shape(N, M, 8, 2)
+    """
+    pass
+
+
+def torch_corner_4c_to_offset(corners_2d, label_boxes_2d):
+    """
+    Args:
+        corners_2d: shape(N, M, 8, 2)
+        label_boxes_2d: shape(N, M, 4)
+    Return:
+        offsets: shape(N, M, 8, 2)
+    """
+    label_corners_4c = torch_xyxy_to_corner_4c(label_boxes_2d)
+    corners_4c = _reorder_corners_2d(corners_2d)
+    return corners_4c - label_corners_4c

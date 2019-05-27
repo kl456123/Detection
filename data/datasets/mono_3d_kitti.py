@@ -8,7 +8,8 @@ from utils.registry import DATASETS
 from utils.box_vis import compute_box_3d
 import torch
 
-KITTI_MEAN_DIMS = {
+MEAN_DIMS = {
+    # KITTI
     'Car': [3.88311640418, 1.62856739989, 1.52563191462],
     'Van': [5.06763659, 1.9007158, 2.20532825],
     'Truck': [10.13586957, 2.58549199, 3.2520595],
@@ -16,7 +17,17 @@ KITTI_MEAN_DIMS = {
     'Person_sitting': [0.80057803, 0.5983815, 1.27450867],
     'Cyclist': [1.76282397, 0.59706367, 1.73698127],
     'Tram': [16.17150617, 2.53246914, 3.53079012],
-    'Misc': [3.64300781, 1.54298177, 1.92320313]
+    'Misc': [3.64300781, 1.54298177, 1.92320313],
+
+    # NUSCENES
+    'car': [3.88311640418, 1.62856739989, 1.52563191462],
+    'bus': [3.88311640418, 1.62856739989, 1.52563191462],
+    'truck': [10.13586957, 2.58549199, 3.2520595],
+    'pedestrian': [0.84422524, 0.66068622, 1.76255119],
+    'bicycle': [1.76282397, 0.59706367, 1.73698127],
+    'motorcycle': [1.76282397, 0.59706367, 1.73698127],
+    'trailer': [10.13586957, 2.58549199, 3.2520595],
+    'construction_vehicle': [10.13586957, 2.58549199, 3.2520595],
 }
 
 
@@ -65,15 +76,16 @@ def truncate_box(box_2d, line, normalize=True):
 
 
 @DATASETS.register('mono_3d_kitti')
+@DATASETS.register('nuscenes_kitti')
 class Mono3DKITTIDataset(KITTIDataset):
     def __init__(self, config, transform=None, training=True, logger=None):
         super().__init__(config, transform, training, logger)
-        self.use_proj_2d = config.get('use_proj_2d', True)
+        self.use_proj_2d = config.get('use_proj_2d', False)
 
     def _generate_mean_dims(self):
         mean_dims = []
         for class_type in self.classes[1:]:
-            mean_dims.append(KITTI_MEAN_DIMS[class_type][::-1])
+            mean_dims.append(MEAN_DIMS[class_type][::-1])
         return np.stack(mean_dims, axis=0).astype(np.float32)
 
     def get_sample(self, index):
@@ -182,31 +194,39 @@ class Mono3DKITTIDataset(KITTIDataset):
     # return np.stack([mid0, mid1], axis=1)
 
     def visuliaze_sample(self, sample):
+        import ipdb
+        ipdb.set_trace()
         image = sample[constants.KEY_IMAGE]
+        num_instances = sample[constants.KEY_NUM_INSTANCES]
         # if image.shape[0] == 3:
         # image = image.permute(1, 2, 0)
         #  boxes = sample[constants.KEY_LABEL_BOXES_2D]
 
-        label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
+        label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D][:num_instances]
         p2 = sample[constants.KEY_STEREO_CALIB_P2]
         boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d, p2)
         sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj
         from utils.visualize import visualize_bbox
         image = np.asarray(image)
-        visualize_bbox(image, boxes_3d_proj)
+        visualize_bbox(image, boxes_3d_proj, save=True)
 
 
 if __name__ == '__main__':
-    dataset_config = {
+    kitti_dataset_config = {
         'root_path': '/data',
         'data_path': 'object/training/image_2',
         'label_path': 'object/training/label_2',
         'classes': ['Car', 'Pedestrian', 'Truck'],
         'dataset_file': './data/train.txt'
     }
+    nuscenes_dataset_config = {
+        'root_path': '/data/nuscenes_kitti',
+        'data_path': 'object/training/image_2',
+        'label_path': 'object/training/label_2',
+        'classes': ['car'],
+        'dataset_file': './data/nuscenes_demo.txt'
+    }
     transforms_config = [{
-        "type": "to_pil"
-    }, {
         "type": "random_hsv"
     }, {
         "type": "random_brightness"
@@ -220,7 +240,8 @@ if __name__ == '__main__':
     }]
     from data import transforms
     transform = transforms.build(transforms_config)
-    dataset = Mono3DKITTIDataset(dataset_config, transform, training=True)
+    dataset = Mono3DKITTIDataset(
+        nuscenes_dataset_config, transform, training=True)
     for sample in dataset:
         # sample = dataset[4]
         dataset.visuliaze_sample(sample)

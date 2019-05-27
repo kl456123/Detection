@@ -97,8 +97,7 @@ class KITTIDataset(DetDataset):
         loaded_sample_names = []
         for sample_path in sample_names:
             sample_name = self.get_sample_name_from_path(sample_path)
-            obj_labels = obj_utils.read_labels(self.label_dir,
-                                               int(sample_name))
+            obj_labels = obj_utils.read_labels(self.label_dir, sample_name)
             obj_labels = self.filter_labels(obj_labels, self.classes)
             if len(obj_labels):
                 loaded_sample_names.append(sample_path)
@@ -246,7 +245,7 @@ class KITTIDataset(DetDataset):
         stereo_calib_p2 = self.load_projection_matrix(calib_path)
 
         # labels
-        obj_labels = obj_utils.read_labels(self.label_dir, int(sample_name))
+        obj_labels = obj_utils.read_labels(self.label_dir, sample_name)
         obj_labels = self.filter_labels(obj_labels, self.classes)
         label_boxes_3d = np.asarray(
             [self._obj_label_to_box_3d(obj_label) for obj_label in obj_labels])

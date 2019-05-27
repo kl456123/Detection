@@ -29,7 +29,8 @@ class CornersLoss(nn.Module):
 
         targets = targets.view(N, M, 8, 3)
         corners_gt = targets[:, :, :, :2].contiguous().view(N, M, -1)
-        cls_gt = targets[:, :, :, 2:].contiguous().view(N, M, -1).long()
+        cls_gt_weight = targets[:, :, :, 2:].contiguous().view(N, M, -1)
+        cls_gt = (cls_gt_weight > 0).long()
 
         cls_loss = self.cls_loss(cls_preds.contiguous().view(-1, 2),
                                  cls_gt.contiguous().view(-1))
@@ -40,7 +41,7 @@ class CornersLoss(nn.Module):
         # import ipdb
         # ipdb.set_trace()
         if self.use_filter:
-            reg_loss = reg_loss.view(-1, 2) * cls_gt.view(-1, 1).float()
+            reg_loss = reg_loss.view(-1, 2) * cls_gt_weight.view(-1, 1).float()
         else:
             reg_loss = reg_loss.view(-1, 2)
         #  reg_loss = reg_loss.view(-1, 2)

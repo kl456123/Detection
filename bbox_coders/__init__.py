@@ -8,7 +8,8 @@ from utils.registry import BBOX_CODERS
 include = [
     'center_coder', 'mean_coder', 'orient_coder', 'orientv3_coder',
     'orientv2_coder', 'rear_side_coder', 'corner_coder', 'bbox_3d_coder',
-    'corner_2d_coder', 'corner_3d_coder'
+    'corner_2d_coder', 'corner_3d_coder', 'nearest_corner_coder',
+    'nearestv2_corner_coder', 'mono_3d_coder'
 ]
 
 import_dir(os.path.dirname(__file__), include=include)

@@ -1,8 +1,8 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 1,
-            "num_workers": 1,
+            "batch_size": 32,
+            "num_workers": 48,
             "shuffle": true
         },
         "dataset_config": {
@@ -233,12 +233,12 @@
         "use_focal_loss": false
     },
     "train_config": {
-        "checkpoint_interval": 100,
+        "checkpoint_interval": 4000,
         "clip_gradient": 10,
-        "disp_interval": 100,
-        "num_iters": 1000,
+        "disp_interval": 800,
+        "num_iters": 600000,
         "optimizer_config": {
-            "base_lr": 0.001,
+            "base_lr": 0.02,
             "bias_lr_factor": 1,
             "eps": 1e-08,
             "momentum": 0.9,
