@@ -1,0 +1,265 @@
+{
+    "data_config": {
+        "dataloader_config": {
+            "batch_size": 32,
+            "num_workers": 48,
+            "shuffle": true
+        },
+        "dataset_config": {
+            "classes": [
+                "bus",
+                "bicycle",
+                "car",
+                "motorcycle",
+                "truck",
+                "trailer",
+                "construction_vehicle",
+                "pedestrian"
+            ],
+            "data_path": "samples/CAM_FRONT",
+            "dataset_file": "trainval.json",
+            "label_path": ".",
+            "root_path": "/data/nuscenes",
+            "type": "nuscenes"
+        },
+        "transform_config": [
+            {
+                "type": "random_hsv"
+            },
+            {
+                "type": "random_brightness"
+            },
+            {
+                "type": "random_horizontal_flip"
+            },
+            {
+                "size": [
+                    384,
+                    1280
+                ],
+                "type": "fix_shape_resize"
+            },
+            {
+                "type": "to_tensor"
+            },
+            {
+                "normal_mean": [
+                    0.485,
+                    0.456,
+                    0.406
+                ],
+                "normal_std": [
+                    0.229,
+                    0.224,
+                    0.225
+                ],
+                "type": "normalize"
+            }
+        ]
+    },
+    "eval_config": {
+        "batch_size": 1,
+        "class_agnostic": true,
+        "classes": [
+            "bus",
+            "bicycle",
+            "car",
+            "motorcycle",
+            "truck",
+            "trailer",
+            "construction_vehicle",
+            "pedestrian"
+        ],
+        "eval_out": "./results/data",
+        "eval_out_anchors": "./results/anchors",
+        "eval_out_rois": "./results/rois",
+        "nms": 0.3,
+        "rng_seed": 3,
+        "thresh": 0.5
+    },
+    "eval_data_config": {
+        "dataloader_config": {
+            "batch_size": 1,
+            "num_workers": 1,
+            "shuffle": false
+        },
+        "dataset_config": {
+            "classes": [
+                "bus",
+                "bicycle",
+                "car",
+                "motorcycle",
+                "truck",
+                "trailer",
+                "construction_vehicle",
+                "pedestrian"
+            ],
+            "data_path": "samples/CAM_FRONT",
+            "dataset_file": "trainval.json",
+            "label_path": ".",
+            "root_path": "/data/nuscenes",
+            "type": "nuscenes"
+        },
+        "transform_config": [
+            {
+                "size": [
+                    384,
+                    1280
+                ],
+                "type": "fix_shape_resize"
+            },
+            {
+                "type": "to_tensor"
+            },
+            {
+                "normal_mean": [
+                    0.485,
+                    0.456,
+                    0.406
+                ],
+                "normal_std": [
+                    0.229,
+                    0.224,
+                    0.225
+                ],
+                "type": "normalize"
+            }
+        ]
+    },
+    "model_config": {
+        "class_agnostic": true,
+        "classes": [
+            "bus",
+            "bicycle",
+            "car",
+            "motorcycle",
+            "truck",
+            "trailer",
+            "construction_vehicle",
+            "pedestrian"
+        ],
+        "feature_extractor_config": {
+            "ndin": [
+                64,
+                128,
+                256,
+                512
+            ],
+            "net_arch": "res18_pruned",
+            "pooling_size": 7,
+            "pretrained": true,
+            "pretrained_path": "./data/pretrained_model",
+            "type": "fpn"
+        },
+        "pooling_mode": "align",
+        "pooling_size": 7,
+        "rpn_config": {
+            "anchor_generator_config": {
+                "anchor_offset": [
+                    0,
+                    0
+                ],
+                "anchor_stride": [
+                    16,
+                    16
+                ],
+                "aspect_ratios": [
+                    0.5,
+                    0.8,
+                    1
+                ],
+                "base_anchor_size": 16,
+                "scales": [
+                    2,
+                    4,
+                    8,
+                    16
+                ],
+                "type": "default",
+                "use_pyramid": true
+            },
+            "din": 256,
+            "min_size": 16,
+            "nms_thresh": 0.7,
+            "post_nms_topN": 2000,
+            "pre_nms_topN": 12000,
+            "target_generator_config": {
+                "analyzer_config": {},
+                "bg_thresh": 0.3,
+                "coder_config": {
+                    "type": "center"
+                },
+                "fg_thresh": 0.7,
+                "matcher_config": {
+                    "type": "bipartitle"
+                },
+                "sampler_config": {
+                    "fg_fraction": 0.25,
+                    "num_samples": 1024,
+                    "type": "balanced"
+                },
+                "similarity_calc_config": {
+                    "type": "center"
+                },
+                "type": "faster_rcnn"
+            },
+            "type": "fpn_rpn",
+            "use_focal_loss": false
+        },
+        "target_generator_config": [
+            {
+                "analyzer_config": {},
+                "bg_thresh": 0.5,
+                "coder_config": {
+                    "type": "corner"
+                },
+                "fg_thresh": 0.5,
+                "matcher_config": {
+                    "type": "argmax"
+                },
+                "sampler_config": {
+                    "fg_fraction": 0.5,
+                    "num_samples": 512,
+                    "type": "balanced"
+                },
+                "similarity_calc_config": {
+                    "type": "center"
+                },
+                "type": "faster_rcnn"
+            }
+        ],
+        "truncated": false,
+        "use_focal_loss": false
+    },
+    "train_config": {
+        "checkpoint_interval": 4000,
+        "clip_gradient": 10,
+        "disp_interval": 800,
+        "num_iters": 600000,
+        "optimizer_config": {
+            "base_lr": 0.02,
+            "bias_lr_factor": 1,
+            "eps": 1e-08,
+            "momentum": 0.9,
+            "type": "sgd",
+            "weight_decay": 0,
+            "weight_decay_bias": 0
+        },
+        "rng_seed": 3,
+        "scheduler_config": {
+            "last_step": -1,
+            "lr_decay_gamma": 0.1,
+            "lr_decay_step": 60000,
+            "milestones": [
+                60000,
+                120000,
+                240000
+            ],
+            "type": "multi_step",
+            "warmup_factor": 0.333,
+            "warmup_iters": 2000,
+            "warmup_method": "linear"
+        },
+        "start_epoch": 1
+    }
+}

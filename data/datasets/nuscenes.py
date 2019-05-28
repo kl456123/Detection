@@ -57,17 +57,22 @@ class NuscenesDataset(DetDataset):
                 os.path.join(self.label_path, dataset_config['dataset_file']))
             #  self.sample_names = {sample_name: self.sample_names[sample_name]}
             self.imgs = sorted(self.make_image_list())
-        elif dataset_config['img_dir'] is not None:
-            self.logger.info('use custom dataset')
-            self.image_dir = dataset_config['img_dir']
-            self.logger.info('use image dir: {}'.format(self.image_dir))
-            self.imgs = self.load_sample_names_from_image_dir(
-                self.image_dir)
-            self.sample_names = self.imgs
         else:
-            self.logger.info('use demo file')
-            self.sample_names = [dataset_config['demo_file']]
-            self.sample_names = self.imgs
+            #  pass
+            self.inference(
+                image_dir=dataset_config.get('img_dir'),
+                image_file=dataset_config.get('demo_file'))
+        #  elif dataset_config['img_dir'] is not None:
+        #  self.logger.info('use custom dataset')
+        #  self.image_dir = dataset_config['img_dir']
+        #  self.logger.info('use image dir: {}'.format(self.image_dir))
+        #  self.imgs = self.load_sample_names_from_image_dir(
+        #  self.image_dir)
+        #  self.sample_names = self.imgs
+        #  else:
+        #  self.logger.info('use demo file')
+        #  self.sample_names = [dataset_config['demo_file']]
+        #  self.sample_names = self.imgs
 
         if dataset_config.get('calib_file'):
             self._calib_file = dataset_config['calib_file']
@@ -142,10 +147,10 @@ class NuscenesDataset(DetDataset):
         label_boxes_2d = sample[constants.KEY_LABEL_BOXES_2D]
         label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
         label_classes = sample[constants.KEY_LABEL_CLASSES]
-        all_label_boxes_3d = np.zeros(
-            (self.max_num_boxes, label_boxes_3d.shape[1]))
-        all_label_boxes_2d = np.zeros(
-            (self.max_num_boxes, label_boxes_2d.shape[1]))
+        all_label_boxes_3d = np.zeros((self.max_num_boxes,
+                                       label_boxes_3d.shape[1]))
+        all_label_boxes_2d = np.zeros((self.max_num_boxes,
+                                       label_boxes_2d.shape[1]))
         all_label_classes = np.zeros((self.max_num_boxes, ))
         # assign it with bg label
         all_label_classes[...] = 0
@@ -189,8 +194,8 @@ class NuscenesDataset(DetDataset):
         label_boxes_3d = np.concatenate([location, dim, ry], axis=-1)
 
         # use boxes_3d_proj rather than boxes 2d
-        boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d,
-                                                            stereo_calib_p2)
+        boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(
+            label_boxes_3d, stereo_calib_p2)
         #  boxes_2d = box_ops.np_clip_boxes(boxes_3d_proj, image_info)
         sample = {}
         sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj

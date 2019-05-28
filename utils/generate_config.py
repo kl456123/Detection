@@ -6,8 +6,8 @@ DATASET_TYPE = 'nuscenes'
 # NET_TYPE = 'fpn_corners_2d'
 NET_TYPE = 'fpn'
 # NET_TYPE = 'fpn_mono_3d_better'
-JOBS = False
-DEBUG = True
+JOBS = True
+DEBUG = False
 
 # enable debug mode
 if DEBUG:

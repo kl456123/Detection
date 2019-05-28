@@ -74,3 +74,19 @@ class DetDataset(Dataset, metaclass=ABCMeta):
     @staticmethod
     def get_sample_name_from_path(sample_path):
         return os.path.splitext(os.path.basename(sample_path))[0]
+
+    def inference(self, image_dir=None, image_file=None):
+        self.logger.info('enable inference mode')
+        if image_dir is not None:
+            self.image_dir = image_dir
+            self.logger.info('use image dir: {}'.format(self.image_dir))
+            self.imgs = self.load_sample_names_from_image_dir(self.image_dir)
+            self.sample_names = self.imgs
+        elif image_file is not None:
+            self.logger.info('use single file')
+            self.sample_names = [image_file]
+            self.sample_names = self.imgs
+        else:
+            self.logger.info('please specific directory of filename of images')
+            raise RuntimeError(
+                'image_dir or image file cannot be None at the same time')

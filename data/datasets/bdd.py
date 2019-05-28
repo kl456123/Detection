@@ -21,20 +21,24 @@ class BDDDataset(DetDataset):
         self.transforms = transform
         self.classes = ['bg'] + dataset_config['classes']
 
-        if dataset_config.get('img_dir') is not None:
-            self.logger.info('use image dir: {}'.format(
-                dataset_config['img_dir']))
-            self.image_dir = dataset_config['img_dir']
-            # directory
-            self.sample_names = self.load_sample_names_from_image_dir(
-                self.image_dir)
-            self.imgs = self.sample_names
-        elif dataset_config.get('demo_file') is not None:
-            # file
-            self.logger.info('use demo file: {}'.format(
-                dataset_config['demo_file']))
-            self.sample_names = [dataset_config['demo_file']]
-            self.imgs = self.sample_names
+        # if dataset_config.get('img_dir') is not None:
+        # self.logger.info('use image dir: {}'.format(
+        # dataset_config['img_dir']))
+        # self.image_dir = dataset_config['img_dir']
+        # # directory
+        # self.sample_names = self.load_sample_names_from_image_dir(
+        # self.image_dir)
+        # self.imgs = self.sample_names
+        # elif dataset_config.get('demo_file') is not None:
+        # # file
+        # self.logger.info('use demo file: {}'.format(
+        # dataset_config['demo_file']))
+        # self.sample_names = [dataset_config['demo_file']]
+        # self.imgs = self.sample_names
+        if dataset_config.get('dataset_file') is None:
+            self.inference(
+                image_dir=dataset_config.get('img_dir'),
+                image_file=dataset_config.get('demo_file'))
         else:
             self.logger.info('use dataset_file: {}'.format(
                 dataset_config['dataset_file']))
@@ -44,7 +48,8 @@ class BDDDataset(DetDataset):
                                           dataset_config['data_path'])
             self.label_path = os.path.join(self.root_path,
                                            dataset_config['label_path'])
-            path = os.path.join(self.label_path, dataset_config['dataset_file'])
+            path = os.path.join(self.label_path,
+                                dataset_config['dataset_file'])
             #  path = '/node01/jobs/io/out/xiongliang/bdd100k_labels_images_train.json'
             self.sample_names = self.make_label_list(path)
 
