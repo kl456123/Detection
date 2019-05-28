@@ -246,8 +246,7 @@ class DimsTargetAssigner(RegTargetAssigner):
         mean_dims = kwargs[constants.KEY_MEAN_DIMS]
         bg_dim = torch.zeros_like(mean_dims[:, -1:, :])
         mean_dims = torch.cat([bg_dim, mean_dims], dim=1)
-        mean_dims = cls.generate_assigned_label(cls,
-                                                label_classes.long(),
+        mean_dims = cls.generate_assigned_label(cls, label_classes.long(),
                                                 mean_dims)
 
         # prepare coder
@@ -274,7 +273,10 @@ class Corners2DTargetAssigner(RegTargetAssigner):
 
         # prepare coder
         # 2d coder config
-        coder = bbox_coders.build({'type': constants.KEY_CORNERS_2D_NEAREST})
+        coder = bbox_coders.build({
+            'type':
+            constants.KEY_CORNERS_2D_NEAREST
+        })
         reg_targets_batch = coder.encode_batch(label_boxes_3d, label_boxes_2d,
                                                p2, image_info)
 

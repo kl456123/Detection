@@ -229,7 +229,6 @@
             }
         ],
         "truncated": false,
-        "use_filter": true,
         "use_focal_loss": false
     },
     "train_config": {

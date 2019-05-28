@@ -53,8 +53,8 @@ class FPNCornersModel(FPNFasterRCNN):
 
                 # gt_dict
                 gt_dict = {}
-                gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
-                                                           KEY_LABEL_BOXES_2D]
+                gt_dict[constants.KEY_PRIMARY] = feed_dict[
+                    constants.KEY_LABEL_BOXES_2D]
                 gt_dict[constants.KEY_CLASSES] = None
                 gt_dict[constants.KEY_BOXES_2D] = None
                 gt_dict[constants.KEY_CORNERS_2D] = None
@@ -99,6 +99,7 @@ class FPNCornersModel(FPNFasterRCNN):
             rcnn_bbox_preds = self.rcnn_bbox_preds[i](pooled_feat)
             rcnn_cls_scores = self.rcnn_cls_preds[i](pooled_feat)
             rcnn_corners_preds = self.rcnn_corners_preds[i](pooled_feat)
+            rcnn_depth_preds = self.rcnn_depth_preds[i](pooled_feat)
             # rcnn_visibility_preds = self.rcnn_visibility_preds[i](pooled_feat)
             rcnn_dim_preds = self.rcnn_dim_preds[i](pooled_feat)
 
@@ -140,6 +141,13 @@ class FPNCornersModel(FPNFasterRCNN):
             rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
             rcnn_corners_preds = rcnn_corners_preds.view(
                 batch_size, rcnn_bbox_preds.shape[1], -1)
+
+            rcnn_depth_preds = rcnn_depth_preds.view(
+                batch_size, rcnn_bbox_preds.shape[1], -1)
+            # concat them(depth and corners)
+            # rcnn_corners_preds = torch.cat(
+                # [rcnn_corners_preds, rcnn_depth_preds], dim=-1)
+
             # rcnn_visibility_preds = rcnn_visibility_preds.view(
             # batch_size, rcnn_bbox_preds.shape[1], -1)
             rcnn_dim_preds = rcnn_dim_preds.view(batch_size, -1, 3)
@@ -170,7 +178,10 @@ class FPNCornersModel(FPNFasterRCNN):
             rcnn_dim_preds = coder.decode_batch(
                 rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
                 rcnn_cls_probs).detach()
-            coder = bbox_coders.build({'type': constants.KEY_CORNERS_2D_NEAREST})
+            coder = bbox_coders.build({
+                'type':
+                constants.KEY_CORNERS_2D_NEAREST
+            })
             # rcnn_corners_preds = coder.decode_batch(
                 # rcnn_corners_preds.detach(), proposals)
 
@@ -229,6 +240,8 @@ class FPNCornersModel(FPNFasterRCNN):
         # combine corners and its visibility
         self.rcnn_corners_preds = nn.ModuleList(
             [nn.Linear(1024, 4 * 8) for _ in range(self.num_stages)])
+        self.rcnn_depth_preds = nn.ModuleList(
+            [nn.Linear(1024, 1 * 8) for _ in range(self.num_stages)])
         # self.rcnn_visibility_preds = nn.ModuleList(
         # [nn.Linear(1024, 2 * 8) for _ in range(self.num_stages)])
 

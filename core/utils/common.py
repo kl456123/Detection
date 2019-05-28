@@ -11,8 +11,8 @@ def build_class(config, registry, *args, **kwargs):
         raise ValueError('config has no type, it can not be builded')
     class_type = config['type']
     if class_type not in registry:
-        raise TypeError(
-            "unknown {} type {}!".format(registry.name, class_type))
+        raise TypeError("unknown {} type {}!".format(registry.name,
+                                                     class_type))
     registered_class = registry[class_type]
     # use config to build it
     return registered_class
@@ -110,8 +110,8 @@ class Stats(object):
             for key in stat:
                 value = stat[key][0]
                 # tensor here
-                summary_dict[key + '_' + str(idx)] = value[0].float() / value[
-                    1].float()
+                summary_dict[key + '_' +
+                             str(idx)] = value[0].float() / value[1].float()
         return summary_dict
 
     def __repr__(self):
@@ -133,7 +133,13 @@ class Stats(object):
 
 
 def compile_cxx():
+    in_path = '/node01_data5/'
+    out_path = '/node01/jobs/io/out/xiongliang/'
     import os
+    # command = 'cd /node01_data5/standard/BDD100k/labels && cp /node01/jobs/io/out/xiongliang/bdd100k_labels_images_train.json .'
+    #  for file in os.listdir('/node01_data5/standard/BDD100k/labels'):
+    #  print(file)
+    #  asdg
     python = '/node01/jobs/io/env/pytorch1.0/bin/python'
     command = 'cd ./lib && {} setup.py build develop && rm build -rf && cd ..'.format(
         python)

@@ -87,7 +87,7 @@ class FPNFasterRCNN(Model):
         prediction_dict.update(self.rpn_model.forward(feed_dict))
         proposals = prediction_dict['proposals']
         multi_stage_loss_units = []
-        multi_stage_stats = []
+        # multi_stage_stats = []
         for i in range(self.num_stages):
 
             if self.training:
@@ -151,6 +151,10 @@ class FPNFasterRCNN(Model):
 
             rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
 
+            # decode for next stage
+            coder = bbox_coders.build(self.target_generators[i]
+                                      .target_generator_config['coder_config'])
+            proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
             if self.training:
                 loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
                 loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
@@ -161,13 +165,6 @@ class FPNFasterRCNN(Model):
                     loss_units[constants.KEY_BOXES_2D]
                 ])
                 # multi_stage_stats.append(stats)
-
-                # decode for next stage
-                coder = bbox_coders.build(
-                    self.target_generators[i]
-                    .target_generator_config['coder_config'])
-                proposals = coder.decode_batch(rcnn_bbox_preds,
-                                               proposals).detach()
 
                 # import ipdb
                 # ipdb.set_trace()

@@ -22,7 +22,7 @@ class Analyzer(object):
             num_instances_per_img = num_instances[batch_ind]
             gt_mask = torch.zeros(num_instances_per_img.item()).type_as(match)
             # remove appended gt first
-            match_per_img = match_per_img[:-append_num]
+            # match_per_img = match_per_img[:-append_num]
             gt_mask[match_per_img[match_per_img > -1]] = 1
             num_matched = num_matched + gt_mask.sum()
 

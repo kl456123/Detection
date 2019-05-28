@@ -530,6 +530,6 @@ class Tester(object):
 
     def test(self, dataloader, model, logger):
         # self.test_super_nms(dataloader, model, logger)
-        # self.test_2d(dataloader, model, logger)
+        self.test_2d(dataloader, model, logger)
         #  self.test_3d(dataloader, model, logger)
-        self.test_corners_3d(dataloader, model, logger)
+        #  self.test_corners_3d(dataloader, model, logger)

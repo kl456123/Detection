@@ -84,7 +84,7 @@ def parse_args():
 
 
 def train(config, logger):
-    data_config = config['data_config']
+    data_config = config['eval_data_config']
     model_config = config['model_config']
     train_config = config['train_config']
 
@@ -161,7 +161,7 @@ def generate_config(args, logger):
 
     train_config = config['train_config']
     model_config = config['model_config']
-    data_config = config['data_config']
+    data_config = config['eval_data_config']
 
     np.random.seed(train_config['rng_seed'])
 

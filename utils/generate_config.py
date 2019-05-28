@@ -2,10 +2,12 @@
 # SWITCH that you only should care about
 # DATASET_TYPE = 'mono_3d_kitti'
 DATASET_TYPE = 'nuscenes'
-NET_TYPE = 'fpn_corners_2d'
+# DATASET_TYPE = 'bdd'
+# NET_TYPE = 'fpn_corners_2d'
+NET_TYPE = 'fpn'
 # NET_TYPE = 'fpn_mono_3d_better'
-JOBS = True
-DEBUG = False
+JOBS = False
+DEBUG = True
 
 # enable debug mode
 if DEBUG:
@@ -53,6 +55,7 @@ pooling_size = 7
 pooling_mode = 'align'
 feature_extractor_type = 'fpn'
 net_arch = 'res18_pruned'
+rpn_fg_fraction = 0.25
 if net_arch == 'res18_pruned':
     ndin = [64, 128, 256, 512]
 elif net_arch == 'res50':
@@ -67,8 +70,8 @@ if DATASET_TYPE in ['kitti', 'mono_3d_kitti', 'nuscenes_kitti']:
     if DATASET_TYPE == 'nuscenes_kitti':
         root_path = '/data/nuscenes_kitti'
         classes = [
-            "bus", "bicycle", "car", "motorcycle",  "truck",
-            "trailer", "construction_vehicle"
+            "bus", "bicycle", "car", "motorcycle", "truck", "trailer",
+            "construction_vehicle"
         ]
     dataset_type = DATASET_TYPE
     image_size = [384, 1280]
@@ -78,6 +81,7 @@ elif DATASET_TYPE == 'bdd':
     # BDD CONFIG
     root_path = '/data'
     classes = ['car']
+    # classes = ["car", "person", "bus", "motor", "rider", "train", "truck"]
     dataset_type = 'bdd'
     training_dataset_file = "bdd100k_labels_images_train.json"
     testing_dataset_file = "bdd100k_labels_images_val.json"
@@ -90,20 +94,21 @@ elif DATASET_TYPE == 'bdd':
 
     if DEBUG:
         # the same file
-        testing_dataset_file = training_dataset_file
-        testing_data_path = training_data_path
+        training_dataset_file = testing_dataset_file
+        training_data_path = testing_data_path
 
     # if JOBS:
     # data_path = "images/train"
+    # rpn_fg_fraction = 0.1
 
     root_path = "/data/bdd/bdd100k/"
     image_size = [384, 768]
 elif DATASET_TYPE == "nuscenes":
     dataset_type = 'nuscenes'
     classes = [
-            "bus", "bicycle", "car", "motorcycle", "truck",
-            "trailer", "construction_vehicle", "pedestrian"
-        ]
+        "bus", "bicycle", "car", "motorcycle", "truck", "trailer",
+        "construction_vehicle", "pedestrian"
+    ]
     root_path = "/data/nuscenes"
     training_dataset_file = "trainval.json"
     testing_dataset_file = training_dataset_file
@@ -172,8 +177,8 @@ def generate_dataset_config(training):
 
 
 def generate_transform_config(transform_names):
-    assert isinstance(transform_names, list) or isinstance(transform_names,
-                                                           tuple)
+    assert isinstance(transform_names, list) or isinstance(
+        transform_names, tuple)
 
     transform_config_maps = {
         "random_hsv": {
@@ -266,7 +271,7 @@ def generate_model_config():
         "sampler_config": {
             "num_samples": 1024,
             "type": "balanced",
-            "fg_fraction": 0.25
+            "fg_fraction": rpn_fg_fraction
         },
         "analyzer_config": {}
     }

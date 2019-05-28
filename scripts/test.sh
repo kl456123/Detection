@@ -218,12 +218,12 @@ rm results/images/*
     # --dataset coco
 
 # FPN_BDD
-# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 1000 \
-    # --net fpn \
-    # --load_dir /data/object/liangxiong/test \
-    # --dataset bdd \
-    # --thresh 0.3
+CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    --checkpoint 1000 \
+    --net fpn \
+    --load_dir /data/object/liangxiong/test \
+    --dataset nuscenes \
+    --thresh 0.3
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
     # --img_path /data/dm202_3w/left_img/007604.png \
@@ -347,12 +347,16 @@ rm results/images/*
     # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
     
     
-CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 384000 \
-    --load_dir /data/object/liangxiong/test \
-    --net fpn_corners_2d \
-    --thresh 0.5 \
-    --dataset nuscenes
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 600000 \
+    # --load_dir /data/object/liangxiong/test \
+    # --net fpn_corners_2d \
+    # --thresh 0.5 \
+    # --dataset nuscenes \
+    # --img_dir /data/dm202_3w/left_img \
+    # --calib_file ./000004.txt
+    # --img_dir /data/pengwu/yizhuang/seq/keyframes/ \
+    # --calib_file ./000004.txt
     # --calib_dir /data/nuscenes/calibs \
     # --img_dir /data/nuscenes/samples/CAM_FRONT
     # --img_dir /data/pengwu/yizhuang/seq/keyframes/ \

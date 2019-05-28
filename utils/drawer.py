@@ -669,12 +669,12 @@ if __name__ == '__main__':
     # result_dir = None
 
     # NUSCENES
-    # image_dir = '/data/nuscenes/samples/CAM_FRONT'
-    # result_dir = './results/data'
-    # save_dir = 'results/images'
-    # calib_dir = '/data/nuscenes/calibs'
-    # calib_file = None
-    # label_dir = None
+    image_dir = '/data/nuscenes/samples/CAM_FRONT'
+    result_dir = './results/data'
+    save_dir = 'results/images'
+    calib_dir = '/data/nuscenes/calibs'
+    calib_file = None
+    label_dir = None
 
     # KITTI
     # image_dir = '/data/object/training/image_2'
@@ -693,12 +693,12 @@ if __name__ == '__main__':
     # calib_file = None
 
     # BDD
-    image_dir = '/data/bdd/bdd100k/images/100k/train'
-    result_dir = 'results/data'
-    save_dir = 'results/images'
-    calib_dir = None
-    label_dir = None
-    calib_file = None
+    # image_dir = '/data/bdd/bdd100k/images/100k/val'
+    # result_dir = 'results/data'
+    # save_dir = 'results/images'
+    # calib_dir = None
+    # label_dir = None
+    # calib_file = None
 
     # DM
     # image_dir = '/data/dm202_3w/left_img'

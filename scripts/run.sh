@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# python utils/generate_config.py
+python utils/generate_config.py
 
 # CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
     # --net faster_rcnn \
@@ -37,10 +37,13 @@
     # --config configs/fpn_coco_config.json
 
 # FPN_BDD
-# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
-    # --net fpn \
-    # --out_path /data/object/liangxiong/fpn_bdd_pretrained \
-    # --config configs/fpn_bdd_config.json
+CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
+    --net fpn \
+    --out_path /data/object/liangxiong/test \
+    --config configs/test_config.json \
+    # --mGPUs
+    # --resume True \
+    # --checkpoint 900
 
 # MONO_3D
 # CUDA_VISIBLE_DEVICES=0,1 python train.py --cuda \
@@ -95,11 +98,11 @@
     # --checkpoint 24000 \
 
 
-CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
-    --net fpn_corners_2d \
-    --out_path /data/object/liangxiong/test \
-    --config configs/fpn_corners_2d_nuscenes_config.json \
-    --model /data/object/liangxiong/test/fpn_corners_3d/mono_3d_kitti/detector_600000.pth
+# CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
+    # --net fpn_corners_2d \
+    # --out_path /data/object/liangxiong/test \
+    # --config configs/test_config.json \
+    # --model /data/object/liangxiong/test/fpn_corners_3d/mono_3d_kitti/detector_600000.pth
 
 # CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
     # --net fpn_mono_3d_better \
