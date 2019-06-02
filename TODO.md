@@ -7,3 +7,4 @@
 * saver should support the setting of num of checkpoint saved
 * dataset training and testing
 * refine coder config
+* drawer(add numpy input method and directory input method)

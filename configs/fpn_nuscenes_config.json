@@ -75,6 +75,7 @@
         "eval_out_rois": "./results/rois",
         "nms": 0.3,
         "rng_seed": 3,
+        "test_type": "test_2d",
         "thresh": 0.5
     },
     "eval_data_config": {
@@ -194,8 +195,8 @@
                     "type": "bipartitle"
                 },
                 "sampler_config": {
-                    "fg_fraction": 0.25,
-                    "num_samples": 1024,
+                    "fg_fraction": 0.5,
+                    "num_samples": 256,
                     "type": "balanced"
                 },
                 "similarity_calc_config": {
@@ -218,7 +219,7 @@
                     "type": "argmax"
                 },
                 "sampler_config": {
-                    "fg_fraction": 0.5,
+                    "fg_fraction": 0.25,
                     "num_samples": 512,
                     "type": "balanced"
                 },

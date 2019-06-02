@@ -50,7 +50,7 @@ class NuscenesDataset(DetDataset):
 
         self.classes = ['bg'] + dataset_config['classes']
 
-        #  sample_name = 'n008-2018-05-21-11-06-59-0400__CAM_FRONT__1526915275512465.jpg'
+        # sample_name = 'n008-2018-05-21-11-06-59-0400__CAM_FRONT__1526915275512465.jpg'
         # sample_name = 'n015-2018-11-21-19-58-31+0800__CAM_FRONT__1542801715412460.jpg'
         if dataset_config.get('dataset_file') is not None:
             self.sample_names = self.make_label_list(

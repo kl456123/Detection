@@ -18,6 +18,7 @@ import argparse
 import shutil
 import torch
 from core.utils import common
+import pprint
 
 
 def parse_args():
@@ -158,6 +159,7 @@ def train(config, logger):
 def generate_config(args, logger):
     # read config from file
     config = Config.fromjson(args.config)
+    pprint.pprint(config)
 
     train_config = config['train_config']
     model_config = config['model_config']

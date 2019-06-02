@@ -187,7 +187,7 @@ rm results/images/*
 
 # BDD
 # CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
-    # --checkpoint 8000 \
+    # --checkpoint 112000 \
     # --net faster_rcnn \
     # --load_dir /data/object/liangxiong/bdd_pretrained \
     # --dataset bdd
@@ -218,14 +218,17 @@ rm results/images/*
     # --dataset coco
 
 # FPN_BDD
-CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 1000 \
-    --net fpn \
-    --load_dir /data/object/liangxiong/test \
-    --dataset nuscenes \
-    --thresh 0.3
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 16000 \
+    # --net fpn \
+    # --load_dir /data/object/liangxiong/test \
+    # --dataset bdd \
+    # --thresh 0.3 \
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
+    # --calib_dir /data/nuscenes/calibs \
+    # --img_dir /data/nuscenes/samples/CAM_FRONT
+    
     # --img_path /data/dm202_3w/left_img/007604.png \
     # --calib_file ./000004.txt
 
@@ -248,8 +251,8 @@ CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
 
 # FPN_MONO_3D (NUSCENES)
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 1000 \
-    # --net fpn_mono_3d \
+    # --checkpoint 40000 \
+    # --net fpn_corners_2d \
     # --load_dir /data/object/liangxiong/test \
     # --dataset nuscenes \
     # --thresh 0.5
@@ -278,12 +281,12 @@ CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
     # --calib_file ./000004.txt
 
 # PRNET_KITTI
-# CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
-    # --checkpoint 16000 \
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 40000 \
     # --net prnet \
-    # --load_dir /data/object/liangxiong/prnet \
+    # --load_dir /data/object/liangxiong/test \
     # --dataset kitti \
-    # --thresh 0.3 \
+    # --thresh 0.3
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
 
@@ -297,11 +300,11 @@ CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
 
 # PRNET_BDD
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 300000 \
-    # --load_dir /data/object/liangxiong/prnet_bdd_ohem \
+    # --checkpoint 1000 \
+    # --load_dir /data/object/liangxiong/test \
     # --net prnet \
     # --thresh 0.3 \
-    # --dataset bdd \
+    # --dataset kitti
     # --calib_dir /data/nuscenes/calibs \
     # --img_dir /data/nuscenes/samples/CAM_FRONT
     # --img_dir /data/dm202_3w/left_img \
@@ -347,12 +350,12 @@ CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
     # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
     
     
-# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 600000 \
-    # --load_dir /data/object/liangxiong/test \
-    # --net fpn_corners_2d \
-    # --thresh 0.5 \
-    # --dataset nuscenes \
+CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    --checkpoint 32000 \
+    --load_dir /data/object/liangxiong/fpn_corners_2d_depth \
+    --net fpn_corners_2d \
+    --thresh 0.5 \
+    --dataset mono_3d_kitti
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
     # --img_dir /data/pengwu/yizhuang/seq/keyframes/ \

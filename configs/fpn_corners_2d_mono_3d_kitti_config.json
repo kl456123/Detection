@@ -9,7 +9,7 @@
             "classes": [
                 "Car"
             ],
-            "dataset_file": "data/trainval.txt",
+            "dataset_file": "data/train.txt",
             "root_path": "/data",
             "type": "mono_3d_kitti",
             "use_proj_2d": false
@@ -60,6 +60,7 @@
         "eval_out_rois": "./results/rois",
         "nms": 0.3,
         "rng_seed": 3,
+        "test_type": "test_corners_3d",
         "thresh": 0.5
     },
     "eval_data_config": {
@@ -164,8 +165,8 @@
                     "type": "bipartitle"
                 },
                 "sampler_config": {
-                    "fg_fraction": 0.25,
-                    "num_samples": 1024,
+                    "fg_fraction": 0.5,
+                    "num_samples": 256,
                     "type": "balanced"
                 },
                 "similarity_calc_config": {
@@ -188,7 +189,7 @@
                     "type": "argmax"
                 },
                 "sampler_config": {
-                    "fg_fraction": 0.5,
+                    "fg_fraction": 0.25,
                     "num_samples": 512,
                     "type": "balanced"
                 },
@@ -198,6 +199,7 @@
                 "type": "faster_rcnn"
             }
         ],
+        "training_depth": true,
         "truncated": false,
         "use_filter": true,
         "use_focal_loss": false

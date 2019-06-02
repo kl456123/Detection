@@ -6,8 +6,11 @@ DATASET_TYPE = 'nuscenes'
 # NET_TYPE = 'fpn_corners_2d'
 NET_TYPE = 'fpn'
 # NET_TYPE = 'fpn_mono_3d_better'
+# NET_TYPE = 'prnet'
+# NET_TYPE = 'prnet_mono_3d'
+# DATASET_TYPE = 'kitti'
 JOBS = True
-DEBUG = False
+DEBUG = not JOBS
 
 # enable debug mode
 if DEBUG:
@@ -22,6 +25,8 @@ if DEBUG:
     if DATASET_TYPE == 'nuscenes_kitti':
         training_dataset_file = "data/nuscenes_demo.txt"
         testing_dataset_file = "data/nuscenes_demo.txt"
+    lr_scheduler = 'step'
+    optimizer = 'sgd'
 else:
     training_batch_size = 32
     num_workers = 48
@@ -34,6 +39,8 @@ else:
     if DATASET_TYPE == 'nuscenes_kitti':
         training_dataset_file = 'data/nuscenes_train.txt'
         testing_dataset_file = 'data/nuscenes_val.txt'
+    lr_scheduler = 'multi_step'
+    optimizer = 'sgd'
 
 # common config
 testing_batch_size = 1
@@ -51,17 +58,34 @@ class_agnostic = True
 use_focal_loss = False
 post_nms_topN = 2000
 pre_nms_topN = 12000
+
+training_post_nms_topN = 2000
+training_pre_nms_topN = 12000
+testing_post_nms_topN = 300
+testing_pre_nms_topN = 6000
+
+# test type(use which one as a tester)
+if NET_TYPE in ['fpn', 'prnet']:
+    test_type = 'test_2d'
+elif NET_TYPE in ['fpn_corners_2d', 'fpn_corners_3d', 'prnet_mono_3d']:
+    test_type = 'test_corners_3d'
+elif NET_TYPE in ['fpn_mono_3d']:
+    test_type = 'test_3d'
+else:
+    raise TypeError('unknown test type!')
+
 pooling_size = 7
 pooling_mode = 'align'
 feature_extractor_type = 'fpn'
 net_arch = 'res18_pruned'
-rpn_fg_fraction = 0.25
+rpn_fg_fraction = 0.5
 if net_arch == 'res18_pruned':
     ndin = [64, 128, 256, 512]
 elif net_arch == 'res50':
     ndin = [256, 512, 1024, 2048]
 rpn_ndin = 256
 rpn_min_size = 16
+training_depth = False
 
 if DATASET_TYPE in ['kitti', 'mono_3d_kitti', 'nuscenes_kitti']:
     # KITTI CONFIG
@@ -80,8 +104,9 @@ if DATASET_TYPE in ['kitti', 'mono_3d_kitti', 'nuscenes_kitti']:
 elif DATASET_TYPE == 'bdd':
     # BDD CONFIG
     root_path = '/data'
-    classes = ['car']
-    # classes = ["car", "person", "bus", "motor", "rider", "train", "truck"]
+    # classes = ['car']
+    classes = ["car", "person", "bus", "motor", "rider", "train", "truck"]
+    # classes = ["person"]
     dataset_type = 'bdd'
     training_dataset_file = "bdd100k_labels_images_train.json"
     testing_dataset_file = "bdd100k_labels_images_val.json"
@@ -232,12 +257,13 @@ def generate_eval_config():
         "eval_out_rois": "./results/rois",
         "nms": testing_nms,
         "rng_seed": 3,
-        "thresh": testing_thresh
+        "thresh": testing_thresh,
+        'test_type': test_type
     }
     return eval_config
 
 
-def generate_model_config():
+def generate_anchor_config():
     anchor_config = {
         "use_pyramid": True,
         "type": "default",
@@ -247,6 +273,20 @@ def generate_model_config():
         "base_anchor_size": 16,
         "scales": [2, 4, 8, 16]
     }
+
+    if NET_TYPE in ['prnet', 'prnet_mono_3d']:
+        anchor_config = {
+            "type":
+            "retina",
+            "aspect_ratio": [[1.5, 3.5], [1.5, 3.5], [1.5, 3.5], [1.5, 3.5],
+                             [1.5, 3.5], [1.5, 3.5]],
+            "default_ratio": [0.02, 0.04, 0.08, 0.16, 0.32],
+            "output_scale": [8, 16, 32, 64, 128]
+        }
+    return anchor_config
+
+
+def generate_feature_extractor_config():
     feature_extractor_config = {
         "type": feature_extractor_type,
         "pretrained_path": "./data/pretrained_model",
@@ -255,6 +295,24 @@ def generate_model_config():
         "pretrained": True,
         "ndin": ndin
     }
+    if NET_TYPE in ['prnet', 'prnet_mono_3d']:
+        feature_extractor_config = {
+            "type": "prnet",
+            "pretrained_path": "./data/pretrained_model",
+            "net_arch": "res18_pruned",
+            "pretrained": True,
+            "det_features": 128,
+            "layer_structure": [2, 2, 2, 2],
+            "dla_input": [128, 256, 512],
+            "output_scale": [8, 16, 32, 64, 128]
+        }
+    return feature_extractor_config
+
+
+def generate_model_config():
+    anchor_config = generate_anchor_config()
+
+    feature_extractor_config = generate_feature_extractor_config()
     rpn_target_generator_config = {
         "type": "faster_rcnn",
         "similarity_calc_config": {
@@ -269,12 +327,35 @@ def generate_model_config():
             "type": "bipartitle"
         },
         "sampler_config": {
-            "num_samples": 1024,
+            "num_samples": 256,
             "type": "balanced",
             "fg_fraction": rpn_fg_fraction
         },
         "analyzer_config": {}
     }
+
+    if NET_TYPE in ['prnet', 'prnet_mono_3d']:
+        rpn_target_generator_config = {
+            "fake_fg_thresh": 0.7,
+            "type": "faster_rcnn",
+            "similarity_calc_config": {
+                "type": "center"
+            },
+            "fg_thresh": 0.5,
+            "bg_thresh": 0.4,
+            "coder_config": {
+                "type": "corner"
+            },
+            "matcher_config": {
+                "type": "argmax"
+            },
+            "sampler_config": {
+                "num_samples": 512,
+                "type": "balanced",
+                "fg_fraction": 0.5
+            },
+            "analyzer_config": {}
+        }
     rcnn_target_generate_config = [{
         "type": "faster_rcnn",
         "similarity_calc_config": {
@@ -291,14 +372,14 @@ def generate_model_config():
         "sampler_config": {
             "num_samples": 512,
             "type": "balanced",
-            "fg_fraction": 0.5
+            "fg_fraction": 0.25
         },
         "analyzer_config": {}
     }]
 
     rpn_config = {
         "type": "fpn_rpn",
-        "use_focal_loss": use_focal_loss,
+        "use_focal_loss": False,
         "anchor_generator_config": anchor_config,
         "target_generator_config": rpn_target_generator_config,
         "din": rpn_ndin,
@@ -320,10 +401,24 @@ def generate_model_config():
     }
     if NET_TYPE == 'fpn_corners_2d':
         model_config['use_filter'] = True
+        model_config['training_depth'] = training_depth
     elif NET_TYPE == 'fpn_corners_3d':
         model_config['freeze_2d'] = freeze_2d
 
-    return model_config
+    if NET_TYPE in ['prnet', 'prnet_mono_3d']:
+        # one stage
+        # rpn_config['coder_config'] = {
+        # "type": "center",
+        # "bbox_normalize_targets_precomputed": False
+        # }
+        # rpn_config['matcher_config'] = {"type": "argmax"}
+        rpn_config['classes'] = classes
+        rpn_config['feature_extractor_config'] = feature_extractor_config
+        rpn_config['input_size'] = image_size
+        return rpn_config
+    else:
+        # two stage
+        return model_config
 
 
 def generate_train_config():
@@ -333,7 +428,7 @@ def generate_train_config():
         "weight_decay_bias": 0,
         "weight_decay": 0,
         "momentum": 0.9,
-        "type": "sgd",
+        "type": optimizer,
         "eps": 1e-8
     }
     scheduler_config = {
@@ -341,7 +436,7 @@ def generate_train_config():
         "lr_decay_gamma": 0.1,
         "lr_decay_step": 60000,
         "milestones": [60000, 120000, 240000],
-        "type": "multi_step",
+        "type": lr_scheduler,
         "warmup_method": "linear",
         "warmup_iters": 2000,
         "warmup_factor": 0.333
@@ -382,6 +477,8 @@ def generate_config():
         json_file = 'configs/{}_{}_config.json'.format(net, dataset_type)
     with open(json_file, 'w') as f:
         json.dump(config, f, indent=4, sort_keys=True)
+
+    print('json_file {} is generated !'.format(json_file))
 
 
 def generate_bdd_config():

@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+"""
+encoded format:
+contents: (offset(8*2), depth(8*1), visibility(8*2), center_depth(1))
+"""
 import torch
 
 from utils.registry import BBOX_CODERS
@@ -44,7 +48,7 @@ class Order():
 @BBOX_CODERS.register(constants.KEY_CORNERS_2D_NEAREST_DEPTH)
 class Corner2DNearestCoder(object):
     @staticmethod
-    def decode_batch(encoded_corners_2d_all, final_boxes_2d):
+    def decode_batch(encoded_corners_2d_all, final_boxes_2d, p2):
         """
         Args:
             encoded_all: shape(N, 8*2 + 8)
@@ -52,6 +56,8 @@ class Corner2DNearestCoder(object):
         N, M = encoded_corners_2d_all.shape[:2]
         # encoded_corners_2d = torch.cat([encoded_corners_2d_all[:,:,::4],encoded_corners_2d_all[:,:,1::4]],dim=-1)
         # visibility = torch.cat([encoded_corners_2d_all[:,:,2::4],encoded_corners_2d_all[:,:,3::4]],dim=-1)
+        center_depth = encoded_corners_2d_all[:, :, -1]
+        encoded_corners_2d_all = encoded_corners_2d_all[:, :, :-1]
         encoded_corners_2d_all = encoded_corners_2d_all.view(N, M, 8, 5)
         encoded_corners_2d = encoded_corners_2d_all[:, :, :, :
                                                     3].contiguous().view(
@@ -84,7 +90,21 @@ class Corner2DNearestCoder(object):
         # rear_plane = Corner2DNearestCoder.reorder_boxes_4c_decode(rear_plane)
 
         corners_2d = torch.cat([front_plane, rear_plane], dim=2)
-        return corners_2d[:, :, Order.reorder()][..., :-1]
+        # import ipdb
+        # ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
+        assert p2.shape[0] == 1, 'only one image in a batch'
+        depth = center_depth.unsqueeze(-1) + corners_2d[:, :, :, 2]
+        depth = depth.view(-1)
+        corners_3d = geometry_utils.torch_points_2d_to_points_3d(
+            corners_2d[:, :, :, :2].view(-1, 2), depth, p2[0]).view(
+                N, M, -1, 3)
+        # return corners_2d[:, :, Order.reorder()][..., :-1]
+
+        # decoded depth
+
+        return corners_3d[:, :, Order.reorder()]
 
     @staticmethod
     def reorder_boxes_4c_decode(boxes_4c):
@@ -186,7 +206,13 @@ class Corner2DNearestCoder(object):
             label_boxes_3d)
         corners_2d = geometry_utils.torch_boxes_3d_to_corners_2d(
             label_boxes_3d, p2)
-        corners_2d = torch.cat([corners_2d, corners_3d[..., -1:]], dim=-1)
+
+        # encode depth first
+        center_depth = label_boxes_3d[:, 2]
+        encoded_depth = corners_3d[..., -1] - center_depth.unsqueeze(-1)
+        # encoded_depth = corners_3d[...,-1]
+        corners_2d = torch.cat(
+            [corners_2d, encoded_depth.unsqueeze(-1)], dim=-1)
         front_plane = corners_2d[:, Order.planes()[0]]
         rear_plane = corners_2d[:, Order.planes()[1]]
         encoded_front_plane, reorder_front_plane = Corner2DNearestCoder.encode_with_bbox(
@@ -212,7 +238,9 @@ class Corner2DNearestCoder(object):
         encoded_all = torch.cat(
             [encoded_points, visibility.unsqueeze(-1).float()], dim=-1)
 
-        return encoded_all.view(encoded_all.shape[0], -1)
+        encoded_all = encoded_all.view(encoded_all.shape[0], -1)
+        # append center_depth
+        return torch.cat([encoded_all, center_depth.unsqueeze(-1)], dim=-1)
 
     @staticmethod
     def encode_batch(label_boxes_3d, label_boxes_2d, p2, image_info):

@@ -64,7 +64,7 @@ class RPNModel(Model):
 
         # cls
         if self.use_focal_loss:
-            self.rpn_cls_loss = FocalLoss(2, gamma=2)
+            self.rpn_cls_loss = FocalLoss(2, gamma=2, alpha=0.25)
         else:
             self.rpn_cls_loss = nn.CrossEntropyLoss(reduction='none')
 
@@ -101,8 +101,8 @@ class RPNModel(Model):
 
         # fg prob
         fg_probs = rpn_cls_probs[:, self.num_anchors:, :, :]
-        fg_probs = fg_probs.permute(0, 2, 3, 1).contiguous().view(batch_size,
-                                                                  -1)
+        fg_probs = fg_probs.permute(0, 2, 3, 1).contiguous().view(
+            batch_size, -1)
 
         # sort fg
         _, fg_probs_order = torch.sort(fg_probs, dim=1, descending=True)
@@ -191,8 +191,9 @@ class RPNModel(Model):
         rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
                                              rpn_cls_scores.shape[2],
                                              rpn_cls_scores.shape[3])
-        rpn_cls_scores = rpn_cls_scores.permute(
-            0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
+        rpn_cls_scores = rpn_cls_scores.permute(0, 3, 4, 2,
+                                                1).contiguous().view(
+                                                    batch_size, -1, 2)
 
         # postprocess
         rpn_cls_probs = rpn_cls_probs.view(
@@ -235,17 +236,19 @@ class RPNModel(Model):
         anchors = prediction_dict['anchors']
         anchors_dict = {}
         anchors_dict[constants.KEY_PRIMARY] = anchors
-        anchors_dict[constants.KEY_BOXES_2D] = prediction_dict['rpn_bbox_preds']
+        anchors_dict[constants.KEY_BOXES_2D] = prediction_dict[
+            'rpn_bbox_preds']
         anchors_dict[constants.KEY_CLASSES] = prediction_dict['rpn_cls_scores']
 
         gt_dict = {}
-        gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.KEY_LABEL_BOXES_2D]
+        gt_dict[constants.KEY_PRIMARY] = feed_dict[
+            constants.KEY_LABEL_BOXES_2D]
         gt_dict[constants.KEY_CLASSES] = None
         gt_dict[constants.KEY_BOXES_2D] = None
 
         auxiliary_dict = {}
-        auxiliary_dict[constants.KEY_BOXES_2D] = feed_dict[constants.
-                                                           KEY_LABEL_BOXES_2D]
+        auxiliary_dict[constants.KEY_BOXES_2D] = feed_dict[
+            constants.KEY_LABEL_BOXES_2D]
         gt_labels = feed_dict[constants.KEY_LABEL_CLASSES]
         auxiliary_dict[constants.KEY_CLASSES] = torch.ones_like(gt_labels)
         auxiliary_dict[constants.KEY_NUM_INSTANCES] = feed_dict[
@@ -255,14 +258,22 @@ class RPNModel(Model):
         # import ipdb
         # ipdb.set_trace()
         _, targets, _ = self.target_generators.generate_targets(
-            anchors_dict, gt_dict, auxiliary_dict)
+            anchors_dict, gt_dict, auxiliary_dict, subsample=False)
 
         cls_target = targets[constants.KEY_CLASSES]
         reg_target = targets[constants.KEY_BOXES_2D]
 
         # loss
 
-        rpn_cls_loss = common_loss.calc_loss(self.rpn_cls_loss, cls_target)
+        if self.use_focal_loss:
+            # when using focal loss, dont normalize it by all samples
+            cls_targets = cls_target['target']
+            pos = cls_targets > 0  # [N,#anchors]
+            num_pos = pos.long().sum().clamp(min=1).float()
+            rpn_cls_loss = common_loss.calc_loss(
+                self.rpn_cls_loss, cls_target, normalize=False) / num_pos
+        else:
+            rpn_cls_loss = common_loss.calc_loss(self.rpn_cls_loss, cls_target)
         rpn_reg_loss = common_loss.calc_loss(self.rpn_bbox_loss, reg_target)
         loss_dict.update({
             'rpn_cls_loss': rpn_cls_loss,

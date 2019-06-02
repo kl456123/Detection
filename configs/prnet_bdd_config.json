@@ -1,8 +1,8 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 32,
-            "num_workers": 32,
+            "batch_size": 8,
+            "num_workers": 16,
             "shuffle": true
         },
         "dataset_config": {
@@ -10,7 +10,7 @@
             "type":"bdd",
             "root_path": "/data/bdd/bdd100k/",
             "dataset_file": "bdd100k_labels_images_train.json",
-            "data_path": "images/train",
+            "data_path": "images/100k/train",
             "label_path": "labels",
             "classes": ["car", "person", "bus", "motor","rider","train","truck"],
             "anchor_generator_config": {

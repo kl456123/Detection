@@ -31,6 +31,23 @@ class Tester(object):
         # self.batch_size = eval_config['batch_size']
 
         self.eval_out = eval_config['eval_out']
+        self.test_type = eval_config['test_type']
+
+        # image visualizer for any dataset
+        image_dir = '/data/object/training/image_2'
+        result_dir = './results/data'
+        save_dir = 'results/images'
+        calib_dir = '/data/object/training/calib'
+        label_dir = None
+        calib_file = None
+        self.visualizer = ImageVisualizer(
+            image_dir,
+            result_dir,
+            label_dir=label_dir,
+            calib_dir=calib_dir,
+            calib_file=calib_file,
+            online=False,
+            save_dir=save_dir)
 
     def _generate_label_path(self, image_path):
         image_name = os.path.basename(image_path)
@@ -60,7 +77,7 @@ class Tester(object):
                 # z, alpha, cf))
             f.write('\n'.join(res_str))
 
-    def save_dets(self, dets, label_path):
+    def save_dets(self, dets, label_path, image_path):
         res_str = []
         # kitti_template = '{} -1 -1 -10 {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.8f}'
         kitti_template = '{} -1 -1 -10 {:.3f} {:.3f} {:.3f} {:.3f} -1 -1 -1 -1000 -1000 -1000 -10 {:.8f}'
@@ -78,6 +95,9 @@ class Tester(object):
                 # z, alpha, cf))
             f.write('\n'.join(res_str))
 
+        # image = self.visualizer.parse_image(image_path)
+        # self.visualizer.render_image_2d(image, boxes_2d, label_classes)
+
     def test_corners_3d(self, dataloader, model, logger):
         self.logger.info('Start testing')
         num_samples = len(dataloader)
@@ -86,20 +106,7 @@ class Tester(object):
             # enable it before forward pass
             model.enable_feat_vis()
         end_time = 0
-        image_dir = '/data/object/training/image_2'
-        result_dir = './results/data'
-        save_dir = 'results/images'
-        calib_dir = '/data/object/training/calib'
-        label_dir = None
-        calib_file = None
-        visualizer = ImageVisualizer(
-            image_dir,
-            result_dir,
-            label_dir=label_dir,
-            calib_dir=calib_dir,
-            calib_file=calib_file,
-            online=False,
-            save_dir=save_dir)
+
 
         for step, data in enumerate(dataloader):
             # start_time = time.time()
@@ -121,7 +128,7 @@ class Tester(object):
 
             scores = prediction[constants.KEY_CLASSES]
             boxes_2d = prediction[constants.KEY_BOXES_2D]
-            dims = prediction[constants.KEY_DIMS]
+            #  dims = prediction[constants.KEY_DIMS]
             corners_2d = prediction[constants.KEY_CORNERS_2D]
             #  import ipdb
             #  ipdb.set_trace()
@@ -143,7 +150,7 @@ class Tester(object):
             for batch_ind in range(batch_size):
                 boxes_2d_per_img = boxes_2d[batch_ind]
                 scores_per_img = scores[batch_ind]
-                dims_per_img = dims[batch_ind]
+                #  dims_per_img = dims[batch_ind]
                 corners_2d_per_img = corners_2d[batch_ind]
                 p2_per_img = p2[batch_ind]
 
@@ -159,19 +166,20 @@ class Tester(object):
                     if inds.numel() > 0:
                         # if self.class_agnostic:
                         threshed_boxes_2d_per_img = boxes_2d_per_img[inds]
-                        threshed_dims_per_img = dims_per_img[inds]
+                        #  threshed_dims_per_img = dims_per_img[inds]
                         threshed_corners_2d_per_img = corners_2d_per_img[inds]
                         # threshed_rcnn_3d_per_img = rcnn_3d_per_img[inds]
                         # else:
                         # threshed_boxes_2d_per_img = boxes_2d_per_img[
                         # inds, class_ind * 4:class_ind * 4 + 4]
                         # concat boxes and scores
-                        threshed_dets_per_img = torch.cat([
-                            threshed_boxes_2d_per_img,
-                            threshed_scores_per_img.unsqueeze(-1),
-                            threshed_dims_per_img,
-                        ],
-                                                          dim=-1)
+                        threshed_dets_per_img = torch.cat(
+                            [
+                                threshed_boxes_2d_per_img,
+                                threshed_scores_per_img.unsqueeze(-1),
+                                #  threshed_dims_per_img,
+                            ],
+                            dim=-1)
 
                         # sort by scores
                         _, order = torch.sort(threshed_scores_per_img, 0, True)
@@ -183,8 +191,8 @@ class Tester(object):
                         keep = nms(threshed_dets_per_img[:, :4],
                                    threshed_dets_per_img[:, 4],
                                    self.nms).view(-1).long()
-                        nms_dets_per_img = threshed_dets_per_img[keep].detach(
-                        ).cpu().numpy()
+                        nms_dets_per_img = threshed_dets_per_img[
+                            keep].detach().cpu().numpy()
                         nms_corners_2d_per_img = threshed_corners_2d_per_img[
                             keep].detach().cpu().numpy()
 
@@ -192,8 +200,7 @@ class Tester(object):
                         dets_2d.append(nms_dets_per_img[:, :4])
                     else:
                         dets.append(
-                            np.zeros(
-                                (0, 8, num_cols), dtype=np.float32))
+                            np.zeros((0, 8, num_cols), dtype=np.float32))
                         dets_2d.append(np.zeros((0, 4)))
 
                 # import ipdb
@@ -207,7 +214,7 @@ class Tester(object):
                 else:
                     corners_2d = corners
 
-                visualizer.render_image_corners_2d(
+                self.visualizer.render_image_corners_2d(
                     image_path[0],
                     boxes_2d=dets_2d,
                     corners_2d=corners_2d,
@@ -292,13 +299,14 @@ class Tester(object):
                         # threshed_boxes_2d_per_img = boxes_2d_per_img[
                         # inds, class_ind * 4:class_ind * 4 + 4]
                         # concat boxes and scores
-                        threshed_dets_per_img = torch.cat([
-                            threshed_boxes_2d_per_img,
-                            threshed_scores_per_img.unsqueeze(-1),
-                            threshed_dims_per_img,
-                            threshed_orients_per_img.unsqueeze(-1)
-                        ],
-                                                          dim=-1)
+                        threshed_dets_per_img = torch.cat(
+                            [
+                                threshed_boxes_2d_per_img,
+                                threshed_scores_per_img.unsqueeze(-1),
+                                threshed_dims_per_img,
+                                threshed_orients_per_img.unsqueeze(-1)
+                            ],
+                            dim=-1)
 
                         # sort by scores
                         _, order = torch.sort(threshed_scores_per_img, 0, True)
@@ -309,14 +317,15 @@ class Tester(object):
                         keep = nms(threshed_dets_per_img[:, :4],
                                    threshed_dets_per_img[:, 4],
                                    self.nms).view(-1).long()
-                        nms_dets_per_img = threshed_dets_per_img[keep].detach(
-                        ).cpu().numpy()
+                        nms_dets_per_img = threshed_dets_per_img[
+                            keep].detach().cpu().numpy()
                         # nms_rcnn_3d_per_img = threshed_rcnn_3d_per_img[keep].detach().cpu().numpy()
 
                         # calculate location
                         location = geometry_utils.calc_location(
                             nms_dets_per_img[:, 5:8], nms_dets_per_img[:, :5],
-                            nms_dets_per_img[:, 8], p2_per_img.cpu().numpy())
+                            nms_dets_per_img[:, 8],
+                            p2_per_img.cpu().numpy())
                         # import ipdb
                         # ipdb.set_trace()
                         # location, _ = mono_3d_postprocess_bbox(
@@ -403,11 +412,12 @@ class Tester(object):
                         # threshed_boxes_2d_per_img = boxes_2d_per_img[
                         # inds, class_ind * 4:class_ind * 4 + 4]
                         # concat boxes and scores
-                        threshed_dets_per_img = torch.cat([
-                            threshed_boxes_2d_per_img,
-                            threshed_scores_per_img.unsqueeze(-1),
-                        ],
-                                                          dim=-1)
+                        threshed_dets_per_img = torch.cat(
+                            [
+                                threshed_boxes_2d_per_img,
+                                threshed_scores_per_img.unsqueeze(-1),
+                            ],
+                            dim=-1)
 
                         # sort by scores
                         _, order = torch.sort(threshed_scores_per_img, 0, True)
@@ -417,8 +427,8 @@ class Tester(object):
                         keep = nms(threshed_dets_per_img[:, :4],
                                    threshed_dets_per_img[:, 4],
                                    self.nms).view(-1).long()
-                        nms_dets_per_img = threshed_dets_per_img[keep].detach(
-                        ).cpu().numpy()
+                        nms_dets_per_img = threshed_dets_per_img[
+                            keep].detach().cpu().numpy()
 
                         dets.append(nms_dets_per_img)
                     else:
@@ -426,7 +436,7 @@ class Tester(object):
 
                 duration_time = time.time() - end_time
                 label_path = self._generate_label_path(image_path[batch_ind])
-                self.save_dets(dets, label_path)
+                self.save_dets(dets, label_path, image_path[batch_ind])
                 sys.stdout.write('\r{}/{},duration: {}'.format(
                     step + 1, num_samples, duration_time))
                 sys.stdout.flush()
@@ -493,11 +503,12 @@ class Tester(object):
                         # threshed_boxes_2d_per_img = boxes_2d_per_img[
                         # inds, class_ind * 4:class_ind * 4 + 4]
                         # concat boxes and scores
-                        threshed_dets_per_img = torch.cat([
-                            threshed_boxes_2d_per_img,
-                            threshed_scores_per_img.unsqueeze(-1),
-                        ],
-                                                          dim=-1)
+                        threshed_dets_per_img = torch.cat(
+                            [
+                                threshed_boxes_2d_per_img,
+                                threshed_scores_per_img.unsqueeze(-1),
+                            ],
+                            dim=-1)
 
                         # sort by scores
                         _, order = torch.sort(threshed_scores_per_img, 0, True)
@@ -512,8 +523,8 @@ class Tester(object):
                             0.8,
                             nms_num=3,
                             loop_time=2)
-                        nms_dets_per_img = threshed_dets_per_img[keep].detach(
-                        ).cpu().numpy()
+                        nms_dets_per_img = threshed_dets_per_img[
+                            keep].detach().cpu().numpy()
 
                         dets.append(nms_dets_per_img)
                     else:
@@ -529,7 +540,9 @@ class Tester(object):
                 end_time = time.time()
 
     def test(self, dataloader, model, logger):
+        test_fn = getattr(self, self.test_type)
+        test_fn(dataloader, model, logger)
         # self.test_super_nms(dataloader, model, logger)
-        self.test_2d(dataloader, model, logger)
+        #  self.test_2d(dataloader, model, logger)
         #  self.test_3d(dataloader, model, logger)
-        #  self.test_corners_3d(dataloader, model, logger)
+        # self.test_corners_3d(dataloader, model, logger)

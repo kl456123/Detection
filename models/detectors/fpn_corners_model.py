@@ -25,6 +25,7 @@ from models import detectors
 from utils import batch_ops
 import bbox_coders
 from core.utils.analyzer import Analyzer
+import copy
 
 
 @DETECTORS.register('fpn_corners_2d')
@@ -92,16 +93,19 @@ class FPNCornersModel(FPNFasterRCNN):
                                                     im_info[0][:2])
 
             # shape(N,C,1,1)
-            pooled_feat = self.feature_extractor.second_stage_feature(
+            pooled_feat_for_corners = self.feature_extractor.second_stage_feature(
                 pooled_feat)
-            pooled_feat = pooled_feat.mean(3).mean(2)
+            pooled_feat_for_corners = pooled_feat_for_corners.mean(3).mean(2)
 
-            rcnn_bbox_preds = self.rcnn_bbox_preds[i](pooled_feat)
-            rcnn_cls_scores = self.rcnn_cls_preds[i](pooled_feat)
-            rcnn_corners_preds = self.rcnn_corners_preds[i](pooled_feat)
-            rcnn_depth_preds = self.rcnn_depth_preds[i](pooled_feat)
+            rcnn_bbox_preds = self.rcnn_bbox_preds[i](pooled_feat_for_corners)
+            rcnn_cls_scores = self.rcnn_cls_preds[i](pooled_feat_for_corners)
+            rcnn_corners_preds = self.rcnn_corners_preds[i](
+                pooled_feat_for_corners)
+            # rcnn_depth_preds = self.rcnn_depth_preds[i](pooled_feat)
+            # rcnn_center_depth_preds = self.rcnn_center_depth_preds[i](
+            # pooled_feat)
             # rcnn_visibility_preds = self.rcnn_visibility_preds[i](pooled_feat)
-            rcnn_dim_preds = self.rcnn_dim_preds[i](pooled_feat)
+            rcnn_dim_preds = self.rcnn_dim_preds[i](pooled_feat_for_corners)
 
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
@@ -142,15 +146,62 @@ class FPNCornersModel(FPNFasterRCNN):
             rcnn_corners_preds = rcnn_corners_preds.view(
                 batch_size, rcnn_bbox_preds.shape[1], -1)
 
-            rcnn_depth_preds = rcnn_depth_preds.view(
-                batch_size, rcnn_bbox_preds.shape[1], -1)
+            # rcnn_depth_preds = rcnn_depth_preds.view(
+            # batch_size, rcnn_bbox_preds.shape[1], -1)
+            # rcnn_center_depth_preds = rcnn_center_depth_preds.view(
+            # batch_size, rcnn_bbox_preds.shape[1], -1)
             # concat them(depth and corners)
             # rcnn_corners_preds = torch.cat(
-                # [rcnn_corners_preds, rcnn_depth_preds], dim=-1)
+            # [rcnn_corners_preds, rcnn_depth_preds], dim=-1)
+
+            # # append center depth
+            # rcnn_corners_preds = torch.cat(
+            # [rcnn_corners_preds, rcnn_center_depth_preds], dim=-1)
 
             # rcnn_visibility_preds = rcnn_visibility_preds.view(
             # batch_size, rcnn_bbox_preds.shape[1], -1)
             rcnn_dim_preds = rcnn_dim_preds.view(batch_size, -1, 3)
+
+            # decode for next stage
+            coder = bbox_coders.build(self.target_generators[i]
+                                      .target_generator_config['coder_config'])
+            proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
+            coder = bbox_coders.build({'type': constants.KEY_DIMS})
+            rcnn_dim_preds = coder.decode_batch(
+                rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
+                rcnn_cls_probs).detach()
+            coder = bbox_coders.build({
+                'type':
+                constants.KEY_CORNERS_2D_NEAREST_DEPTH
+            })
+            # rcnn_corners_preds = coder.decode_batch(
+            # rcnn_corners_preds.detach(), proposals)
+
+            # import ipdb
+            # ipdb.set_trace()
+            # if self.training_depth:
+                # # predict for depth
+                # rois = box_ops.box2rois(proposals)
+                # pooled_feat_for_depth = self.pyramid_rcnn_pooling(
+                    # rcnn_feat_maps, rois.view(-1, 5), im_info[0][:2])
+
+                # shape(N,C,1,1)
+            pooled_feat_for_depth = self.third_stage_feature(pooled_feat)
+            pooled_feat_for_depth = pooled_feat_for_depth.mean(3).mean(2)
+            rcnn_depth_preds = self.rcnn_depth_preds[i](
+                pooled_feat_for_depth)
+            rcnn_depth_preds = rcnn_depth_preds.view(
+                batch_size, rcnn_bbox_preds.shape[1], -1)
+
+            # # concat them(depth and corners)
+            rcnn_corners_preds = self.fuse_corners_and_depth(
+                rcnn_corners_preds, rcnn_depth_preds)
+            # rcnn_corners_preds = torch.cat(
+            # [rcnn_corners_preds, rcnn_depth_preds], dim=-1)
+
+            # # # append center depth
+            # rcnn_corners_preds = torch.cat(
+            # [rcnn_corners_preds, rcnn_center_depth_preds], dim=-1)
 
             if self.training:
                 loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
@@ -170,21 +221,6 @@ class FPNCornersModel(FPNFasterRCNN):
                 ])
                 multi_stage_stats.append(stats)
 
-            # decode for next stage
-            coder = bbox_coders.build(self.target_generators[i]
-                                      .target_generator_config['coder_config'])
-            proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
-            coder = bbox_coders.build({'type': constants.KEY_DIMS})
-            rcnn_dim_preds = coder.decode_batch(
-                rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
-                rcnn_cls_probs).detach()
-            coder = bbox_coders.build({
-                'type':
-                constants.KEY_CORNERS_2D_NEAREST
-            })
-            # rcnn_corners_preds = coder.decode_batch(
-                # rcnn_corners_preds.detach(), proposals)
-
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
             prediction_dict[constants.KEY_STATS] = multi_stage_stats
@@ -199,7 +235,8 @@ class FPNCornersModel(FPNFasterRCNN):
                                               2] / image_info[:, 2].unsqueeze(
                                                   -1).unsqueeze(-1)
             rcnn_corners_preds = coder.decode_batch(
-                rcnn_corners_preds.detach(), proposals)
+                rcnn_corners_preds.detach(), proposals,
+                feed_dict[constants.KEY_STEREO_CALIB_P2_ORIG])
             prediction_dict[constants.KEY_CORNERS_2D] = rcnn_corners_preds
             prediction_dict[constants.KEY_BOXES_2D] = proposals
             prediction_dict[constants.KEY_DIMS] = rcnn_dim_preds
@@ -210,6 +247,21 @@ class FPNCornersModel(FPNFasterRCNN):
             return prediction_dict, loss_dict
         else:
             return prediction_dict
+
+    def fuse_corners_and_depth(self, corners_2d, depth):
+        """
+        Args:
+            corners_2d: shape(N, M, 32)
+            depth: shape(N, M, 8+1)
+        """
+        N, M = corners_2d.shape[:2]
+        related_depth = depth[:, :, :8].contiguous().view(N, M, 8, 1)
+        center_depth = depth[:, :, -1:]
+        corners_2d = corners_2d.view(N, M, 8, 4)
+        corners_2d = torch.cat(
+            [corners_2d[..., :2], related_depth, corners_2d[..., 2:]], dim=-1)
+
+        return torch.cat([corners_2d.view(N, M, -1), center_depth], dim=-1)
 
     def squeeze_bbox_preds(self, rcnn_bbox_preds, rcnn_cls_targets, out_c=4):
         """
@@ -229,11 +281,22 @@ class FPNCornersModel(FPNFasterRCNN):
     def init_weights(self):
         super().init_weights()
 
+        self.freeze_modules()
+        for param in self.rcnn_depth_preds.parameters():
+            param.requires_grad = True
+
+        for param in self.third_stage_feature.parameters():
+            param.requires_grad = True
+
+        self.freeze_bn(self)
+        self.unfreeze_bn(self.third_stage_feature)
+
     def init_param(self, model_config):
         super().init_param(model_config)
         self.class_agnostic_3d = False
         # all points used for training
         self.use_filter = model_config['use_filter']
+        self.training_depth = model_config['training_depth']
 
     def init_modules(self):
         super().init_modules()
@@ -241,7 +304,12 @@ class FPNCornersModel(FPNFasterRCNN):
         self.rcnn_corners_preds = nn.ModuleList(
             [nn.Linear(1024, 4 * 8) for _ in range(self.num_stages)])
         self.rcnn_depth_preds = nn.ModuleList(
-            [nn.Linear(1024, 1 * 8) for _ in range(self.num_stages)])
+            [nn.Linear(1024, 1 * 8 + 1) for _ in range(self.num_stages)])
+
+        self.third_stage_feature = copy.deepcopy(
+            self.feature_extractor.second_stage_feature)
+        # self.rcnn_center_depth_preds = nn.ModuleList(
+        # [nn.Linear(1024, 1) for _ in range(self.num_stages)])
         # self.rcnn_visibility_preds = nn.ModuleList(
         # [nn.Linear(1024, 2 * 8) for _ in range(self.num_stages)])
 
@@ -256,7 +324,8 @@ class FPNCornersModel(FPNFasterRCNN):
                 [nn.Linear(1024, 3) for _ in range(self.num_stages)])
 
         #  self.rcnn_orient_loss = OrientationLoss()
-        self.rcnn_corners_loss = CornersLoss(use_filter=self.use_filter)
+        self.rcnn_corners_loss = CornersLoss(
+            use_filter=self.use_filter, training_depth=self.training_depth)
 
     def loss(self, prediction_dict, feed_dict):
         """
@@ -278,7 +347,7 @@ class FPNCornersModel(FPNFasterRCNN):
                 self.rcnn_bbox_loss, dim_target, True)
 
         loss_dict.update({
-            # 'rcnn_corners_loss': rcnn_corners_loss,
+            'rcnn_corners_loss': rcnn_corners_loss,
             #  'rcnn_dim_loss': rcnn_dim_loss
         })
 

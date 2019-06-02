@@ -196,49 +196,6 @@ class TwoStageRetinaLayer(Model):
         os_preds = torch.cat(y_os, dim=1)
         cls_preds = torch.cat(y_cls, dim=1)
 
-        # if self.training:
-        # prediction_dict = {
-        # 'loc1_preds': loc1_preds,
-        # 'loc2_preds': loc2_preds,
-        # 'os_preds': os_preds,
-        # 'cls_preds': cls_preds
-        # }
-
-        # stats = {
-        # 'recall': torch.tensor([1, 1]).to('cuda').float().unsqueeze(0)
-        # }
-        # prediction_dict[constants.KEY_STATS] = [stats]
-        # else:
-        # prediction_dict = {}
-        # cls_probs = F.softmax(cls_preds, dim=-1)
-        # os_probs = F.softmax(os_preds, dim=-1)[:, :, 1:]
-        # os_probs[os_probs <= 0.4] = 0
-        # prediction_dict[constants.KEY_CLASSES] = cls_probs * os_probs
-        # # prediction_dict[constants.KEY_OBJECTNESS] = os_preds
-
-        # image_info = feed_dict[constants.KEY_IMAGE_INFO]
-        # variances = [0.1, 0.2]
-        # default_boxes = feed_dict['default_boxes'][0]
-        # new_default_boxes = torch.cat([
-        # default_boxes[:, :2] - default_boxes[:, 2:] / 2,
-        # default_boxes[:, :2] + default_boxes[:, 2:] / 2
-        # ], 1)
-        # xymin = loc2_preds[0, :, :2] * variances[
-        # 0] * default_boxes[:, 2:] + new_default_boxes[:, :2]
-        # xymax = loc2_preds[0, :, 2:] * variances[
-        # 0] * default_boxes[:, 2:] + new_default_boxes[:, 2:]
-        # proposals = torch.cat([xymin, xymax], 1).unsqueeze(0)  # [8732,4]
-
-        # image_info = image_info.unsqueeze(-1).unsqueeze(-1)
-        # proposals[:, :, ::
-        # 2] = proposals[:, :, ::
-        # 2] * image_info[:, 1] / image_info[:, 3]
-        # proposals[:, :, 1::
-        # 2] = proposals[:, :, 1::
-        # 2] * image_info[:, 0] / image_info[:, 2]
-        # prediction_dict[constants.KEY_BOXES_2D] = proposals
-        # return prediction_dict
-
         image_info = feed_dict[constants.KEY_IMAGE_INFO]
 
         batch_size = loc1_preds.shape[0]
@@ -249,13 +206,6 @@ class TwoStageRetinaLayer(Model):
         coder = bbox_coders.build(
             self.target_generators.target_generator_config['coder_config'])
         proposals = coder.decode_batch(loc2_preds, anchors).detach()
-
-        # if self.normlize_anchor:
-        # denormalize
-        # h = image_info[:, 0].unsqueeze(-1).unsqueeze(-1)
-        # w = image_info[:, 1].unsqueeze(-1).unsqueeze(-1)
-        # proposals[:, :, ::2] = proposals[:, :, ::2] * w
-        # proposals[:, :, 1::2] = proposals[:, :, 1::2] * h
 
         cls_probs = F.softmax(cls_preds.detach(), dim=-1)
         os_probs = F.softmax(os_preds.detach(), dim=-1)[:, :, 1:]
@@ -330,38 +280,12 @@ class TwoStageRetinaLayer(Model):
             proposals[:, :, ::2] = proposals[:, :, ::2] / image_info[:, 3]
             proposals[:, :, 1::2] = proposals[:, :, 1::2] / image_info[:, 2]
             prediction_dict[constants.KEY_BOXES_2D] = proposals
-        return prediction_dict
-
-    # def loss(self, prediction_dict, feed_dict):
-    # # import ipdb
-    # # ipdb.set_trace()
-
-    # target = feed_dict['gt_target']
-    # loc1_preds = prediction_dict['loc1_preds']
-    # loc2_preds = prediction_dict['loc2_preds']
-    # conf_preds = prediction_dict['cls_preds']
-    # os_preds = prediction_dict['os_preds']
-    # bbox, labels, os_gt, _ = target
-
-    # loc_loss, os_loss, conf_loss = self.two_step_loss(
-    # loc1_preds,
-    # loc2_preds,
-    # bbox,
-    # conf_preds,
-    # labels.long(),
-    # os_preds,
-    # os_gt,
-    # is_print=False)
-
-    # # loss
-    # loss_dict = {}
-
-    # # loss_dict['total_loss'] = total_loss
-    # loss_dict['loc_loss'] = loc_loss
-    # loss_dict['os_loss'] = os_loss
-    # loss_dict['conf_loss'] = conf_loss
-
-    # return loss_dict
+        # return prediction_dict
+        if self.training:
+            loss_dict = self.loss(prediction_dict, feed_dict)
+            return prediction_dict, loss_dict
+        else:
+            return prediction_dict
 
     def loss(self, prediction_dict, feed_dict):
         loss_dict = {}

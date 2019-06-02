@@ -1,8 +1,8 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 8,
-            "num_workers": 16,
+            "batch_size": 32,
+            "num_workers": 48,
             "shuffle": true
         },
         "dataset_config": {
@@ -11,7 +11,8 @@
             ],
             "dataset_file": "data/train.txt",
             "root_path": "/data",
-            "type": "kitti"
+            "type": "mono_3d_kitti",
+            "use_proj_2d": false
         },
         "transform_config": [
             {
@@ -59,7 +60,7 @@
         "eval_out_rois": "./results/rois",
         "nms": 0.3,
         "rng_seed": 3,
-        "test_type": "test_2d",
+        "test_type": "test_corners_3d",
         "thresh": 0.5
     },
     "eval_data_config": {
@@ -74,7 +75,8 @@
             ],
             "dataset_file": "data/val.txt",
             "root_path": "/data",
-            "type": "kitti"
+            "type": "mono_3d_kitti",
+            "use_proj_2d": false
         },
         "transform_config": [
             {

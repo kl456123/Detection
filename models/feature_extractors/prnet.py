@@ -44,9 +44,7 @@ class PRNetFeatureExtractor(Model):
 
     def init_param(self, model_config):
         self.pretrained = model_config['pretrained']
-        self.img_channels = model_config['img_channels']
         self.net_arch = model_config['net_arch']
-        self.use_cascade = model_config['use_cascade']
         self.pretrained_path = model_config['pretrained_path']
         self.net_arch_path_map = {
             'res50': 'resnet50-19c8e357.pth',
@@ -58,7 +56,6 @@ class PRNetFeatureExtractor(Model):
         self.pyramid_layers = len(model_config['output_scale'])
         self.det_features = model_config['det_features']
         # including bg
-        self.num_class = len(model_config['classes']) + 1
         self.dla_input = model_config['dla_input']
         self.layer_structure = model_config['layer_structure']
 

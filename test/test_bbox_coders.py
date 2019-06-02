@@ -55,8 +55,8 @@ def test_bbox_coders():
     cls_orients = orients[:, :, :1].long()
     row = torch.arange(0, cls_orients.numel()).type_as(cls_orients)
     encoded_cls_orients.view(-1, 2)[row, cls_orients.view(-1)] = 1
-    encoded_orients = torch.cat([encoded_cls_orients, orients[:, :, 1:]],
-                                dim=-1)
+    encoded_orients = torch.cat(
+        [encoded_cls_orients, orients[:, :, 1:]], dim=-1)
 
     ry = bbox_coder.decode_batch(encoded_orients, proposals, proposals, p2)
     # import ipdb
@@ -117,8 +117,8 @@ def test_orientv2_coder():
     cls_orients = orients[:, :, :1].long()
     row = torch.arange(0, cls_orients.numel()).type_as(cls_orients)
     encoded_cls_orients.view(-1, 3)[row, cls_orients.view(-1)] = 1
-    encoded_orients = torch.cat([encoded_cls_orients, orients[:, :, 1:]],
-                                dim=-1)
+    encoded_orients = torch.cat(
+        [encoded_cls_orients, orients[:, :, 1:]], dim=-1)
 
     ry = bbox_coder.decode_batch(encoded_orients, proposals, p2)
     print(ry)
@@ -149,8 +149,8 @@ def test_rear_side_coder():
     cls_orients = orients[:, :, :1].long()
     row = torch.arange(0, cls_orients.numel()).type_as(cls_orients)
     encoded_cls_orients.view(-1, 2)[row, cls_orients.view(-1)] = 1
-    encoded_orients = torch.cat([encoded_cls_orients, orients[:, :, 1:]],
-                                dim=-1)
+    encoded_orients = torch.cat(
+        [encoded_cls_orients, orients[:, :, 1:]], dim=-1)
 
     ry = bbox_coder.decode_batch(encoded_orients, proposals, p2)
     print(ry)
@@ -160,7 +160,7 @@ def test_rear_side_coder():
 
 def test_corners_coder():
 
-    coder_config = {'type': constants.KEY_CORNERS_2D_NEARESTV2}
+    coder_config = {'type': constants.KEY_CORNERS_2D_NEAREST_DEPTH}
     bbox_coder = bbox_coders.build(coder_config)
 
     dataset = build_dataset('kitti')
@@ -178,24 +178,28 @@ def test_corners_coder():
     image_info = torch.stack(1 * [image_info], dim=0)
     p2 = torch.stack(1 * [p2], dim=0)
 
-    # import ipdb
-    # ipdb.set_trace()
     encoded_corners_2d = bbox_coder.encode_batch(
         label_boxes_3d, label_boxes_2d, p2, image_info)
     #  torch.cat([encoded_corners_2d, ])
     num_boxes = encoded_corners_2d.shape[1]
     batch_size = encoded_corners_2d.shape[0]
-    encoded_corners_2d = encoded_corners_2d.view(batch_size, num_boxes, 8, 3)
+    center_depth = encoded_corners_2d[:, :, -1:]
+    encoded_corners_2d = encoded_corners_2d[:, :, :-1].view(
+        batch_size, num_boxes, 8, 4)
 
     encoded_visibility = torch.zeros_like(encoded_corners_2d[:, :, :, :2])
     visibility = encoded_corners_2d[:, :, :, -1:].long()
     row = torch.arange(0, visibility.numel()).type_as(visibility)
     encoded_visibility.view(-1, 2)[row, visibility.view(-1)] = 1
     encoded_corners_2d = torch.cat(
-        [encoded_corners_2d[:, :, :, :2], encoded_visibility], dim=-1)
+        [encoded_corners_2d[:, :, :, :3], encoded_visibility], dim=-1)
 
-    decoded_corners_2d = bbox_coder.decode_batch(
-        encoded_corners_2d.view(batch_size, num_boxes, -1), proposals)
+    encoded_corners_2d = torch.cat(
+        [encoded_corners_2d.view(batch_size, num_boxes, -1), center_depth],
+        dim=-1)
+
+    decoded_corners_2d = bbox_coder.decode_batch(encoded_corners_2d, proposals,
+                                                 p2)
 
     decoded_corners_2d = decoded_corners_2d.cpu().detach().numpy()
 
@@ -214,7 +218,10 @@ def test_corners_coder():
         calib_file=calib_file,
         online=False,
         save_dir=save_dir)
-    visualizer.render_image_corners_2d(image_path, decoded_corners_2d[0])
+    # import ipdb
+    # ipdb.set_trace()
+    visualizer.render_image_corners_2d(
+        image_path, corners_3d=decoded_corners_2d[0], p2=p2[0])
 
 
 def compute_ray_angle(C):

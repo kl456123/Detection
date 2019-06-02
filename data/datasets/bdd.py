@@ -50,7 +50,7 @@ class BDDDataset(DetDataset):
                                            dataset_config['label_path'])
             path = os.path.join(self.label_path,
                                 dataset_config['dataset_file'])
-            #  path = '/node01/jobs/io/out/xiongliang/bdd100k_labels_images_train.json'
+            # path = '/node01/jobs/io/out/xiongliang/bdd100k_labels_images_train.json'
             self.sample_names = self.make_label_list(path)
 
             self.imgs = self.make_image_list()
@@ -72,8 +72,9 @@ class BDDDataset(DetDataset):
         annotations = self.load_annotation(dataset_file)
         new_annotations = []
         for anno in annotations:
-            if self._check_anno(anno):
-                new_annotations.append(anno)
+            if anno['name'] == 'fe1f2409-c16ea1ed.jpg':
+                if self._check_anno(anno):
+                    new_annotations.append(anno)
 
         return new_annotations
 

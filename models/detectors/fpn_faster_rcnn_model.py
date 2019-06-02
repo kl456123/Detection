@@ -235,7 +235,7 @@ class FPNFasterRCNN(Model):
 
         # loss module
         if self.use_focal_loss:
-            self.rcnn_cls_loss = FocalLoss(self.n_classes, gamma=2)
+            self.rcnn_cls_loss = FocalLoss(self.n_classes, gamma=2, alpha=0.75)
         else:
             self.rcnn_cls_loss = nn.CrossEntropyLoss(reduction='none')
 
@@ -285,12 +285,20 @@ class FPNFasterRCNN(Model):
 
         for stage_ind in range(self.num_stages):
             cls_target = targets[stage_ind][0]
-            # cls_targets = cls_target['target']
-            # pos = cls_targets > 0  # [N,#anchors]
-            # num_pos = pos.long().sum().clamp(min=1).float()
 
-            rcnn_cls_loss = rcnn_cls_loss + common_loss.calc_loss(
-                self.rcnn_cls_loss, cls_target)
+            if self.use_focal_loss:
+                # when using focal loss, dont normalize it by all samples
+                cls_targets = cls_target['target']
+                pos = cls_targets > 0  # [N,#anchors]
+                num_pos = pos.long().sum().clamp(min=1).float()
+                rcnn_cls_loss = common_loss.calc_loss(
+                    self.rcnn_cls_loss, cls_target, normalize=False) / num_pos
+            else:
+                rcnn_cls_loss = rcnn_cls_loss + common_loss.calc_loss(
+                    self.rcnn_cls_loss, cls_target)
+
+            # rcnn_cls_loss = rcnn_cls_loss + common_loss.calc_loss(
+            # self.rcnn_cls_loss, cls_target)
 
             reg_target = targets[stage_ind][1]
             rcnn_reg_loss = rcnn_reg_loss + common_loss.calc_loss(

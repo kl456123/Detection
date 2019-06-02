@@ -98,7 +98,7 @@ class RPNModel(_RPNModel):
         im_info = bottom_blobs[constants.KEY_IMAGE_INFO]
 
         rpn_cls_scores = []
-        rpn_cls_probs = []
+        # rpn_cls_probs = []
         rpn_bbox_preds = []
 
         for rpn_feat_map in rpn_feat_maps:
@@ -108,43 +108,47 @@ class RPNModel(_RPNModel):
             # rpn cls score
             # shape(N,2*num_anchors,H,W)
             rpn_cls_score = self.rpn_cls_score(rpn_conv)
+            rpn_cls_score = rpn_cls_score.permute(0, 2, 3, 1).contiguous()
+            rpn_cls_score = rpn_cls_score.view(batch_size, -1, 2)
 
             # rpn cls prob shape(N,2*num_anchors,H,W)
-            rpn_cls_score_reshape = rpn_cls_score.view(batch_size, 2, -1)
-            rpn_cls_prob = F.softmax(rpn_cls_score_reshape, dim=1)
-            rpn_cls_prob = rpn_cls_prob.view_as(rpn_cls_score)
+            # rpn_cls_score_reshape = rpn_cls_score.view(batch_size, 2, -1)
+            # rpn_cls_prob = F.softmax(rpn_cls_score_reshape, dim=1)
+            # rpn_cls_prob = rpn_cls_prob.view_as(rpn_cls_score)
 
-            rpn_cls_prob = rpn_cls_prob.view(batch_size, 2, -1,
-                                             rpn_cls_prob.shape[2],
-                                             rpn_cls_prob.shape[3])
-            rpn_cls_prob = rpn_cls_prob.permute(
-                0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
+            # rpn_cls_prob = rpn_cls_prob.view(batch_size, 2, -1,
+            # rpn_cls_prob.shape[2],
+            # rpn_cls_prob.shape[3])
+            # rpn_cls_prob = rpn_cls_prob.permute(
+            # 0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
 
-            rpn_cls_score = rpn_cls_score.view(batch_size, 2, -1,
-                                               rpn_cls_score.shape[2],
-                                               rpn_cls_score.shape[3])
-            rpn_cls_score = rpn_cls_score.permute(
-                0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
+            # rpn_cls_score = rpn_cls_score.view(batch_size, 2, -1,
+            # rpn_cls_score.shape[2],
+            # rpn_cls_score.shape[3])
+            # rpn_cls_score = rpn_cls_score.permute(
+            # 0, 3, 4, 2, 1).contiguous().view(batch_size, -1, 2)
             rpn_bbox_pred = self.rpn_bbox_pred(rpn_conv)
+            # rpn_bbox_pred = rpn_bbox_pred.permute(0, 2, 3, 1).contiguous()
             rpn_bbox_pred = rpn_bbox_pred.permute(0, 2, 3, 1).contiguous()
             # shape(N,H*W*num_anchors,4)
             rpn_bbox_pred = rpn_bbox_pred.view(batch_size, -1, 4)
 
-            rpn_cls_probs.append(rpn_cls_prob)
+            # rpn_cls_probs.append(rpn_cls_prob)
             rpn_cls_scores.append(rpn_cls_score)
             # get rpn offsets to the anchor boxes
             rpn_bbox_preds.append(rpn_bbox_pred)
 
         rpn_cls_scores = torch.cat(rpn_cls_scores, dim=1)
-        rpn_cls_probs = torch.cat(rpn_cls_probs, dim=1)
+        # rpn_cls_probs = torch.cat(rpn_cls_probs, dim=1)
         rpn_bbox_preds = torch.cat(rpn_bbox_preds, dim=1)
+        rpn_cls_probs = F.softmax(rpn_cls_scores, dim=-1)
 
         # generate pyramid anchors
         feature_map_list = [
             base_feat.shape[-2:] for base_feat in rpn_feat_maps
         ]
-        anchors = self.anchor_generator.generate_pyramid(feature_map_list,
-                                                         im_info[0][:-1])
+        anchors = self.anchor_generator.generate_pyramid(
+            feature_map_list, im_info[0][:-1])
         anchors = anchors.unsqueeze(0).repeat(batch_size, 1, 1)
 
         ###############################
@@ -154,9 +158,9 @@ class RPNModel(_RPNModel):
         proposals_batch, proposals_order = self.generate_proposal(
             rpn_cls_probs, anchors, rpn_bbox_preds, im_info)
 
-        if self.training:
-            label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
-            proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
+        # if self.training:
+        # label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
+        # proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
 
         # postprocess
 

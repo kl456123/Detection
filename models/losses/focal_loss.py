@@ -67,8 +67,8 @@ class FocalLoss(nn.Module):
         else:
             if isinstance(self.alpha, (float, int)):
                 fg_num_classes = self.num_classes - 1
-                alpha = torch.FloatTensor([self.alpha] + [(
-                    1 - self.alpha) / fg_num_classes] * fg_num_classes)
+                alpha = torch.FloatTensor(
+                    [self.alpha] + [1 - self.alpha] * fg_num_classes)
             else:
                 alpha = torch.FloatTensor(self.alpha)
 
@@ -111,8 +111,8 @@ class FocalLoss(nn.Module):
         # pos_alpha = 1 - neg_alpha
 
         fg_num_classes = self.num_classes - 1
-        alpha = torch.FloatTensor([neg_alpha] + [pos_alpha / fg_num_classes] *
-                                  fg_num_classes)
+        alpha = torch.FloatTensor(
+            [neg_alpha] + [pos_alpha / fg_num_classes] * fg_num_classes)
         return alpha
 
     def forward(self, cls_preds, cls_targets, ignored_label=-1,
