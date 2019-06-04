@@ -113,8 +113,8 @@ class TargetGenerator(object):
             kwargs.update(auxiliary_dict)
             # weight_args = [match, assigned_overlaps_batch]
 
-            weight = target_assigner.assign_weight(**kwargs)
             target = target_assigner.assign_target(**kwargs)
+            weight = target_assigner.assign_weight(**kwargs)
             loss_units[key] = {
                 'weight': weight,
                 'target': target,

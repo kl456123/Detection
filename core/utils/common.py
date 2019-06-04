@@ -144,3 +144,63 @@ def compile_cxx():
     command = 'cd ./lib && {} setup.py build develop && rm build -rf && cd ..'.format(
         python)
     os.system(command)
+
+
+instance_info_dict = {}
+
+
+def InstanceInfo(object):
+    def __init__(self, instance_info_dict):
+        for attr_name in instance_info_dict:
+            self.add_field_by_name()
+
+    def add_field_by_name(self, name, coders=[]):
+        """
+        Note that one name for multiple coders
+        """
+        attr = Attr(name)
+        # for coder in coders:
+        # attr.add_coder(coder)
+
+        self.add_field_by_attr(self, attr)
+
+    def add_field_by_attr(self, attr):
+        setattr(self, attr.name, attr)
+
+
+def Coder(object):
+    pass
+
+
+def Attr(object):
+    def __init__(self, name):
+        self.name = name
+        self._set_assigner(name)
+        self._set_coders(name)
+
+    def _set_assigner(self, name):
+        import coders
+        config = {'type': name}
+        self._assigner = coders.build(config)
+
+    # def add_coder(self, coder):
+    # pass
+
+    def _set_coders(self, name):
+        import bbox_coders
+
+        config = {'type': name}
+        self._coders = bbox_coders.build(config)
+
+
+def Loss(dict):
+    def update_loss_units(self, name, preds=None, weights=None, targets=None):
+        self[name].update({
+            'pred': preds,
+            'weight': weights,
+            'target': targets
+        })
+
+
+def Assigner(object):
+    pass

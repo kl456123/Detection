@@ -10,6 +10,8 @@ class CornersLoss(nn.Module):
         super().__init__()
         self.cls_loss = nn.CrossEntropyLoss(reduction='none', ignore_index=-1)
         self.reg_loss = nn.MSELoss(reduction='none')
+        # L1 loss for depth
+        self.smooth_l1 = nn.L1Loss(reduction='none')
         self.split_loss = split_loss
         self.use_filter = use_filter
         self.training_depth = training_depth
@@ -57,15 +59,15 @@ class CornersLoss(nn.Module):
             corners_gt[:, :, :, :2].contiguous().view(N, M, -1))
 
         if self.training_depth:
-            depth_loss = self.reg_loss(
+            depth_loss = self.smooth_l1(
                 corners_preds[:, :, :, 2:].contiguous().view(N, M, -1),
                 corners_gt[:, :, :, 2:].contiguous().view(N, M, -1))
             reg_loss = torch.cat(
                 [corners_loss.view(N, M, 8, -1),
                  depth_loss.view(N, M, 8, -1)],
                 dim=-1)
-            center_depth_loss = self.reg_loss(center_depth_preds,
-                                              center_depth_gt)
+            center_depth_loss = self.smooth_l1(center_depth_preds,
+                                               center_depth_gt)
         else:
             reg_loss = corners_loss.view(N, M, 8, -1)
 

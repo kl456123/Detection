@@ -56,7 +56,9 @@ class Corner2DNearestCoder(object):
         N, M = encoded_corners_2d_all.shape[:2]
         # encoded_corners_2d = torch.cat([encoded_corners_2d_all[:,:,::4],encoded_corners_2d_all[:,:,1::4]],dim=-1)
         # visibility = torch.cat([encoded_corners_2d_all[:,:,2::4],encoded_corners_2d_all[:,:,3::4]],dim=-1)
-        center_depth = encoded_corners_2d_all[:, :, -1]
+        # center_depth = encoded_corners_2d_all[:, :, -1]
+        # decode center depth
+        # center_depth = - torch.log(center_depth)
         encoded_corners_2d_all = encoded_corners_2d_all[:, :, :-1]
         encoded_corners_2d_all = encoded_corners_2d_all.view(N, M, 8, 5)
         encoded_corners_2d = encoded_corners_2d_all[:, :, :, :
@@ -95,7 +97,9 @@ class Corner2DNearestCoder(object):
         # import ipdb
         # ipdb.set_trace()
         assert p2.shape[0] == 1, 'only one image in a batch'
-        depth = center_depth.unsqueeze(-1) + corners_2d[:, :, :, 2]
+        # depth = center_depth.unsqueeze(-1) + corners_2d[:, :, :, 2]
+        # depth = - torch.log(corners_2d[:, :, :, 2])
+        depth = corners_2d[:, :, :, 2]
         depth = depth.view(-1)
         corners_3d = geometry_utils.torch_points_2d_to_points_3d(
             corners_2d[:, :, :, :2].view(-1, 2), depth, p2[0]).view(
@@ -209,8 +213,9 @@ class Corner2DNearestCoder(object):
 
         # encode depth first
         center_depth = label_boxes_3d[:, 2]
-        encoded_depth = corners_3d[..., -1] - center_depth.unsqueeze(-1)
-        # encoded_depth = corners_3d[...,-1]
+        # encoded_depth = corners_3d[..., -1] - center_depth.unsqueeze(-1)
+        # encoded_depth = 1/F.sigmoid(corners_3d[..., -1]) - 1
+        encoded_depth = corners_3d[...,-1]
         corners_2d = torch.cat(
             [corners_2d, encoded_depth.unsqueeze(-1)], dim=-1)
         front_plane = corners_2d[:, Order.planes()[0]]
@@ -240,6 +245,9 @@ class Corner2DNearestCoder(object):
 
         encoded_all = encoded_all.view(encoded_all.shape[0], -1)
         # append center_depth
+
+        # encode center detph
+        # center_depth = 1/F.sigmoid(center_depth) - 1
         return torch.cat([encoded_all, center_depth.unsqueeze(-1)], dim=-1)
 
     @staticmethod

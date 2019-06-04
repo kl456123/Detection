@@ -351,9 +351,9 @@ rm results/images/*
     
     
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 32000 \
-    --load_dir /data/object/liangxiong/fpn_corners_2d_depth \
-    --net fpn_corners_2d \
+    --checkpoint 156000 \
+    --load_dir /data/object/liangxiong/test \
+    --net fpn_corners_stable \
     --thresh 0.5 \
     --dataset mono_3d_kitti
     # --img_dir /data/dm202_3w/left_img \

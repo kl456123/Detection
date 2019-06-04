@@ -275,7 +275,7 @@ class Corners2DTargetAssigner(RegTargetAssigner):
         # 2d coder config
         coder = bbox_coders.build({
             'type':
-            constants.KEY_CORNERS_2D_NEAREST_DEPTH
+            constants.KEY_CORNERS_2D_STABLE
         })
         reg_targets_batch = coder.encode_batch(label_boxes_3d, label_boxes_2d,
                                                p2, image_info)

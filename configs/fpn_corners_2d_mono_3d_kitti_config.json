@@ -1,7 +1,7 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 16,
+            "batch_size": 32,
             "num_workers": 48,
             "shuffle": true
         },
@@ -199,7 +199,7 @@
                 "type": "faster_rcnn"
             }
         ],
-        "training_depth": true,
+        "training_depth": false,
         "truncated": false,
         "use_filter": true,
         "use_focal_loss": false
