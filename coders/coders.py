@@ -273,10 +273,7 @@ class Corners2DTargetAssigner(RegTargetAssigner):
 
         # prepare coder
         # 2d coder config
-        coder = bbox_coders.build({
-            'type':
-            constants.KEY_CORNERS_2D_STABLE
-        })
+        coder = bbox_coders.build({'type': constants.KEY_CORNERS_2D_NEAREST_DEPTH})
         reg_targets_batch = coder.encode_batch(label_boxes_3d, label_boxes_2d,
                                                p2, image_info)
 
@@ -326,6 +323,30 @@ class FPNMono3DNon2DProjTargetAssigner(RegTargetAssigner):
 
         reg_targets_batch = cls.generate_assigned_label(
             cls, kwargs[constants.KEY_MATCH], reg_targets_batch)
+        reg_targets_batch[match == -1] = 0
+        # no need grad_fn
+        return reg_targets_batch
+
+
+@TARGET_ASSIGNERS.register(constants.KEY_KEYPOINTS)
+class KeyPointTargetAssigner(RegTargetAssigner):
+    @classmethod
+    def assign_target(cls, **kwargs):
+        match = kwargs[constants.KEY_MATCH]
+        keypoints = kwargs[constants.KEY_KEYPOINTS]
+
+        # prepare coder
+        # 2d coder config
+        coder = bbox_coders.build({'type': constants.KEY_KEYPOINTS})
+        proposals = kwargs[constants.KEY_PROPOSALS]
+
+        # assign label keypoints first
+        assigned_keypoints = cls.generate_assigned_label(
+            cls, kwargs[constants.KEY_MATCH], keypoints)
+        reg_targets_batch = coder.encode_batch(proposals, assigned_keypoints)
+
+        # reg_targets_batch = cls.generate_assigned_label(
+            # cls, kwargs[constants.KEY_MATCH], reg_targets_batch)
         reg_targets_batch[match == -1] = 0
         # no need grad_fn
         return reg_targets_batch

@@ -293,6 +293,62 @@ def test_corners_3d_coder():
     visualizer.render_image_corners_2d(image_path, decoded_corners_2d)
 
 
+def test_keypoint_coder():
+    coder_config = {'type': constants.KEY_KEYPOINTS}
+    bbox_coder = bbox_coders.build(coder_config)
+
+    dataset = build_dataset()
+    sample = dataset[0]
+    label_boxes_3d = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_3D])
+    label_boxes_2d = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_2D])
+    p2 = torch.from_numpy(sample[constants.KEY_STEREO_CALIB_P2])
+    proposals = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_2D])
+    num_instances = torch.from_numpy(sample[constants.KEY_NUM_INSTANCES])
+    keypoints = sample[constants.KEY_KEYPOINTS]
+
+    # ry = compute_ray_angle(label_boxes_3d[:, :3])
+    # label_boxes_3d[:, -1] += ry
+
+    label_boxes_3d = torch.stack(1 * [label_boxes_3d[:num_instances]], dim=0)
+    label_boxes_2d = torch.stack(1 * [label_boxes_2d[:num_instances]], dim=0)
+    proposals = torch.stack(1 * [proposals[:num_instances]], dim=0)
+    keypoints = torch.stack(1 * [keypoints[:num_instances]], dim=0)
+    p2 = torch.stack(1 * [p2], dim=0)
+
+    # import ipdb
+    # ipdb.set_trace()
+    # label_boxes_3d[:, :, -1] = 0
+
+    encoded_corners_3d = bbox_coder.encode_batch(proposals, keypoints)
+    #  torch.cat([encoded_corners_2d, ])
+    num_boxes = encoded_corners_3d.shape[1]
+    batch_size = encoded_corners_3d.shape[0]
+
+    decoded_corners_3d = bbox_coder.decode_batch(
+        encoded_corners_3d.view(batch_size, num_boxes, -1), proposals, p2)
+
+    decoded_corners_2d = geometry_utils.torch_points_3d_to_points_2d(
+        decoded_corners_3d[0].view(-1, 3), p2[0]).view(-1, 8, 2)
+    decoded_corners_2d = decoded_corners_2d.cpu().detach().numpy()
+
+    image_path = sample[constants.KEY_IMAGE_PATH]
+    image_dir = '/data/object/training/image_2'
+    result_dir = './results/data'
+    save_dir = 'results/images'
+    calib_dir = '/data/object/training/calib'
+    label_dir = None
+    calib_file = None
+    visualizer = ImageVisualizer(
+        image_dir,
+        result_dir,
+        label_dir=label_dir,
+        calib_dir=calib_dir,
+        calib_file=calib_file,
+        online=False,
+        save_dir=save_dir)
+    visualizer.render_image_corners_2d(image_path, decoded_corners_2d)
+
+
 if __name__ == '__main__':
     # test_bbox_coders()
     # test_orient_coder()

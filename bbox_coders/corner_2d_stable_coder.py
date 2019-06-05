@@ -73,12 +73,13 @@ class Corner2DStableCoder(object):
         return occluded_filter
 
     @staticmethod
-    def encode(label_boxes_3d, label_boxes_2d, p2, image_info):
+    def encode(label_boxes_3d, proposals, p2, image_info):
         """
         return projections of 3d bbox corners in the inner of 2d bbox.
             Note that set the visibility at the same time according to the 2d bbox
             and image boundary.(truncated or occluded)
         """
+        label_boxes_2d = proposals
         # shape(N, 8, 2)
         corners_3d = geometry_utils.torch_boxes_3d_to_corners_3d(
             label_boxes_3d)

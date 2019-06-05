@@ -16,6 +16,7 @@ from models.losses import common_loss
 from models.losses.focal_loss import FocalLoss
 from models.losses.orientation_loss import OrientationLoss
 from models.losses.corners_loss import CornersLoss
+from models.losses.keypoint_loss import KeyPointLoss
 
 from utils.registry import DETECTORS
 from utils import box_ops
@@ -48,20 +49,20 @@ def conv3x3_bn_relu(in_planes, out_planes, stride=1):
 
 
 class KeyPointPredictor(nn.Module):
-    def __init__(self, inplane, output=4):
+    def __init__(self, inplane, output=8 * 3):
         super().__init__()
 
         layers = []
-        for i in range(8):
-            layers.append(conv3x3_bn_relu(inplane, 512))
-            inplane = 512
+        for i in range(6):
+            layers.append(conv3x3_bn_relu(inplane, 256))
+            inplane = 256
 
         # upsample
-        deconv = nn.ConvTranspose2d(512, 512, 2, 2, 0)
-        bn = nn.BatchNorm2d(512)
+        deconv = nn.ConvTranspose2d(256, 256, 2, 2, 0)
+        bn = nn.BatchNorm2d(256)
         relu = nn.ReLU()
         upsample = nn.Upsample(scale_factor=2, mode='bilinear')
-        conv = nn.Conv2d(512, output, 1, 1, 0)
+        conv = nn.Conv2d(256, output, 1, 1, 0)
         layers.extend([deconv, bn, relu, upsample, conv])
         self.layers = nn.Sequential(*layers)
 
@@ -128,10 +129,10 @@ class MaskRCNNModel(FPNFasterRCNN):
                     constants.KEY_LABEL_BOXES_2D]
                 gt_dict[constants.KEY_CLASSES] = None
                 gt_dict[constants.KEY_BOXES_2D] = None
-                gt_dict[constants.KEY_CORNERS_2D] = None
+                gt_dict[constants.KEY_KEYPOINTS] = None
                 # gt_dict[constants.KEY_CORNERS_VISIBILITY] = None
                 # gt_dict[constants.KEY_ORIENTS_V2] = None
-                gt_dict[constants.KEY_DIMS] = None
+                # gt_dict[constants.KEY_DIMS] = None
 
                 # auxiliary_dict(used for encoding)
                 auxiliary_dict = {}
@@ -146,10 +147,12 @@ class MaskRCNNModel(FPNFasterRCNN):
                 auxiliary_dict[constants.KEY_NUM_INSTANCES] = feed_dict[
                     constants.KEY_NUM_INSTANCES]
                 auxiliary_dict[constants.KEY_PROPOSALS] = proposals
-                auxiliary_dict[constants.KEY_MEAN_DIMS] = feed_dict[
-                    constants.KEY_MEAN_DIMS]
+                # auxiliary_dict[constants.KEY_MEAN_DIMS] = feed_dict[
+                # constants.KEY_MEAN_DIMS]
                 auxiliary_dict[constants.KEY_IMAGE_INFO] = feed_dict[
                     constants.KEY_IMAGE_INFO]
+                auxiliary_dict[constants.KEY_KEYPOINTS] = feed_dict[
+                    constants.KEY_KEYPOINTS]
 
                 proposals_dict, loss_units, stats = self.target_generators[
                     i].generate_targets(proposals_dict, gt_dict,
@@ -164,8 +167,8 @@ class MaskRCNNModel(FPNFasterRCNN):
             mask_pooled_feat = self.maskrcnn_pyramid_rcnn_pooling(
                 rcnn_feat_maps, rois.view(-1, 5), im_info[0][:2])
             keypoint_heatmap = self.keypoint_predictor(mask_pooled_feat)
-            keypoint_scores = keypoint_heatmap.view(-1, 56 * 56)
-            keypoint_probs = F.softmax(keypoint_scores, dim=-1)
+            # keypoint_scores = keypoint_heatmap.view(-1, 56 * 56)
+            # keypoint_probs = F.softmax(keypoint_scores, dim=-1)
 
             # shape(N,C,1,1)
             pooled_feat_for_corners = self.feature_extractor.second_stage_feature(
@@ -176,8 +179,6 @@ class MaskRCNNModel(FPNFasterRCNN):
 
             rcnn_bbox_preds = self.rcnn_bbox_preds[i](pooled_feat_for_corners)
             rcnn_cls_scores = self.rcnn_cls_preds[i](pooled_feat_for_corners)
-            rcnn_corners_preds = self.rcnn_corners_preds[i](
-                pooled_feat_for_corners)
 
             rcnn_dim_preds = self.rcnn_dim_preds[i](pooled_feat_for_corners)
 
@@ -188,42 +189,36 @@ class MaskRCNNModel(FPNFasterRCNN):
                                                    self.n_classes)
             rcnn_cls_probs = rcnn_cls_probs.view(batch_size, -1,
                                                  self.n_classes)
+            keypoint_heatmap = keypoint_heatmap.view(batch_size, -1,
+                                                     56 * 56 * 8 * 3)
 
             rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
-            rcnn_corners_preds = rcnn_corners_preds.view(
-                batch_size, rcnn_bbox_preds.shape[1], -1)
 
             rcnn_dim_preds = rcnn_dim_preds.view(batch_size, -1, 3)
 
             # decode for next stage
 
             keypoint_coder = bbox_coders.build({
-                'type':
-                constants.KEY_CORNERS_2D_HM
+                'type': constants.KEY_KEYPOINTS
             })
-            keypoints = keypoint_coder.decode_keypoint_heatmap(
-                proposals, keypoint_probs.view(-1, 4, 56 * 56))
+            keypoints = keypoint_coder.decode_batch(proposals,
+                                                    keypoint_heatmap)
 
             coder = bbox_coders.build(self.target_generators[i]
                                       .target_generator_config['coder_config'])
             proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
-            coder = bbox_coders.build({'type': constants.KEY_DIMS})
-            rcnn_dim_preds = coder.decode_batch(
-                rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
-                rcnn_cls_probs).detach()
-            coder = bbox_coders.build({
-                'type':
-                constants.KEY_CORNERS_2D_NEAREST_DEPTH
-            })
+            # coder = bbox_coders.build({'type': constants.KEY_DIMS})
+            # rcnn_dim_preds = coder.decode_batch(
+            # rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
+            # rcnn_cls_probs).detach()
 
             # shape(N,C,1,1)
 
             if self.training:
                 loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
                 loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
-                loss_units[constants.KEY_DIMS]['pred'] = rcnn_dim_preds
-                loss_units[constants.KEY_CORNERS_2D][
-                    'pred'] = rcnn_corners_preds
+                # loss_units[constants.KEY_DIMS]['pred'] = rcnn_dim_preds
+                loss_units[constants.KEY_KEYPOINTS]['pred'] = keypoint_heatmap
                 # loss_units[constants.KEY_CORNERS_VISIBILITY][
                 # 'pred'] = rcnn_visibility_preds
                 # import ipdb
@@ -231,8 +226,8 @@ class MaskRCNNModel(FPNFasterRCNN):
                 multi_stage_loss_units.append([
                     loss_units[constants.KEY_CLASSES],
                     loss_units[constants.KEY_BOXES_2D],
-                    loss_units[constants.KEY_CORNERS_2D],
-                    loss_units[constants.KEY_DIMS]
+                    loss_units[constants.KEY_KEYPOINTS],
+                    # loss_units[constants.KEY_DIMS]
                 ])
                 multi_stage_stats.append(stats)
 
@@ -243,21 +238,20 @@ class MaskRCNNModel(FPNFasterRCNN):
             prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
 
             image_info = feed_dict[constants.KEY_IMAGE_INFO]
-            proposals[:, :, ::2] = proposals[:, :, ::
-                                             2] / image_info[:, 3].unsqueeze(
-                                                 -1).unsqueeze(-1)
-            proposals[:, :, 1::2] = proposals[:, :, 1::
-                                              2] / image_info[:, 2].unsqueeze(
-                                                  -1).unsqueeze(-1)
-            rcnn_corners_preds = coder.decode_batch(
-                rcnn_corners_preds.detach(), proposals,
-                feed_dict[constants.KEY_STEREO_CALIB_P2_ORIG])
-            prediction_dict[constants.KEY_CORNERS_2D] = rcnn_corners_preds
+            image_info = image_info.unsqueeze(1).unsqueeze(1)
+            # import ipdb
+            # ipdb.set_trace()
+            proposals[:, :, ::2] = proposals[:, :, ::2] / image_info[..., 3]
+            proposals[:, :, 1::2] = proposals[:, :, 1::2] / image_info[..., 2]
             prediction_dict[constants.KEY_BOXES_2D] = proposals
-            prediction_dict[constants.KEY_DIMS] = rcnn_dim_preds
-            prediction_dict[constants.KEY_CORNERS_2D] = rcnn_corners_preds
+            # prediction_dict[constants.KEY_DIMS] = rcnn_dim_preds
 
-            prediction_dict[constants.KEY_KEYPOINTS] = keypoints
+            keypoints[..., 0] = keypoints[..., 0] / image_info[
+                ..., 3].unsqueeze(-1)
+            keypoints[..., 1] = keypoints[..., 1] / image_info[
+                ..., 2].unsqueeze(-1)
+            # shape(N,M,8,2)
+            prediction_dict[constants.KEY_CORNERS_2D] = keypoints
 
         if self.training:
             loss_dict = self.loss(prediction_dict, feed_dict)
@@ -301,11 +295,11 @@ class MaskRCNNModel(FPNFasterRCNN):
     def init_modules(self):
         super().init_modules()
         # combine corners and its visibility
-        self.rcnn_corners_preds = nn.ModuleList(
-            [nn.Linear(1024, 4 * 8) for _ in range(self.num_stages)])
+        # self.rcnn_corners_preds = nn.ModuleList(
+        # [nn.Linear(1024, 4 * 8) for _ in range(self.num_stages)])
 
         # self.third_stage_feature = copy.deepcopy(
-            # self.feature_extractor.second_stage_feature)
+        # self.feature_extractor.second_stage_feature)
         # self.rcnn_center_depth_preds = nn.ModuleList(
         # [nn.Linear(1024, 1) for _ in range(self.num_stages)])
         # self.rcnn_visibility_preds = nn.ModuleList(
@@ -321,8 +315,9 @@ class MaskRCNNModel(FPNFasterRCNN):
 
         self.maskrcnn_pooling = AdaptiveROIAlign((14, 14), 2)
         self.keypoint_predictor = KeyPointPredictor(256)
-        self.rcnn_kp_loss = functools.partial(
-            F.cross_entropy, reduce=False, ignore_index=-1)
+        # self.rcnn_kp_loss = functools.partial(
+        # F.cross_entropy, reduce=False, ignore_index=-1)
+        self.rcnn_kp_loss = KeyPointLoss()
 
     def loss(self, prediction_dict, feed_dict):
         """
@@ -332,16 +327,16 @@ class MaskRCNNModel(FPNFasterRCNN):
         loss_dict = super().loss(prediction_dict, feed_dict)
         targets = prediction_dict[constants.KEY_TARGETS]
         rcnn_corners_loss = 0
-        rcnn_dim_loss = 0
+        # rcnn_dim_loss = 0
 
         for stage_ind in range(self.num_stages):
             orient_target = targets[stage_ind][2]
             rcnn_corners_loss = rcnn_corners_loss + common_loss.calc_loss(
                 self.rcnn_kp_loss, orient_target, True)
 
-            dim_target = targets[stage_ind][3]
-            rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
-                self.rcnn_bbox_loss, dim_target, True)
+            # dim_target = targets[stage_ind][3]
+            # rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
+            # self.rcnn_bbox_loss, dim_target, True)
 
         loss_dict.update({
             'rcnn_corners_loss': rcnn_corners_loss,

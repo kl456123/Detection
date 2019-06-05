@@ -16,25 +16,9 @@ from data import transforms
 class BDDDataset(DetDataset):
     def __init__(self, dataset_config, transform=None, training=True):
         super().__init__(training)
-        # import ipdb
-        # ipdb.set_trace()
         self.transforms = transform
         self.classes = ['bg'] + dataset_config['classes']
 
-        # if dataset_config.get('img_dir') is not None:
-        # self.logger.info('use image dir: {}'.format(
-        # dataset_config['img_dir']))
-        # self.image_dir = dataset_config['img_dir']
-        # # directory
-        # self.sample_names = self.load_sample_names_from_image_dir(
-        # self.image_dir)
-        # self.imgs = self.sample_names
-        # elif dataset_config.get('demo_file') is not None:
-        # # file
-        # self.logger.info('use demo file: {}'.format(
-        # dataset_config['demo_file']))
-        # self.sample_names = [dataset_config['demo_file']]
-        # self.imgs = self.sample_names
         if dataset_config.get('dataset_file') is None:
             self.inference(
                 image_dir=dataset_config.get('img_dir'),

@@ -7,7 +7,7 @@ from utils.registry import DATASETS
 
 include = [
     'coco', 'kitti', 'mono_3d_kitti', 'bdd', 'bdd_better', 'nuscenes',
-    'inference_dataset'
+    'inference_dataset', 'keypoint_kitti'
 ]
 
 import_dir(os.path.dirname(__file__), include=include)

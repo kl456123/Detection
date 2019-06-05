@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # SWITCH that you only should care about
-DATASET_TYPE = 'mono_3d_kitti'
+# DATASET_TYPE = 'mono_3d_kitti'
+DATASET_TYPE = 'keypoint_kitti'
 # DATASET_TYPE = 'nuscenes'
 # DATASET_TYPE = 'bdd'
 # NET_TYPE = 'fpn_corners_2d'
@@ -9,7 +10,7 @@ NET_TYPE = 'fpn_corners_stable'
 # NET_TYPE = 'prnet'
 # NET_TYPE = 'prnet_mono_3d'
 # DATASET_TYPE = 'kitti'
-JOBS = True
+JOBS = False
 DEBUG = not JOBS
 
 # enable debug mode
@@ -90,7 +91,9 @@ rpn_ndin = 256
 rpn_min_size = 16
 training_depth = False
 
-if DATASET_TYPE in ['kitti', 'mono_3d_kitti', 'nuscenes_kitti']:
+if DATASET_TYPE in [
+        'kitti', 'mono_3d_kitti', 'nuscenes_kitti', 'keypoint_kitti'
+]:
     # KITTI CONFIG
     root_path = '/data'
     classes = ['Car']
