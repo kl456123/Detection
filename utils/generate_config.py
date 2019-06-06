@@ -5,10 +5,11 @@ DATASET_TYPE = 'keypoint_kitti'
 # DATASET_TYPE = 'nuscenes'
 # DATASET_TYPE = 'bdd'
 # NET_TYPE = 'fpn_corners_2d'
-NET_TYPE = 'fpn_corners_stable'
+# NET_TYPE = 'fpn_corners_stable'
 # NET_TYPE = 'fpn_mono_3d_better'
 # NET_TYPE = 'prnet'
 # NET_TYPE = 'prnet_mono_3d'
+NET_TYPE = 'maskrcnn'
 # DATASET_TYPE = 'kitti'
 JOBS = False
 DEBUG = not JOBS
@@ -70,7 +71,7 @@ if NET_TYPE in ['fpn', 'prnet']:
     test_type = 'test_2d'
 elif NET_TYPE in [
         'fpn_corners_2d', 'fpn_corners_3d', 'prnet_mono_3d',
-        'fpn_corners_stable'
+        'fpn_corners_stable', 'maskrcnn'
 ]:
     test_type = 'test_corners_3d'
 elif NET_TYPE in ['fpn_mono_3d']:

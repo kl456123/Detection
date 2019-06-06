@@ -351,11 +351,11 @@ rm results/images/*
     
     
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 600000 \
+    --checkpoint 1000 \
     --load_dir /data/object/liangxiong/test \
-    --net fpn_corners_2d \
+    --net fpn_corners_stable \
     --thresh 0.5 \
-    --dataset nuscenes
+    --dataset mono_3d_kitti
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
     # --img_dir /data/pengwu/yizhuang/seq/keyframes/ \

@@ -287,11 +287,6 @@ class MaskRCNNModel(FPNFasterRCNN):
         # self.freeze_bn(self)
         # self.unfreeze_bn(self.third_stage_feature)
 
-    def init_param(self, model_config):
-        super().init_param(model_config)
-        # all points used for training
-        self.use_filter = model_config['use_filter']
-
     def init_modules(self):
         super().init_modules()
         # combine corners and its visibility

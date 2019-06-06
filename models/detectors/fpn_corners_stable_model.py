@@ -140,18 +140,6 @@ class FPNCornersModel(FPNFasterRCNN):
 
             rcnn_dim_preds = rcnn_dim_preds.view(batch_size, -1, 3)
 
-            # decode for next stage
-            coder = bbox_coders.build(self.target_generators[i]
-                                      .target_generator_config['coder_config'])
-            proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
-            coder = bbox_coders.build({'type': constants.KEY_DIMS})
-            rcnn_dim_preds = coder.decode_batch(
-                rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
-                rcnn_cls_probs).detach()
-            coder = bbox_coders.build({
-                'type': constants.KEY_CORNERS_2D_STABLE
-            })
-
             # shape(N,C,1,1)
 
             if self.training:
@@ -168,6 +156,28 @@ class FPNCornersModel(FPNFasterRCNN):
                 ])
                 multi_stage_stats.append(stats)
 
+            # decode for next stage
+            # corners decode
+            corners_coder = bbox_coders.build({
+                'type':
+                constants.KEY_CORNERS_2D_STABLE
+            })
+            rcnn_corners_preds = corners_coder.decode_batch(
+                rcnn_corners_preds.detach(), proposals)
+
+            # bbox decode
+            boxes_coder = bbox_coders.build(
+                self.target_generators[i]
+                .target_generator_config['coder_config'])
+            proposals = boxes_coder.decode_batch(rcnn_bbox_preds,
+                                                 proposals).detach()
+
+            # dims decode
+            dims_coder = bbox_coders.build({'type': constants.KEY_DIMS})
+            rcnn_dim_preds = dims_coder.decode_batch(
+                rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
+                rcnn_cls_probs).detach()
+
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
             prediction_dict[constants.KEY_STATS] = multi_stage_stats
@@ -175,14 +185,15 @@ class FPNCornersModel(FPNFasterRCNN):
             prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
 
             image_info = feed_dict[constants.KEY_IMAGE_INFO]
-            proposals[:, :, ::2] = proposals[:, :, ::
-                                             2] / image_info[:, 3].unsqueeze(
-                                                 -1).unsqueeze(-1)
-            proposals[:, :, 1::2] = proposals[:, :, 1::
-                                              2] / image_info[:, 2].unsqueeze(
-                                                  -1).unsqueeze(-1)
-            rcnn_corners_preds = coder.decode_batch(
-                rcnn_corners_preds.detach(), proposals)
+            image_info = image_info.unsqueeze(1).unsqueeze(1)
+            proposals[:, :, ::2] = proposals[:, :, ::2] / image_info[..., 3]
+            proposals[:, :, 1::2] = proposals[:, :, 1::2] / image_info[..., 2]
+
+            rcnn_corners_preds[..., 0] = rcnn_corners_preds[
+                ..., 0] / image_info[..., 3].unsqueeze(-1)
+            rcnn_corners_preds[..., 1] = rcnn_corners_preds[
+                ..., 1] / image_info[..., 2].unsqueeze(-1)
+
             prediction_dict[constants.KEY_CORNERS_2D] = rcnn_corners_preds
             prediction_dict[constants.KEY_BOXES_2D] = proposals
             prediction_dict[constants.KEY_DIMS] = rcnn_dim_preds
@@ -233,7 +244,7 @@ class FPNCornersModel(FPNFasterRCNN):
         self.rcnn_corners_preds = nn.ModuleList(
             [nn.Linear(1024, 8 * (4 * 2 + 4)) for _ in range(self.num_stages)])
         # self.rcnn_scores_preds = nn.ModuleList(
-            # [nn.Linear(1024, 1 * 8 * 4) for _ in range(self.num_stages)])
+        # [nn.Linear(1024, 1 * 8 * 4) for _ in range(self.num_stages)])
 
         # not class agnostic for dims
         if not self.class_agnostic_3d:
