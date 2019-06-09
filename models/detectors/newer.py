@@ -28,7 +28,8 @@ from assigner import InstanceInfo
 @DETECTORS.register('faster_rcnn')
 class FasterRCNN(Model):
     def forward(self, feed_dict):
-        prediction_dict = {}
+        # prediction_dict = {}
+        output_dict = {}
 
         # base model
         base_feat = self.feature_extractor.first_stage_feature(
@@ -37,22 +38,23 @@ class FasterRCNN(Model):
         self.add_feat('base_feat', base_feat)
 
         # rpn model
-        prediction_dict.update(self.rpn_model.forward(feed_dict))
-        proposals = prediction_dict['proposals']
+        output_dict.update(self.rpn_model.forward(feed_dict))
+        proposals = output_dict['proposals']
         multi_stage_loss_units = []
         for i in range(self.num_stages):
 
             if self.training:
-                output_dict = prediction_dict
                 auxiliary_dict = {}
                 auxiliary_dict[constants.KEY_PROPOSALS] = proposals
 
                 # proposals_dict, loss_units = self.instance.target_generators[
-                    # i].generate_targets(output_dict, feed_dict, auxiliary_dict)
-                losses = self.instance.generate_losses(output_dict, feed_dict, auxiliary_dict)
+                # i].generate_targets(output_dict, feed_dict, auxiliary_dict)
+                losses = self.instance_info.generate_losses(
+                    output_dict, feed_dict, auxiliary_dict)
 
                 losses, subsampled_mask = self.sampler.subsample_losses(losses)
-                proposals, _ = self.sampler.subsample_outputs(proposals, subsampled_mask)
+                proposals, _ = self.sampler.subsample_outputs(
+                    proposals, subsampled_mask)
 
                 # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
                 # proposals = proposals_dict[constants.KEY_PRIMARY]
@@ -64,47 +66,37 @@ class FasterRCNN(Model):
                 pooled_feat)
             pooled_feat = pooled_feat.mean(3).mean(2)
 
-            rcnn_bbox_preds = self.rcnn_bbox_preds[i](pooled_feat)
-            rcnn_cls_scores = self.rcnn_cls_preds[i](pooled_feat)
+            # rcnn_bbox_preds = self.rcnn_bbox_preds[i](pooled_feat)
+            # rcnn_cls_scores = self.rcnn_cls_preds[i](pooled_feat)
 
-            rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
-            batch_size = rois.shape[0]
-            rcnn_cls_scores = rcnn_cls_scores.view(batch_size, -1,
-                                                   self.n_classes)
-            rcnn_cls_probs = rcnn_cls_probs.view(batch_size, -1,
-                                                 self.n_classes)
-            rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
-            output_dict.update({constants.KEY_})
+            for attr_name in self.branches:
+                attr_preds = self.branches[attr_name][i](pooled_feat)
+                output_dict[attr_name] = attr_preds
+
+            # rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
+            # batch_size = rois.shape[0]
+            # rcnn_cls_scores = rcnn_cls_scores.view(batch_size, -1,
+            # self.n_classes)
+            # rcnn_cls_probs = rcnn_cls_probs.view(batch_size, -1,
+            # self.n_classes)
+            # rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
+            # output_dict.update({constants.KEY_})
 
             if self.training:
-                losses[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
-                loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
-                # import ipdb
-                # ipdb.set_trace()
-                multi_stage_loss_units.extend([
-                    loss_units[constants.KEY_CLASSES],
-                    loss_units[constants.KEY_BOXES_2D]
-                ])
+                losses.update_from_output(output_dict)
+
+            # decode
+            instance = self.instance_info.generate_instance(output_dict)
 
             # decode for next stage
-            coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
-            proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
+            # coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+            # proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
 
         if self.training:
-            prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
+            # prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
+            return losses, stats
         else:
-            prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
-
-            image_info = feed_dict[constants.KEY_IMAGE_INFO]
-            proposals[:, :, ::2] = proposals[:, :, ::
-                                             2] / image_info[:, 3].unsqueeze(
-                                                 -1).unsqueeze(-1)
-            proposals[:, :, 1::2] = proposals[:, :, 1::
-                                              2] / image_info[:, 2].unsqueeze(
-                                                  -1).unsqueeze(-1)
-            prediction_dict[constants.KEY_BOXES_2D] = proposals
-
-        return prediction_dict
+            return instance
 
     def squeeze_bbox_preds(self, rcnn_bbox_preds, rcnn_cls_targets, out_c=4):
         """
@@ -137,22 +129,29 @@ class FasterRCNN(Model):
             self.rcnn_pooling = ROIAlign(
                 (self.pooling_size, self.pooling_size), 1.0 / 16.0, 2)
         # note that roi extractor is shared but heads not
-        self.rcnn_cls_preds = nn.ModuleList(
-            [nn.Linear(2048, self.n_classes) for _ in range(self.num_stages)])
+        # self.rcnn_cls_preds = nn.ModuleList(
+            # [nn.Linear(2048, self.n_classes) for _ in range(self.num_stages)])
         in_channels = 2048
-        if self.class_agnostic:
-            rcnn_bbox_pred = nn.Linear(in_channels, 4)
-        else:
-            rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
-        self.rcnn_bbox_preds = nn.ModuleList(
-            [rcnn_bbox_pred for _ in range(self.num_stages)])
+
+        # construct  many branches for each attr of instance
+        branches = {}
+        for attr in self.instance_info:
+            col = self.instance_info[attr]
+            branches[attr] = nn.ModuleList([nn.Linear(in_channels, self.n_classes) for _ in range(self.num_stages)])
+        self.branches = nn.ModuleDict(branches)
+
+        # if self.class_agnostic:
+            # rcnn_bbox_pred = nn.Linear(in_channels, 4)
+        # else:
+            # rcnn_bbox_pred = nn.Linear(in_channels, 4 * self.n_classes)
+        # self.rcnn_bbox_preds = nn.ModuleList(
+            # [rcnn_bbox_pred for _ in range(self.num_stages)])
 
         # loss module
         # if self.use_focal_loss:
         # self.rcnn_cls_loss = FocalLoss(self.n_classes)
         # else:
         self.rcnn_cls_loss = nn.CrossEntropyLoss(reduce=False)
-
         self.rcnn_bbox_loss = nn.modules.SmoothL1Loss(reduce=False)
 
     def init_param(self, model_config):

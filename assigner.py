@@ -94,6 +94,12 @@ class LossDict(dict):
         else:
             self[name] = dict()
 
+    def update_from_output(self, output_dict):
+        for key in self:
+            if key in output_dict:
+                preds = output_dict[key]
+                self.update_loss_unit(key, {'preds': preds})
+
     def get_preds(self, attr_name):
         return self[attr_name][self.KEY_PREDS]
 
@@ -106,7 +112,8 @@ class LossDict(dict):
 
 class Instance(object):
     def __init__(self, config):
-        self._instance_assigner = InstanceAssigner(config)
+        self._instance_assigner = InstanceAssigner(config[config['assigner']])
+        self._instance_losses = Loss(config['loss'])
         # self.losses = {}
 
     def generate_losses(self, output_dict, feed_dict, auxiliary_dict):
@@ -138,3 +145,10 @@ class Instance(object):
                 })
 
         return losses
+
+    def calc_loss(self, losses):
+        loss_dict = dict()
+        for attr_name in self._instance_losses:
+            instance_loss_fn = self._instance_losses[attr_name]
+            loss_dict[attr_name] = instance_loss_fn[losses[attr_name]]
+        return loss_dict
