@@ -16,7 +16,9 @@ class KeyPointKittiDataset(KITTIDataset):
         p2 = torch.from_numpy(sample[constants.KEY_STEREO_CALIB_P2])
         image_info = torch.from_numpy(sample[constants.KEY_IMAGE_INFO])
         keypoint = self._generate_keypoint(label_boxes_3d, p2, image_info)
+        # keypoint_heatmap = self._generate_keypoint_heatmap(keypoint)
         sample[constants.KEY_KEYPOINTS] = keypoint
+        # sample[constants.KEY_KEYPOINTS_HEATMAP] = keypoint_heatmap
         return sample
 
     def get_testing_sample(self, index):

@@ -49,7 +49,7 @@ def conv3x3_bn_relu(in_planes, out_planes, stride=1):
 
 
 class KeyPointPredictor(nn.Module):
-    def __init__(self, inplane, output=8 * 3):
+    def __init__(self, inplane, output=8):
         super().__init__()
 
         layers = []
@@ -61,9 +61,9 @@ class KeyPointPredictor(nn.Module):
         deconv = nn.ConvTranspose2d(256, 256, 2, 2, 0)
         bn = nn.BatchNorm2d(256)
         relu = nn.ReLU()
-        upsample = nn.Upsample(scale_factor=2, mode='bilinear')
+        # upsample = nn.Upsample(scale_factor=2, mode='bilinear')
         conv = nn.Conv2d(256, output, 1, 1, 0)
-        layers.extend([deconv, bn, relu, upsample, conv])
+        layers.extend([deconv, bn, relu, conv])
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -189,8 +189,6 @@ class MaskRCNNModel(FPNFasterRCNN):
                                                    self.n_classes)
             rcnn_cls_probs = rcnn_cls_probs.view(batch_size, -1,
                                                  self.n_classes)
-            keypoint_heatmap = keypoint_heatmap.view(batch_size, -1,
-                                                     56 * 56 * 8 * 3)
 
             rcnn_bbox_preds = rcnn_bbox_preds.view(batch_size, -1, 4)
 
@@ -199,8 +197,12 @@ class MaskRCNNModel(FPNFasterRCNN):
             # decode for next stage
 
             keypoint_coder = bbox_coders.build({
-                'type': constants.KEY_KEYPOINTS
+                'type':
+                constants.KEY_KEYPOINTS_HEATMAP
             })
+            resolution = keypoint_coder.resolution
+            keypoint_heatmap = keypoint_heatmap.view(
+                batch_size, -1, resolution * resolution * 8)
             keypoints = keypoint_coder.decode_batch(proposals,
                                                     keypoint_heatmap)
 

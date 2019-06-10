@@ -337,7 +337,7 @@ class KeyPointTargetAssigner(RegTargetAssigner):
 
         # prepare coder
         # 2d coder config
-        coder = bbox_coders.build({'type': constants.KEY_KEYPOINTS})
+        coder = bbox_coders.build({'type': constants.KEY_KEYPOINTS_HEATMAP})
         proposals = kwargs[constants.KEY_PROPOSALS]
 
         # assign label keypoints first
