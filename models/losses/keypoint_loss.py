@@ -10,6 +10,7 @@ class KeyPointLoss(nn.Module):
 
         self.cls_loss = nn.CrossEntropyLoss(reduction='none')
         self.reg_loss = nn.MSELoss(reduction='none')
+        # self.reg_loss = nn.L1Loss(reduction='none')
         self.reg_refine = reg_refine
 
     def forward(self, preds, targets):

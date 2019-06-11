@@ -57,12 +57,12 @@ def drawGaussian(pt, image_shape, sigma=2):
     img = torch.zeros(N, M, K, h, w).type_as(pt).float()
 
     g_index = torch.nonzero(g > 0).unsqueeze(-1)
-    g_cond = (g_index[:, 0] >= g_x_start) & (g_index[:, 1] >= g_y_start) & (
-        g_index[:, 0] < g_x_end) & (g_index[:, 1] < g_y_end)
+    g_cond = (g_index[:, 1] >= g_x_start) & (g_index[:, 0] >= g_y_start) & (
+        g_index[:, 1] < g_x_end) & (g_index[:, 0] < g_y_end)
     img_index = torch.nonzero(img.view(-1, h, w)[0] > -1).unsqueeze(-1)
-    img_cond = (img_index[:, 0] >= img_x_start) & (
-        img_index[:, 1] >= img_y_start) & (img_index[:, 0] < img_x_end) & (
-            img_index[:, 1] < img_y_end)
+    img_cond = (img_index[:, 1] >= img_x_start) & (
+        img_index[:, 0] >= img_y_start) & (img_index[:, 1] < img_x_end) & (
+            img_index[:, 0] < img_y_end)
     img_cond = img_cond.transpose(0, 1).view(N, M, K, h, w)
     g_cond = g_cond.transpose(0, 1).view(N, M, K, g.shape[0], g.shape[1])
     # import ipdb

@@ -323,7 +323,6 @@ def test_keypoint_coder():
     keypoints = torch.stack(1 * [keypoints[:num_instances]], dim=0)
     p2 = torch.stack(1 * [p2], dim=0)
 
-
     # label_boxes_3d[:, :, -1] = 0
 
     encoded_corners_3d = bbox_coder.encode_batch(proposals, keypoints)
@@ -366,6 +365,74 @@ def test_keypoint_coder():
         image_path, corners_2d=decoded_corners_2d[0])
 
 
+def test_keypoint_hm_coder():
+    coder_config = {'type': constants.KEY_KEYPOINTS_HEATMAP}
+    bbox_coder = bbox_coders.build(coder_config)
+
+    dataset = build_dataset(dataset_type='keypoint_kitti')
+    sample = dataset[0]
+    label_boxes_3d = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_3D])
+    label_boxes_2d = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_2D])
+    p2 = torch.from_numpy(sample[constants.KEY_STEREO_CALIB_P2])
+    proposals = torch.from_numpy(sample[constants.KEY_LABEL_BOXES_2D])
+    num_instances = torch.from_numpy(sample[constants.KEY_NUM_INSTANCES])
+    keypoints = sample[constants.KEY_KEYPOINTS]
+
+    # ry = compute_ray_angle(label_boxes_3d[:, :3])
+    # label_boxes_3d[:, -1] += ry
+
+    label_boxes_3d = torch.stack(1 * [label_boxes_3d[:num_instances]], dim=0)
+    label_boxes_2d = torch.stack(1 * [label_boxes_2d[:num_instances]], dim=0)
+    proposals = torch.stack(1 * [proposals[:num_instances]], dim=0)
+    keypoints = torch.stack(1 * [keypoints[:num_instances]], dim=0)
+    p2 = torch.stack(1 * [p2], dim=0)
+
+    # label_boxes_3d[:, :, -1] = 0
+
+    # import ipdb
+    # ipdb.set_trace()
+    encoded_corners_3d = bbox_coder.encode_batch(proposals, keypoints)
+    #  torch.cat([encoded_corners_2d, ])
+    num_boxes = encoded_corners_3d.shape[1]
+    batch_size = encoded_corners_3d.shape[0]
+
+    keypoint_heatmap = encoded_corners_3d.view(batch_size, num_boxes, 8,
+                                               -1)[..., :-1]
+    # resolution = bbox_coder.resolution
+    # keypoint_heatmap = torch.zeros((batch_size * num_boxes * 8, resolution * resolution))
+    # row = torch.arange(keypoint.numel()).type_as(keypoint)
+    # keypoint_heatmap[row, keypoint.view(-1)] = 1
+    # keypoint_heatmap = torch.stack([keypoint_heatmap] * 3, dim=1)
+
+    # reshape before decode
+    keypoint_heatmap = keypoint_heatmap.contiguous().view(
+        batch_size, num_boxes, -1)
+
+    decoded_corners_2d = bbox_coder.decode_batch(proposals, keypoint_heatmap)
+
+    decoded_corners_2d = decoded_corners_2d.cpu().detach().numpy()
+
+    image_path = sample[constants.KEY_IMAGE_PATH]
+    image_dir = '/data/object/training/image_2'
+    result_dir = './results/data'
+    save_dir = 'results/images'
+    calib_dir = '/data/object/training/calib'
+    label_dir = None
+    calib_file = None
+    visualizer = ImageVisualizer(
+        image_dir,
+        result_dir,
+        label_dir=label_dir,
+        calib_dir=calib_dir,
+        calib_file=calib_file,
+        online=False,
+        save_dir=save_dir)
+    # import ipdb
+    # ipdb.set_trace()
+    visualizer.render_image_corners_2d(
+        image_path, corners_2d=decoded_corners_2d[0])
+
+
 if __name__ == '__main__':
     # test_bbox_coders()
     # test_orient_coder()
@@ -374,4 +441,5 @@ if __name__ == '__main__':
     #  test_rear_side_coder()
     # test_corners_coder()
     # test_corners_3d_coder()
-    test_keypoint_coder()
+    # test_keypoint_coder()
+    test_keypoint_hm_coder()

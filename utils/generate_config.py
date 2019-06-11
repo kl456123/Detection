@@ -58,7 +58,7 @@ training_nms = 0.7
 testing_thresh = 0.5
 class_agnostic = True
 use_focal_loss = False
-post_nms_topN = 2000
+post_nms_topN = 1000
 pre_nms_topN = 12000
 
 training_post_nms_topN = 2000

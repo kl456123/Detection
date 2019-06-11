@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+"""
+    Densely to predict offsets between gt keypoints and anchor points
+"""
 
 import torch
 
@@ -12,10 +15,8 @@ from core.utils import format_checker
 # heatmap_size = [56, 56]
 
 
-@BBOX_CODERS.register(constants.KEY_KEYPOINTS_HEATMAP)
+@BBOX_CODERS.register(constants.KEY_KEYPOINTS_DENSE_REG)
 class KeyPointCoder(object):
-    # def __init__(self, coder_config):
-    # self.heatmap_size = coder_config['size']
     resolution = 28
 
     @staticmethod
@@ -28,8 +29,6 @@ class KeyPointCoder(object):
         Returns:
             keypoint_heatmap: shape(N, M, K, 2) (pos, vis)
         """
-        # import ipdb
-        # ipdb.set_trace()
         N, M = keypoints_pairs.shape[:2]
         keypoints_pairs = keypoints_pairs.view(N, M, -1, 3)
         num_joints = keypoints_pairs.shape[-2]
@@ -37,6 +36,8 @@ class KeyPointCoder(object):
         # ipdb.set_trace()
         keypoints = keypoints_pairs[..., :2]
         visibility = keypoints_pairs[..., 2]
+
+        anchor_points = None
 
         # spatial_dims = heatmap_size[0] * heatmap_size[1]
         # heatmaps_shape = (N, M, num_joints, spatial_dims)
@@ -145,3 +146,4 @@ class KeyPointCoder(object):
         # keypoints + offsets
         # keypoints = keypoints + offsets * wh
         return keypoints
+
