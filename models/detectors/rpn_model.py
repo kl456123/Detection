@@ -93,7 +93,8 @@ class RPNModel(Model):
         # shape(N,H*W*num_anchors,4)
         rpn_bbox_preds = rpn_bbox_preds.view(batch_size, -1, 4)
 
-        coders = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+        coders = bbox_coders.build(
+            self.target_generators.target_generator_config['coder_config'])
         proposals = coders.decode_batch(rpn_bbox_preds, anchors)
 
         # filer and clip
@@ -184,9 +185,9 @@ class RPNModel(Model):
         #  rois_batch = torch.cat((batch_idx.unsqueeze(-1), proposals_batch),
         #  dim=2)
 
-        if self.training:
-            label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
-            proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
+        # if self.training:
+            # label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
+            # proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
 
         rpn_cls_scores = rpn_cls_scores.view(batch_size, 2, -1,
                                              rpn_cls_scores.shape[2],

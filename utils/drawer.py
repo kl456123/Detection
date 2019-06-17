@@ -669,20 +669,20 @@ if __name__ == '__main__':
     # result_dir = None
 
     # NUSCENES
-    image_dir = '/data/nuscenes/samples/CAM_FRONT'
-    result_dir = './results/data'
-    save_dir = 'results/images'
-    calib_dir = '/data/nuscenes/calibs'
-    calib_file = None
-    label_dir = None
+    #  image_dir = '/data/nuscenes/samples/CAM_FRONT'
+    #  result_dir = './results/data'
+    #  save_dir = 'results/images'
+    #  calib_dir = '/data/nuscenes/calibs'
+    #  calib_file = None
+    #  label_dir = None
 
     # KITTI
-    # image_dir = '/data/object/training/image_2'
-    # result_dir = './results/data'
-    # save_dir = 'results/images'
-    # calib_dir = '/data/object/training/calib'
-    # label_dir = None
-    # calib_file = None
+    image_dir = '/data/object/training/image_2'
+    result_dir = './results/data'
+    save_dir = 'results/images'
+    calib_dir = '/data/object/training/calib'
+    label_dir = None
+    calib_file = None
 
     # MONOGRNET
     # image_dir = '/data/object/training/image_2'

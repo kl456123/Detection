@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # SWITCH that you only should care about
 # DATASET_TYPE = 'mono_3d_kitti'
-DATASET_TYPE = 'keypoint_kitti'
+#  DATASET_TYPE = 'keypoint_kitti'
 # DATASET_TYPE = 'nuscenes'
 # DATASET_TYPE = 'bdd'
 # NET_TYPE = 'fpn_corners_2d'
@@ -9,8 +9,12 @@ DATASET_TYPE = 'keypoint_kitti'
 # NET_TYPE = 'fpn_mono_3d_better'
 # NET_TYPE = 'prnet'
 # NET_TYPE = 'prnet_mono_3d'
-NET_TYPE = 'maskrcnn'
-# DATASET_TYPE = 'kitti'
+# NET_TYPE = 'fpn_corners_3d'
+# NET_TYPE = 'fpn_grnet'
+NET_TYPE = 'faster_rcnn'
+# NET_TYPE = 'fpn'
+#  NET_TYPE = 'maskrcnn'
+DATASET_TYPE = 'kitti'
 JOBS = False
 DEBUG = not JOBS
 
@@ -66,12 +70,19 @@ training_pre_nms_topN = 12000
 testing_post_nms_topN = 300
 testing_pre_nms_topN = 6000
 
+use_pyramid = True
+rpn_type = 'fpn_rpn'
+feature_extractor_type = 'fpn'
+if NET_TYPE in ['faster_rcnn']:
+    use_pyramid = False
+    rpn_type = 'rpn'
+    feature_extractor_type = 'resnet'
 # test type(use which one as a tester)
-if NET_TYPE in ['fpn', 'prnet']:
+if NET_TYPE in ['fpn', 'prnet', 'faster_rcnn']:
     test_type = 'test_2d'
 elif NET_TYPE in [
         'fpn_corners_2d', 'fpn_corners_3d', 'prnet_mono_3d',
-        'fpn_corners_stable', 'maskrcnn'
+        'fpn_corners_stable', 'maskrcnn', 'fpn_grnet'
 ]:
     test_type = 'test_corners_3d'
 elif NET_TYPE in ['fpn_mono_3d']:
@@ -81,7 +92,6 @@ else:
 
 pooling_size = 7
 pooling_mode = 'align'
-feature_extractor_type = 'fpn'
 net_arch = 'res18_pruned'
 rpn_fg_fraction = 0.5
 if net_arch == 'res18_pruned':
@@ -106,7 +116,7 @@ if DATASET_TYPE in [
         ]
     dataset_type = DATASET_TYPE
     image_size = [384, 1280]
-    freeze_2d = True
+    freeze_2d = False
     use_proj_2d = False
 elif DATASET_TYPE == 'bdd':
     # BDD CONFIG
@@ -272,7 +282,7 @@ def generate_eval_config():
 
 def generate_anchor_config():
     anchor_config = {
-        "use_pyramid": True,
+        "use_pyramid": use_pyramid,
         "type": "default",
         "anchor_offset": [0, 0],
         "anchor_stride": [16, 16],
@@ -313,6 +323,11 @@ def generate_feature_extractor_config():
             "dla_input": [128, 256, 512],
             "output_scale": [8, 16, 32, 64, 128]
         }
+    if feature_extractor_type == 'resnet':
+        feature_extractor_config.update({
+            'img_channels': 3,
+            'use_cascade': False
+        })
     return feature_extractor_config
 
 
@@ -385,7 +400,7 @@ def generate_model_config():
     }]
 
     rpn_config = {
-        "type": "fpn_rpn",
+        "type": rpn_type,
         "use_focal_loss": False,
         "anchor_generator_config": anchor_config,
         "target_generator_config": rpn_target_generator_config,

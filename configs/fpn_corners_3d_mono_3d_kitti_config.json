@@ -1,8 +1,8 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 32,
-            "num_workers": 48,
+            "batch_size": 16,
+            "num_workers": 32,
             "shuffle": true
         },
         "dataset_config": {
@@ -11,7 +11,8 @@
             ],
             "dataset_file": "data/train.txt",
             "root_path": "/data",
-            "type": "mono_3d_kitti"
+            "type": "mono_3d_kitti",
+            "use_proj_2d": false
         },
         "transform_config": [
             {
@@ -59,6 +60,7 @@
         "eval_out_rois": "./results/rois",
         "nms": 0.3,
         "rng_seed": 3,
+        "test_type": "test_corners_3d",
         "thresh": 0.5
     },
     "eval_data_config": {
@@ -73,7 +75,8 @@
             ],
             "dataset_file": "data/val.txt",
             "root_path": "/data",
-            "type": "mono_3d_kitti"
+            "type": "mono_3d_kitti",
+            "use_proj_2d": false
         },
         "transform_config": [
             {
@@ -150,7 +153,7 @@
             "din": 256,
             "min_size": 16,
             "nms_thresh": 0.7,
-            "post_nms_topN": 2000,
+            "post_nms_topN": 1000,
             "pre_nms_topN": 12000,
             "target_generator_config": {
                 "analyzer_config": {},
@@ -163,8 +166,8 @@
                     "type": "bipartitle"
                 },
                 "sampler_config": {
-                    "fg_fraction": 0.25,
-                    "num_samples": 1024,
+                    "fg_fraction": 0.5,
+                    "num_samples": 256,
                     "type": "balanced"
                 },
                 "similarity_calc_config": {
@@ -187,7 +190,7 @@
                     "type": "argmax"
                 },
                 "sampler_config": {
-                    "fg_fraction": 0.5,
+                    "fg_fraction": 0.25,
                     "num_samples": 512,
                     "type": "balanced"
                 },
@@ -206,11 +209,11 @@
         "disp_interval": 800,
         "num_iters": 600000,
         "optimizer_config": {
-            "base_lr": 0.02,
+            "base_lr": 0.001,
             "bias_lr_factor": 1,
             "eps": 1e-08,
             "momentum": 0.9,
-            "type": "sgd",
+            "type": "adam",
             "weight_decay": 0,
             "weight_decay_bias": 0
         },
@@ -224,7 +227,7 @@
                 120000,
                 240000
             ],
-            "type": "multi_step",
+            "type": "step",
             "warmup_factor": 0.333,
             "warmup_iters": 2000,
             "warmup_method": "linear"

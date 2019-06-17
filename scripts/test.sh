@@ -350,12 +350,12 @@ rm results/images/*
     # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
     
     
-CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 1000 \
-    --load_dir /data/object/liangxiong/test \
-    --net maskrcnn \
-    --thresh 0.5 \
-    --dataset keypoint_kitti
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 1000 \
+    # --load_dir /data/object/liangxiong/test \
+    # --net faster_rcnn \
+    # --thresh 0.5 \
+    # --dataset kitti
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
     # --img_dir /data/pengwu/yizhuang/seq/keyframes/ \

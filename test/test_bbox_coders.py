@@ -440,6 +440,6 @@ if __name__ == '__main__':
     # test_orientv2_coder()
     #  test_rear_side_coder()
     # test_corners_coder()
-    # test_corners_3d_coder()
+    test_corners_3d_coder()
     # test_keypoint_coder()
-    test_keypoint_hm_coder()
+    # test_keypoint_hm_coder()

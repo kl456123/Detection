@@ -277,8 +277,8 @@ class Corners2DTargetAssigner(RegTargetAssigner):
         label_boxes_3d = cls.generate_assigned_label(
             cls, kwargs[constants.KEY_MATCH], label_boxes_3d)
         coder = bbox_coders.build({'type': constants.KEY_CORNERS_2D_STABLE})
-        reg_targets_batch = coder.encode_batch(label_boxes_3d, proposals,
-                                               p2, image_info)
+        reg_targets_batch = coder.encode_batch(label_boxes_3d, proposals, p2,
+                                               image_info)
         reg_targets_batch[match == -1] = 0
         # no need grad_fn
         return reg_targets_batch
@@ -289,18 +289,39 @@ class Corners3DTargetAssigner(RegTargetAssigner):
     @classmethod
     def assign_target(cls, **kwargs):
         match = kwargs[constants.KEY_MATCH]
-        label_boxes_2d = kwargs[constants.KEY_BOXES_2D]
+        # label_boxes_2d = kwargs[constants.KEY_BOXES_2D]
+        proposals = kwargs[constants.KEY_PROPOSALS]
         label_boxes_3d = kwargs[constants.KEY_BOXES_3D]
         p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
 
         # prepare coder
         # 2d coder config
         coder = bbox_coders.build({'type': constants.KEY_CORNERS_3D})
-        reg_targets_batch = coder.encode_batch(label_boxes_3d, label_boxes_2d,
-                                               p2)
+        label_boxes_3d = cls.generate_assigned_label(
+            cls, kwargs[constants.KEY_MATCH], label_boxes_3d)
+        reg_targets_batch = coder.encode_batch(label_boxes_3d, proposals, p2)
 
+        reg_targets_batch[match == -1] = 0
+        # no need grad_fn
+        return reg_targets_batch
+
+
+@TARGET_ASSIGNERS.register(constants.KEY_CORNERS_3D_GRNET)
+class Corners3DGRNetTargetAssigner(RegTargetAssigner):
+    @classmethod
+    def assign_target(cls, **kwargs):
+        match = kwargs[constants.KEY_MATCH]
+        label_boxes_3d = kwargs[constants.KEY_BOXES_3D]
+        p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
+
+        # prepare coder
+        # 2d coder config
+        coder = bbox_coders.build({'type': constants.KEY_CORNERS_3D_GRNET})
+
+        reg_targets_batch = coder.encode_batch(label_boxes_3d, p2)
         reg_targets_batch = cls.generate_assigned_label(
             cls, kwargs[constants.KEY_MATCH], reg_targets_batch)
+
         reg_targets_batch[match == -1] = 0
         # no need grad_fn
         return reg_targets_batch
@@ -346,7 +367,7 @@ class KeyPointTargetAssigner(RegTargetAssigner):
         reg_targets_batch = coder.encode_batch(proposals, assigned_keypoints)
 
         # reg_targets_batch = cls.generate_assigned_label(
-            # cls, kwargs[constants.KEY_MATCH], reg_targets_batch)
+        # cls, kwargs[constants.KEY_MATCH], reg_targets_batch)
         reg_targets_batch[match == -1] = 0
         # no need grad_fn
         return reg_targets_batch

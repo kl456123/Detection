@@ -1,17 +1,18 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 1,
-            "num_workers": 1,
+            "batch_size": 32,
+            "num_workers": 48,
             "shuffle": true
         },
         "dataset_config": {
             "classes": [
                 "Car"
             ],
-            "dataset_file": "data/demo.txt",
+            "dataset_file": "data/train.txt",
             "root_path": "/data",
-            "type": "kitti"
+            "type": "mono_3d_kitti",
+            "use_proj_2d": false
         },
         "transform_config": [
             {
@@ -59,7 +60,7 @@
         "eval_out_rois": "./results/rois",
         "nms": 0.3,
         "rng_seed": 3,
-        "test_type": "test_2d",
+        "test_type": "test_corners_3d",
         "thresh": 0.5
     },
     "eval_data_config": {
@@ -72,9 +73,10 @@
             "classes": [
                 "Car"
             ],
-            "dataset_file": "data/demo.txt",
+            "dataset_file": "data/val.txt",
             "root_path": "/data",
-            "type": "kitti"
+            "type": "mono_3d_kitti",
+            "use_proj_2d": false
         },
         "transform_config": [
             {
@@ -108,7 +110,6 @@
             "Car"
         ],
         "feature_extractor_config": {
-            "img_channels": 3,
             "ndin": [
                 64,
                 128,
@@ -119,8 +120,7 @@
             "pooling_size": 7,
             "pretrained": true,
             "pretrained_path": "./data/pretrained_model",
-            "type": "resnet",
-            "use_cascade": false
+            "type": "fpn"
         },
         "pooling_mode": "align",
         "pooling_size": 7,
@@ -147,7 +147,7 @@
                     16
                 ],
                 "type": "default",
-                "use_pyramid": false
+                "use_pyramid": true
             },
             "din": 256,
             "min_size": 16,
@@ -174,7 +174,7 @@
                 },
                 "type": "faster_rcnn"
             },
-            "type": "rpn",
+            "type": "fpn_rpn",
             "use_focal_loss": false
         },
         "target_generator_config": [
@@ -203,16 +203,16 @@
         "use_focal_loss": false
     },
     "train_config": {
-        "checkpoint_interval": 100,
+        "checkpoint_interval": 4000,
         "clip_gradient": 10,
-        "disp_interval": 100,
-        "num_iters": 1000,
+        "disp_interval": 800,
+        "num_iters": 600000,
         "optimizer_config": {
-            "base_lr": 0.001,
+            "base_lr": 0.02,
             "bias_lr_factor": 1,
             "eps": 1e-08,
             "momentum": 0.9,
-            "type": "adam",
+            "type": "sgd",
             "weight_decay": 0,
             "weight_decay_bias": 0
         },
@@ -226,7 +226,7 @@
                 120000,
                 240000
             ],
-            "type": "step",
+            "type": "multi_step",
             "warmup_factor": 0.333,
             "warmup_iters": 2000,
             "warmup_method": "linear"

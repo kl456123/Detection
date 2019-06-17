@@ -30,7 +30,7 @@ from core.utils.analyzer import Analyzer
 from utils import geometry_utils
 
 
-@DETECTORS.register('fpn_grnet')
+@DETECTORS.register('fpn_corners_3d')
 class FPNGRNetModel(FPNFasterRCNN):
     def forward(self, feed_dict):
         im_info = feed_dict[constants.KEY_IMAGE_INFO]
@@ -56,11 +56,11 @@ class FPNGRNetModel(FPNFasterRCNN):
 
                 # gt_dict
                 gt_dict = {}
-                gt_dict[constants.KEY_PRIMARY] = feed_dict[
-                    constants.KEY_LABEL_BOXES_2D]
+                gt_dict[constants.KEY_PRIMARY] = feed_dict[constants.
+                                                           KEY_LABEL_BOXES_2D]
                 gt_dict[constants.KEY_CLASSES] = None
                 gt_dict[constants.KEY_BOXES_2D] = None
-                gt_dict[constants.KEY_CORNERS_3D_GRNET] = None
+                gt_dict[constants.KEY_CORNERS_3D] = None
                 # gt_dict[constants.KEY_CORNERS_VISIBILITY] = None
                 # gt_dict[constants.KEY_ORIENTS_V2] = None
                 gt_dict[constants.KEY_DIMS] = None
@@ -151,7 +151,7 @@ class FPNGRNetModel(FPNFasterRCNN):
                 loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
                 loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
                 loss_units[constants.KEY_DIMS]['pred'] = rcnn_dim_preds
-                loss_units[constants.KEY_CORNERS_3D_GRNET][
+                loss_units[constants.KEY_CORNERS_3D][
                     'pred'] = rcnn_corners_preds
                 # loss_units[constants.KEY_CORNERS_VISIBILITY][
                 # 'pred'] = rcnn_visibility_preds
@@ -160,34 +160,28 @@ class FPNGRNetModel(FPNFasterRCNN):
                 multi_stage_loss_units.append([
                     loss_units[constants.KEY_CLASSES],
                     loss_units[constants.KEY_BOXES_2D],
-                    loss_units[constants.KEY_CORNERS_3D_GRNET],
+                    loss_units[constants.KEY_CORNERS_3D],
                     loss_units[constants.KEY_DIMS]
                 ])
                 multi_stage_stats.append(stats)
-            else:
 
-                # decode for next stage
-                coder = bbox_coders.build({
-                    'type':
-                    constants.KEY_CORNERS_3D_GRNET
-                })
-                rcnn_corners_preds = coder.decode_batch(
-                    rcnn_corners_preds.detach(), proposals,
-                    feed_dict[constants.KEY_STEREO_CALIB_P2])
-                coder = bbox_coders.build(
-                    self.target_generators[i]
-                    .target_generator_config['coder_config'])
-                proposals = coder.decode_batch(rcnn_bbox_preds,
-                                               proposals).detach()
-                coder = bbox_coders.build({'type': constants.KEY_DIMS})
-                rcnn_dim_preds = coder.decode_batch(
-                    rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
-                    rcnn_cls_probs).detach()
+            # decode for next stage
+            coder = bbox_coders.build({'type': constants.KEY_CORNERS_3D})
+            rcnn_corners_preds = coder.decode_batch(
+                rcnn_corners_preds.detach(), proposals,
+                feed_dict[constants.KEY_STEREO_CALIB_P2])
+            coder = bbox_coders.build(self.target_generators[i]
+                                      .target_generator_config['coder_config'])
+            proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
+            coder = bbox_coders.build({'type': constants.KEY_DIMS})
+            rcnn_dim_preds = coder.decode_batch(
+                rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
+                rcnn_cls_probs).detach()
+
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
             prediction_dict[constants.KEY_STATS] = multi_stage_stats
-            prediction_dict[constants.KEY_PROPOSALS] = proposals
         else:
             prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
 
@@ -239,17 +233,17 @@ class FPNGRNetModel(FPNFasterRCNN):
     def init_weights(self):
         super().init_weights()
 
-        # if self.freeze_2d:
-        # self.freeze_modules()
-        # for param in self.rcnn_corners_preds.parameters():
-        # param.requires_grad = True
+        if self.freeze_2d:
+            self.freeze_modules()
+            for param in self.rcnn_corners_preds.parameters():
+                param.requires_grad = True
 
-        # self.freeze_bn(self)
+            self.freeze_bn(self)
 
     def init_param(self, model_config):
         super().init_param(model_config)
         self.class_agnostic_3d = False
-        # self.freeze_2d = model_config.get('freeze_2d', False)
+        self.freeze_2d = model_config.get('freeze_2d', False)
 
     def init_modules(self):
         super().init_modules()
@@ -270,7 +264,7 @@ class FPNGRNetModel(FPNFasterRCNN):
                 [nn.Linear(1024, 3) for _ in range(self.num_stages)])
 
         #  self.rcnn_orient_loss = OrientationLoss()
-        self.l1_loss = nn.L1Loss(reduction='none')
+        self.rcnn_corners_loss = Corners3DLoss()
 
     def loss(self, prediction_dict, feed_dict):
         """
@@ -279,73 +273,20 @@ class FPNGRNetModel(FPNFasterRCNN):
         """
         loss_dict = super().loss(prediction_dict, feed_dict)
         targets = prediction_dict[constants.KEY_TARGETS]
-        # rcnn_corners_loss = 0
-        # rcnn_dim_loss = 0
-
-        proposals = prediction_dict[constants.KEY_PROPOSALS]
-        p2 = feed_dict[constants.KEY_STEREO_CALIB_P2]
-        local_corners_loss = 0
-        global_corners_loss = 0
-        depth_loss = 0
-        location_loss = 0
-        # import ipdb
-        # ipdb.set_trace()
+        rcnn_corners_loss = 0
+        rcnn_dim_loss = 0
 
         for stage_ind in range(self.num_stages):
-            corners_target = targets[stage_ind][2]
-            # rcnn_corners_loss = rcnn_corners_loss + common_loss.calc_loss(
-            # self.rcnn_corners_loss, orient_target, True)
-            preds = corners_target['pred']
-            targets = corners_target['target']
-            weights = corners_target['weight']
+            orient_target = targets[stage_ind][2]
+            rcnn_corners_loss = rcnn_corners_loss + common_loss.calc_loss(
+                self.rcnn_corners_loss, orient_target, True)
 
-            local_corners_gt = targets[:, :, :24]
-            location_gt = targets[:, :, 24:]
-            N, M = local_corners_gt.shape[:2]
-
-            global_corners_gt = (local_corners_gt.view(N, M, 8, 3) +
-                                 location_gt.view(N, M, 1, 3)).view(N, M, -1)
-            depth_gt = location_gt[:, :, 2:]
-
-            local_corners_preds = preds[:, :, :24]
-            center_2d_deltas_preds = preds[:, :, 24:26]
-            depth_preds = preds[:, :, 26:]
-            # decode center_2d
-            proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals)
-            center_2d_preds = (
-                center_2d_deltas_preds * proposals_xywh[:, :, 2:] +
-                proposals_xywh[:, :, :2])
-
-            location_preds = []
-            for batch_ind in range(N):
-                location_preds.append(
-                    geometry_utils.torch_points_2d_to_points_3d(
-                        center_2d_preds[batch_ind], depth_preds[batch_ind],
-                        p2[batch_ind]))
-            location_preds = torch.stack(location_preds, dim=0)
-            global_corners_preds = (location_preds.view(N, M, 1, 3) +
-                                    local_corners_preds.view(N, M, 8, 3)).view(
-                                        N, M, -1)
-            weights = weights.unsqueeze(-1)
-
-            global_corners_loss = self.l1_loss(global_corners_preds,
-                                               global_corners_gt) * weights
-            local_corners_loss = self.l1_loss(local_corners_preds,
-                                              local_corners_gt) * weights
-            depth_loss = self.l1_loss(depth_preds, depth_gt) * weights
-
-            location_loss = self.l1_loss(location_preds, location_gt) * weights
-
-            # dim_target = targets[stage_ind][3]
-            # rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
-            # self.rcnn_bbox_loss, dim_target, True)
+            dim_target = targets[stage_ind][3]
+            rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
+                self.rcnn_bbox_loss, dim_target, True)
 
         loss_dict.update({
-            'global_corners_loss': global_corners_loss * 10,
-            'local_corners_loss': local_corners_loss * 10,
-            'depth_loss': depth_loss * 10,
-            'location_loss': location_loss * 10
-            # 'rcnn_corners_loss': rcnn_corners_loss,
+            'rcnn_corners_loss': rcnn_corners_loss,
             # 'rcnn_dim_loss': rcnn_dim_loss
         })
 

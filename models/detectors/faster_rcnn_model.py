@@ -43,6 +43,7 @@ class FasterRCNN(Model):
         prediction_dict.update(self.rpn_model.forward(feed_dict))
         proposals = prediction_dict['proposals']
         multi_stage_loss_units = []
+        multi_stage_stats = []
         for i in range(self.num_stages):
 
             if self.training:
@@ -66,7 +67,7 @@ class FasterRCNN(Model):
                     constants.KEY_NUM_INSTANCES]
                 auxiliary_dict[constants.KEY_PROPOSALS] = proposals
 
-                proposals_dict, loss_units = self.target_generators[
+                proposals_dict, loss_units, stats = self.target_generators[
                     i].generate_targets(proposals_dict, gt_dict,
                                         auxiliary_dict)
 
@@ -113,13 +114,16 @@ class FasterRCNN(Model):
                     loss_units[constants.KEY_CLASSES],
                     loss_units[constants.KEY_BOXES_2D]
                 ])
+                multi_stage_stats.append(stats)
 
             # decode for next stage
-            coder = bbox_coders.build({'type': constants.KEY_BOXES_2D})
+            coder = bbox_coders.build(self.target_generators[i]
+                                      .target_generator_config['coder_config'])
             proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
+            prediction_dict[constants.KEY_STATS] = multi_stage_stats
         else:
             prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
 
@@ -132,7 +136,11 @@ class FasterRCNN(Model):
                                                   -1).unsqueeze(-1)
             prediction_dict[constants.KEY_BOXES_2D] = proposals
 
-        return prediction_dict
+        if self.training:
+            loss_dict = self.loss(prediction_dict, feed_dict)
+            return prediction_dict, loss_dict
+        else:
+            return prediction_dict
 
     def squeeze_bbox_preds(self, rcnn_bbox_preds, rcnn_cls_targets, out_c=4):
         """
@@ -165,9 +173,9 @@ class FasterRCNN(Model):
             self.rcnn_pooling = ROIAlign((self.pooling_size,
                                           self.pooling_size), 1.0 / 16.0, 2)
         # note that roi extractor is shared but heads not
+        in_channels = 512
         self.rcnn_cls_preds = nn.ModuleList(
-            [nn.Linear(2048, self.n_classes) for _ in range(self.num_stages)])
-        in_channels = 2048
+            [nn.Linear(in_channels, self.n_classes) for _ in range(self.num_stages)])
         if self.class_agnostic:
             rcnn_bbox_pred = nn.Linear(in_channels, 4)
         else:

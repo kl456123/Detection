@@ -44,7 +44,7 @@ class Corner3DCoder(object):
         # loop here
         C = geometry_utils.torch_points_2d_to_points_3d(C_2d, instance_depth,
                                                         p2)
-        R_inv = geometry_utils.torch_ry_to_rotation_matrix(-alpha.view(
+        R_inv = geometry_utils.torch_ry_to_rotation_matrix(alpha.view(
             -1)).type_as(encoded_corners_3d_all)
 
         # may be slow
@@ -71,7 +71,7 @@ class Corner3DCoder(object):
 
         alpha = geometry_utils.compute_ray_angle(
             C_2d.unsqueeze(0), p2.unsqueeze(0)).squeeze(0)
-        R = geometry_utils.torch_ry_to_rotation_matrix(alpha).type_as(
+        R = geometry_utils.torch_ry_to_rotation_matrix(-alpha).type_as(
             global_corners_3d)
 
         # local coords
