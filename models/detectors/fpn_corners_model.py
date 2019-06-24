@@ -303,10 +303,11 @@ class FPNCornersModel(FPNFasterRCNN):
     def init_modules(self):
         super().init_modules()
         # combine corners and its visibility
+        in_channels = 1024
         self.rcnn_corners_preds = nn.ModuleList(
-            [nn.Linear(1024, 4 * 8) for _ in range(self.num_stages)])
+            [nn.Linear(in_channels, 4 * 8) for _ in range(self.num_stages)])
         self.rcnn_depth_preds = nn.ModuleList(
-            [nn.Linear(1024, 1 * 8 + 1) for _ in range(self.num_stages)])
+            [nn.Linear(in_channels, 1 * 8 + 1) for _ in range(self.num_stages)])
 
         self.third_stage_feature = copy.deepcopy(
             self.feature_extractor.second_stage_feature)
@@ -318,12 +319,12 @@ class FPNCornersModel(FPNFasterRCNN):
         # not class agnostic for dims
         if not self.class_agnostic_3d:
             self.rcnn_dim_preds = nn.ModuleList([
-                nn.Linear(1024, self.n_classes * 3)
+                nn.Linear(in_channels, self.n_classes * 3)
                 for _ in range(self.num_stages)
             ])
         else:
             self.rcnn_dim_preds = nn.ModuleList(
-                [nn.Linear(1024, 3) for _ in range(self.num_stages)])
+                [nn.Linear(in_channels, 3) for _ in range(self.num_stages)])
 
         #  self.rcnn_orient_loss = OrientationLoss()
         self.rcnn_corners_loss = CornersLoss(

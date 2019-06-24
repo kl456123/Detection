@@ -31,7 +31,7 @@ from core.utils.analyzer import Analyzer
 from utils import geometry_utils
 
 
-@DETECTORS.register('fpn_grnet')
+@DETECTORS.register('fpn_grnet_reverse')
 class FPNGRNetModel(FPNFasterRCNN):
     def forward(self, feed_dict):
         im_info = feed_dict[constants.KEY_IMAGE_INFO]
@@ -212,6 +212,14 @@ class FPNGRNetModel(FPNFasterRCNN):
             # rcnn_corners_preds[0].view(-1, 3),
             # feed_dict[constants.KEY_STEREO_CALIB_P2_ORIG][0]).view(-1, 8,
             # 2)
+            N, M = rcnn_corners_preds.shape[:2]
+            rcnn_corners_preds = rcnn_corners_preds.view(N, M, 8, 2)
+            rcnn_corners_preds[:, :, :,
+                               0] = rcnn_corners_preds[:, :, :,
+                                                       0] / image_info[:, 3]
+            rcnn_corners_preds[:, :, :,
+                               1] = rcnn_corners_preds[:, :, :,
+                                                       1] / image_info[:, 2]
             prediction_dict[constants.KEY_CORNERS_2D] = rcnn_corners_preds
             prediction_dict[constants.KEY_BOXES_2D] = proposals
             prediction_dict[constants.KEY_DIMS] = rcnn_dim_preds
@@ -256,7 +264,7 @@ class FPNGRNetModel(FPNFasterRCNN):
         super().init_modules()
         # combine corners and its visibility
         self.rcnn_corners_preds = nn.ModuleList(
-            [nn.Linear(1024, 4 + 2 + 1) for _ in range(self.num_stages)])
+            [nn.Linear(1024, 2 * 8 + 2 + 1) for _ in range(self.num_stages)])
         # self.rcnn_visibility_preds = nn.ModuleList(
         # [nn.Linear(1024, 2 * 8) for _ in range(self.num_stages)])
 
@@ -276,25 +284,11 @@ class FPNGRNetModel(FPNFasterRCNN):
         self.smooth_l1_loss = nn.SmoothL1Loss(reduction='none')
 
     def calc_local_corners(self, dims, ry):
-        # import ipdb
-        # ipdb.set_trace()
         h = dims[:, 0]
         w = dims[:, 1]
         l = dims[:, 2]
         zeros = torch.zeros_like(l).type_as(l)
-        # rotation_matrix = geometry_utils.torch_ry_to_rotation_matrix(ry)
-
-        zeros = torch.zeros_like(ry[:, 0])
-        ones = torch.ones_like(ry[:, 0])
-        cos = torch.cos(ry[:, 0])
-        sin = torch.sin(ry[:, 0])
-        # norm = torch.norm(ry, dim=-1)
-        cos = cos
-        sin = sin
-
-        rotation_matrix = torch.stack(
-            [cos, zeros, sin, zeros, ones, zeros, -sin, zeros, cos],
-            dim=-1).reshape(-1, 3, 3)
+        rotation_matrix = geometry_utils.torch_ry_to_rotation_matrix(ry)
 
         x_corners = torch.stack(
             [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2],
@@ -334,45 +328,39 @@ class FPNGRNetModel(FPNFasterRCNN):
         xy = points_2d_homo[:, :2]
         return xy / depth
 
-    def select_corners(self, global_corners_gt):
+    def decode_corners_2d(self, corners_2d_encoded, proposals):
+        N, M = proposals.shape[:2]
+        final_boxes_2d_xywh = geometry_utils.torch_xyxy_to_xywh(proposals)
+        # left_top = final_boxes_2d[:, :, :2].unsqueeze(2)
+        mid = final_boxes_2d_xywh[:, :, :2].unsqueeze(2)
+        wh = final_boxes_2d_xywh[:, :, 2:].unsqueeze(2)
+        corners_2d_encoded = corners_2d_encoded.view(N, M, 8, 2)
+        corners_2d = corners_2d_encoded * wh + mid
+        return corners_2d
 
-        N, M = global_corners_gt.shape[:2]
-        global_corners_gt = global_corners_gt.view(N, M, 8, 3)
+    def calc_dims_preds(self, local_corners_preds):
+        N, M = local_corners_preds.shape[:2]
+        points_3d = local_corners_preds.view(N, M, 8, 3)
+        points = torch.split(points_3d, [1, 1, 1, 1, 1, 1, 1, 1], dim=2)
+        w1 = torch.norm(points[0] - points[1], dim=-1)
+        w2 = torch.norm(points[2] - points[3], dim=-1)
+        w3 = torch.norm(points[4] - points[5], dim=-1)
+        w4 = torch.norm(points[7] - points[6], dim=-1)
+        w = (w1 + w2 + w3 + w4) / 4
 
-        global_corners_gt_dist = torch.norm(global_corners_gt, dim=-1)
-        bottom_corners = global_corners_gt_dist[:, :, [0, 1, 2, 3]]
-        top_corners = global_corners_gt_dist[:, :, [4, 5, 6, 7]]
+        h1 = torch.norm(points[4] - points[0], dim=-1)
+        h2 = torch.norm(points[5] - points[1], dim=-1)
+        h3 = torch.norm(points[6] - points[2], dim=-1)
+        h4 = torch.norm(points[7] - points[3], dim=-1)
+        h = (h1 + h2 + h3 + h4) / 4
 
-        _, bottom_corners_argmin = torch.sort(
-            bottom_corners, dim=-1, descending=False)
-        _, top_corners_argmin = torch.sort(
-            top_corners, dim=-1, descending=False)
-        top_corners_argmin = top_corners_argmin + 4
-        # select top 3
-        bottom_corners_topk = bottom_corners_argmin[:, :, :3]
-        top_corners_topk = top_corners_argmin[:, :, :2]
-        selected_topk = torch.cat(
-            [bottom_corners_topk, top_corners_topk], dim=-1)
-
-        # index to mask
-        selected_filter = torch.zeros_like(global_corners_gt[..., 0]).view(-1)
-
-        num = selected_topk.view(-1, selected_topk.shape[-1]).shape[0]
-        offset = (torch.arange(num).type_as(selected_topk) * 8).view(-1,
-                                                                     1).expand(
-                                                                         -1, 5)
-        # import ipdb
-        # ipdb.set_trace()
-        index = selected_topk + offset.view(N, M, -1)
-        selected_filter[index.view(-1)] = 1
-        return selected_filter.view(N, M, -1)
-
-    def decode_center_depth(self, dims_preds, final_boxes_2d_xywh, p2):
-        f = p2[:, 0, 0]
-        h_2d = final_boxes_2d_xywh[:, :, -1] + 1e-6
-        h_3d = dims_preds[:, :, 0]
-        depth_preds = f.unsqueeze(-1) * h_3d / h_2d
-        return depth_preds.unsqueeze(-1)
+        l1 = torch.norm(points[0] - points[3], dim=-1)
+        l2 = torch.norm(points[1] - points[2], dim=-1)
+        l3 = torch.norm(points[4] - points[7], dim=-1)
+        l4 = torch.norm(points[5] - points[6], dim=-1)
+        l = (l1 + l2 + l3 + l4) / 4
+        dims_preds = torch.cat([h, w, l], dim=-1)
+        return dims_preds
 
     def loss(self, prediction_dict, feed_dict):
         """
@@ -401,6 +389,7 @@ class FPNGRNetModel(FPNFasterRCNN):
             weights = corners_target['weight']
             weights = weights.unsqueeze(-1)
 
+            # gt
             local_corners_gt = targets[:, :, :24]
             location_gt = targets[:, :, 24:27]
             dims_gt = targets[:, :, 27:]
@@ -408,39 +397,41 @@ class FPNGRNetModel(FPNFasterRCNN):
 
             global_corners_gt = (local_corners_gt.view(N, M, 8, 3) +
                                  location_gt.view(N, M, 1, 3)).view(N, M, -1)
+            corners_depth_gt = global_corners_gt.view(N, M, 8, 3)[..., -1]
             center_depth_gt = location_gt[:, :, 2:]
 
-            dims_preds = torch.exp(preds[:, :, :3]) * mean_dims
+            # preds
+            corners_2d_preds = preds[:, :, :16]
+
+            corners_2d_preds = self.decode_corners_2d(corners_2d_preds,
+                                                      proposals)
+
             # import ipdb
             # ipdb.set_trace()
-            dims_loss = self.l1_loss(dims_preds, dims_gt) * weights
-            ry_preds = preds[:, :, 3:4]
-            # ray_angle = -torch.atan2(location_gt[:, :, 2], location_gt[:, :, 0])
-            # ry_preds = ry_preds + ray_angle.unsqueeze(-1)
             local_corners_preds = []
             # calc local corners preds
             for batch_ind in range(N):
                 local_corners_preds.append(
-                    self.calc_local_corners(dims_preds[batch_ind].detach(),
-                                            ry_preds[batch_ind]))
-            local_corners_preds = torch.stack(local_corners_preds, dim=0)
-
-            center_2d_deltas_preds = preds[:, :, 4:6]
-            center_depth_preds = preds[:, :, 6:]
+                    geometry_utils.torch_points_2d_to_points_3d(
+                        corners_2d_preds[batch_ind].view(-1, 2),
+                        corners_depth_gt[batch_ind].view(-1), p2[batch_ind]))
+            local_corners_preds = torch.stack(
+                local_corners_preds, dim=0).view(N, M, -1)
             # import ipdb
             # ipdb.set_trace()
+            dims_preds = self.calc_dims_preds(local_corners_preds)
+
+            dims_loss = self.l1_loss(dims_preds, dims_gt) * weights
+
+            center_2d_deltas_preds = preds[:, :, 16:18]
+            center_depth_preds = preds[:, :, 18:]
             # decode center_2d
             proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals)
-            center_depth_init = self.decode_center_depth(
-                dims_preds, proposals_xywh, p2)
-            center_depth_preds = center_depth_init * center_depth_preds
             center_2d_preds = (
                 center_2d_deltas_preds * proposals_xywh[:, :, 2:] +
                 proposals_xywh[:, :, :2])
             # center_depth_preds_detach = center_depth_preds.detach()
 
-            # import ipdb
-            # ipdb.set_trace()
             # use gt depth to cal loss to make sure the gradient smooth
             location_preds = []
             for batch_ind in range(N):
@@ -470,20 +461,20 @@ class FPNGRNetModel(FPNFasterRCNN):
                                                global_corners_gt) * weights
 
             # proj 2d loss
-            corners_2d_preds = []
+            # corners_2d_preds = []
             corners_2d_gt = []
             for batch_ind in range(N):
-                corners_2d_preds.append(
-                    geometry_utils.torch_points_3d_to_points_2d(
-                        global_corners_preds[batch_ind].view(-1, 3),
-                        p2[batch_ind]))
+                # corners_2d_preds.append(
+                # geometry_utils.torch_points_3d_to_points_2d(
+                # global_corners_preds[batch_ind].view(-1, 3),
+                # p2[batch_ind]))
                 corners_2d_gt.append(
                     geometry_utils.torch_points_3d_to_points_2d(
                         global_corners_gt[batch_ind].view(-1, 3),
                         p2[batch_ind]))
 
-            corners_2d_preds = torch.stack(
-                corners_2d_preds, dim=0).view(N, M, -1)
+            # corners_2d_preds = torch.stack(
+            # corners_2d_preds, dim=0).view(N, M, -1)
             corners_2d_gt = torch.stack(corners_2d_gt, dim=0).view(N, M, -1)
 
             # image filter
@@ -499,18 +490,10 @@ class FPNGRNetModel(FPNFasterRCNN):
 
             # import ipdb
             # ipdb.set_trace()
-            encoded_corners_2d_gt = corners_2d_gt.view(N, M, 8, 2)
-            encoded_corners_2d_preds = corners_2d_preds.view(N, M, 8, 2)
-            corners_2d_loss = self.smooth_l1_loss(
-                encoded_corners_2d_preds.view(N, M, -1),
-                encoded_corners_2d_gt.view(N, M, -1)) * weights
-            corners_2d_loss = (
-                corners_2d_loss.view(N, M, 8, 2) * image_filter.unsqueeze(-1))
-            # import ipdb
-            # ipdb.set_trace()
-            mask = self.select_corners(global_corners_gt)
-            mask = mask.unsqueeze(-1).expand_as(corners_2d_loss).float()
-            corners_2d_loss = corners_2d_loss.view(N, M, -1)
+            corners_2d_loss = self.l1_loss(
+                corners_2d_preds.view(N, M, -1), corners_2d_gt) * weights
+            corners_2d_loss = (corners_2d_loss.view(N, M, 8, 2) *
+                               image_filter.unsqueeze(-1)).view(N, M, -1)
             corners_depth_loss = self.l1_loss(
                 corners_depth_preds, corners_depth_gt) * weights * image_filter
 
@@ -528,23 +511,21 @@ class FPNGRNetModel(FPNFasterRCNN):
             # rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
             # self.rcnn_bbox_loss, dim_target, True)
 
-            global_corners_loss = self.l1_loss(global_corners_preds,
-                                               global_corners_gt) * weights
+            # global_corners_loss = self.l1_loss(global_corners_preds,
+            # global_corners_gt) * weights
             # local_corners_loss = self.l1_loss(local_corners_preds,
             # local_corners_gt) * weights
-            # import ipdb
-            # ipdb.set_trace()
 
         loss_dict.update({
-            # 'global_corners_loss': global_corners_loss,
+            # 'global_corners_loss': global_corners_loss * 10,
             # 'local_corners_loss': local_corners_loss * 10,
             'corners_2d_loss': corners_2d_loss,
-            # 'center_depth_loss': center_depth_loss,
-            # 'location_loss': location_loss,
+            # 'center_depth_loss': center_depth_loss * 10,
+            # 'location_loss': location_loss * 10,
             # 'corners_depth_loss': corners_depth_loss * 10,
             # 'rcnn_corners_loss': rcnn_corners_loss,
             # 'rcnn_dim_loss': rcnn_dim_loss
-            # 'dims_loss': dims_loss
+            'dims_loss': dims_loss * 10
         })
 
         return loss_dict

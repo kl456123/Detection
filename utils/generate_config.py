@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # SWITCH that you only should care about
-# DATASET_TYPE = 'mono_3d_kitti'
+DATASET_TYPE = 'mono_3d_kitti'
 #  DATASET_TYPE = 'keypoint_kitti'
 # DATASET_TYPE = 'nuscenes'
 # DATASET_TYPE = 'bdd'
@@ -10,11 +10,11 @@
 # NET_TYPE = 'prnet'
 # NET_TYPE = 'prnet_mono_3d'
 # NET_TYPE = 'fpn_corners_3d'
-# NET_TYPE = 'fpn_grnet'
-NET_TYPE = 'faster_rcnn'
+NET_TYPE = 'fpn_grnet'
+# NET_TYPE = 'faster_rcnn'
 # NET_TYPE = 'fpn'
 #  NET_TYPE = 'maskrcnn'
-DATASET_TYPE = 'kitti'
+# DATASET_TYPE = 'kitti'
 JOBS = False
 DEBUG = not JOBS
 

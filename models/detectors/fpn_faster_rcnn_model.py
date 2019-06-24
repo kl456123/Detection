@@ -222,9 +222,9 @@ class FPNFasterRCNN(Model):
         self.feature_extractor = feature_extractors.build(
             self.feature_extractor_config)
         self.rpn_model = detectors.build(self.rpn_config)
-        self.rcnn_cls_preds = nn.ModuleList(
-            [nn.Linear(1024, self.n_classes) for _ in range(self.num_stages)])
         in_channels = 1024
+        self.rcnn_cls_preds = nn.ModuleList(
+            [nn.Linear(in_channels, self.n_classes) for _ in range(self.num_stages)])
         if self.class_agnostic:
             rcnn_bbox_pred = nn.Linear(in_channels, 4)
         else:

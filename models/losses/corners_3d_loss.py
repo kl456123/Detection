@@ -36,7 +36,7 @@ class Corners3DLoss(nn.Module):
                                            instance_depth_gt)
 
         loss = torch.cat(
-            [local_corners_3d_loss, C_2d_loss, instance_depth_loss],
+            [local_corners_3d_loss * 10, C_2d_loss, instance_depth_loss],
             dim=-1)
 
         # return self.l1_loss(preds, targets)

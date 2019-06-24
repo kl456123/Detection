@@ -16,7 +16,8 @@ include = [
     'fpn_rpn_model', 'fpn_mono_3d_model', 'fpn_multibin_model',
     'fpn_mono_3d_rear_model', 'pr_model', 'pr_mono_3d_model', 'fpn_corners_model',
     'fpn_grnet', 'fpn_mono_3d_better_model', 'rpn_model_test', 'fpn_corners_stable_model',
-    'maskrcnn_model', 'fpn_corners_3d_model'
+    'maskrcnn_model', 'fpn_corners_3d_model', 'fpn_corner_loss', 'fpn_grnet_reverse',
+    'fpn_rpn_grnet_model'
 ]
 # import all for register all modules into registry dict
 import_dir(os.path.dirname(__file__), include=include)

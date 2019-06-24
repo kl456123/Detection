@@ -282,10 +282,10 @@ rm results/images/*
 
 # PRNET_KITTI
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 40000 \
-    # --net prnet \
+    # --checkpoint 1000 \
+    # --net prnet_mono_3d \
     # --load_dir /data/object/liangxiong/test \
-    # --dataset kitti \
+    # --dataset mono_3d_kitti \
     # --thresh 0.3
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
@@ -350,12 +350,12 @@ rm results/images/*
     # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
     
     
-# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 1000 \
-    # --load_dir /data/object/liangxiong/test \
-    # --net faster_rcnn \
-    # --thresh 0.5 \
-    # --dataset kitti
+CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    --checkpoint 1000 \
+    --load_dir /data/object/liangxiong/test \
+    --net fpn_grnet \
+    --thresh 0.5 \
+    --dataset mono_3d_kitti
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
     # --img_dir /data/pengwu/yizhuang/seq/keyframes/ \

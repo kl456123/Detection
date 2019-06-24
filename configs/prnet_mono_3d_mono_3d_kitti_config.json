@@ -183,21 +183,22 @@
         ],
         "min_size": 16,
         "nms_thresh": 0.7,
-        "post_nms_topN": 2000,
+        "post_nms_topN": 1000,
         "pre_nms_topN": 12000,
         "target_generator_config": {
             "analyzer_config": {},
-            "bg_thresh": 0.3,
+            "bg_thresh": 0.4,
             "coder_config": {
-                "type": "center"
+                "type": "corner"
             },
-            "fg_thresh": 0.7,
+            "fake_fg_thresh": 0.7,
+            "fg_thresh": 0.5,
             "matcher_config": {
-                "type": "bipartitle"
+                "type": "argmax"
             },
             "sampler_config": {
                 "fg_fraction": 0.5,
-                "num_samples": 256,
+                "num_samples": 512,
                 "type": "balanced"
             },
             "similarity_calc_config": {

@@ -682,6 +682,7 @@ if __name__ == '__main__':
     save_dir = 'results/images'
     calib_dir = '/data/object/training/calib'
     label_dir = None
+    #  label_dir = '/data/object/training/label_2'
     calib_file = None
 
     # MONOGRNET

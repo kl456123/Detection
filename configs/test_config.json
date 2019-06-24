@@ -11,7 +11,8 @@
             ],
             "dataset_file": "data/demo.txt",
             "root_path": "/data",
-            "type": "kitti"
+            "type": "mono_3d_kitti",
+            "use_proj_2d": false
         },
         "transform_config": [
             {
@@ -59,7 +60,7 @@
         "eval_out_rois": "./results/rois",
         "nms": 0.3,
         "rng_seed": 3,
-        "test_type": "test_2d",
+        "test_type": "test_corners_3d",
         "thresh": 0.5
     },
     "eval_data_config": {
@@ -74,7 +75,8 @@
             ],
             "dataset_file": "data/demo.txt",
             "root_path": "/data",
-            "type": "kitti"
+            "type": "mono_3d_kitti",
+            "use_proj_2d": false
         },
         "transform_config": [
             {
@@ -108,7 +110,6 @@
             "Car"
         ],
         "feature_extractor_config": {
-            "img_channels": 3,
             "ndin": [
                 64,
                 128,
@@ -119,8 +120,7 @@
             "pooling_size": 7,
             "pretrained": true,
             "pretrained_path": "./data/pretrained_model",
-            "type": "resnet",
-            "use_cascade": false
+            "type": "fpn"
         },
         "pooling_mode": "align",
         "pooling_size": 7,
@@ -147,7 +147,7 @@
                     16
                 ],
                 "type": "default",
-                "use_pyramid": false
+                "use_pyramid": true
             },
             "din": 256,
             "min_size": 16,
@@ -174,7 +174,7 @@
                 },
                 "type": "faster_rcnn"
             },
-            "type": "rpn",
+            "type": "fpn_rpn",
             "use_focal_loss": false
         },
         "target_generator_config": [
@@ -212,7 +212,7 @@
             "bias_lr_factor": 1,
             "eps": 1e-08,
             "momentum": 0.9,
-            "type": "adam",
+            "type": "sgd",
             "weight_decay": 0,
             "weight_decay_bias": 0
         },

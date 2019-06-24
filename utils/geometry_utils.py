@@ -636,3 +636,36 @@ def torch_corner_4c_to_offset(corners_2d, label_boxes_2d):
     label_corners_4c = torch_xyxy_to_corner_4c(label_boxes_2d)
     corners_4c = _reorder_corners_2d(corners_2d)
     return corners_4c - label_corners_4c
+
+
+def pseudo_3d_to_3d(points_2d, p2, mean_dims=[]):
+    """
+    Args:
+        points_2d: shape(N, 8, 2)
+        p2: shape(3, 4)
+        mean_dims: (hwl)
+    """
+
+    h = boxes[:, 3]
+    w = boxes[:, 4]
+    l = boxes[:, 5]
+    zeros = np.zeros_like(l)
+    rotation_matrix = ry_to_rotation_matrix(ry)
+
+    x_corners = np.array(
+        [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2])
+    y_corners = np.array([zeros, zeros, zeros, zeros, -h, -h, -h, -h])
+    z_corners = np.array(
+        [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2])
+
+
+def local_corners_to_global_corners(local_corners_3d):
+    alpha = compute_ray_angle(
+    C_2d.unsqueeze(0), p2.unsqueeze(0)).squeeze(0)
+
+    # loop here
+
+    R_inv = torch_ry_to_rotation_matrix(
+        alpha.view(-1)).type_as(encoded_corners_3d_all)
+    global_corners_3d = torch.matmul(
+        R_inv, local_corners_3d) + C.unsqueeze(-1)

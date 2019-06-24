@@ -2,11 +2,11 @@
 
 # python utils/generate_config.py
 
-CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
-    --net faster_rcnn \
-    --out_path /data/object/liangxiong/test \
-    --config configs/test_config.json \
-    --mGPUs
+# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
+    # --net faster_rcnn \
+    # --out_path /data/object/liangxiong/test \
+    # --config configs/test_config.json \
+    # --mGPUs
 # --model /data/liangxiong/detection/data/pretrained_model/resnet50-19c8e357.pth
 
 
@@ -87,6 +87,12 @@ CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
     # --config configs/prnet_bdd_config.json \
     # --mGPUs
 
+# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
+    # --net prnet_mono_3d \
+    # --out_path /data/object/liangxiong/test \
+    # --config configs/test_config.json \
+    # --model /data/object/liangxiong/test/prnet/kitti/detector_172000.pth
+
 
 # PRNET_MONO
 # CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
@@ -121,11 +127,11 @@ CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
     # --mGPUs
 
 # GRNET
-# CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
-    # --net fpn_grnet \
-    # --out_path /data/object/liangxiong/test \
-    # --config configs/test_config.json \
-    # --model /data/object/liangxiong/test/fpn_corners_3d/mono_3d_kitti/detector_600000.pth
+CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
+    --net fpn_grnet \
+    --out_path /data/object/liangxiong/test \
+    --config configs/test_config.json \
+    --model /data/object/liangxiong/test/fpn_corners_3d/mono_3d_kitti/detector_600000.pth
 
 
 # CUDA_VISIBLE_DEVICES=0 python train.py --cuda \

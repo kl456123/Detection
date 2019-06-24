@@ -19,6 +19,8 @@ import torch.nn.functional as F
 from core.utils.analyzer import Analyzer
 from models.losses.orientation_loss import OrientationLoss
 
+from utils import geometry_utils
+
 
 def one_hot_embedding(labels, num_classes):
     '''Embedding labels to one-hot form.
@@ -154,7 +156,9 @@ class TwoStageRetinaLayer(Model):
             out_channels=self.num_anchors * self.num_regress,
             kernel_size=1)
         self.corners_out = nn.Conv2d(
-            in_channels, out_channels=self.num_anchors * 41, kernel_size=1)
+            in_channels,
+            out_channels=self.num_anchors * (2 + 4 + 1),
+            kernel_size=1)
         # self.orient_out = nn.Conv2d(
         # in_channels, out_channels=self.num_anchors * 5, kernel_size=1)
 
@@ -173,9 +177,11 @@ class TwoStageRetinaLayer(Model):
             self.rpn_os_loss = nn.CrossEntropyLoss(reduction='none')
 
         self.retina_loss = RetinaNetLoss(self.num_classes)
+        self.l1_loss = nn.L1Loss(reduction='none')
+        self.smooth_l1_loss = nn.SmoothL1Loss(reduction='none')
 
-        self.rcnn_corners_loss = CornersLoss(
-            use_filter=True, training_depth=False)
+        # self.rcnn_corners_loss = CornersLoss(
+        # use_filter=True, training_depth=False)
 
         # self.rcnn_orient_preds = nn.Linear(1024, 5)
 
@@ -235,7 +241,7 @@ class TwoStageRetinaLayer(Model):
             corners_feature = self.corners_feature(x)
             corners_out = self.corners_out(corners_feature)
             corners_out = corners_out.permute(0, 2, 3, 1).contiguous()
-            corners_out = corners_out.view(N, -1, 41)
+            corners_out = corners_out.view(N, -1, 7)
             y_corners.append(corners_out)
 
             # orient out
@@ -271,10 +277,7 @@ class TwoStageRetinaLayer(Model):
         # ipdb.set_trace()
         #  final_probs = cls_probs
 
-        coder = bbox_coders.build({
-            'type':
-            constants.KEY_CORNERS_2D_NEAREST_DEPTH
-        })
+        coder = bbox_coders.build({'type': constants.KEY_CORNERS_3D_GRNET})
         # decoded_dim_preds = coder.decode_batch(
         # dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
         # final_probs).detach()
@@ -296,7 +299,7 @@ class TwoStageRetinaLayer(Model):
             anchors_dict[constants.KEY_OBJECTNESS] = os_preds
             # anchors_dict[constants.KEY_DIMS] = dim_preds
             # anchors_dict[constants.KEY_ORIENTS_V2] = orient_preds
-            anchors_dict[constants.KEY_CORNERS_2D] = corners_preds
+            anchors_dict[constants.KEY_CORNERS_3D_GRNET] = corners_preds
 
             # anchors_dict[constants.KEY_FINAL_PROBS] = final_probs
 
@@ -309,7 +312,7 @@ class TwoStageRetinaLayer(Model):
             gt_dict[constants.KEY_BOXES_2D_REFINE] = None
             # gt_dict[constants.KEY_ORIENTS_V2] = None
             # gt_dict[constants.KEY_DIMS] = None
-            gt_dict[constants.KEY_CORNERS_2D] = None
+            gt_dict[constants.KEY_CORNERS_3D_GRNET] = None
 
             auxiliary_dict = {}
             auxiliary_dict[constants.KEY_BOXES_2D] = feed_dict[
@@ -348,6 +351,7 @@ class TwoStageRetinaLayer(Model):
 
             prediction_dict[constants.KEY_STATS] = [stats, second_stage_stats]
             prediction_dict[constants.KEY_TARGETS] = targets
+            prediction_dict[constants.KEY_PROPOSALS] = anchors
         else:
 
             prediction_dict[constants.KEY_CLASSES] = final_probs
@@ -367,7 +371,7 @@ class TwoStageRetinaLayer(Model):
 
             corners_preds = coder.decode_batch(
                 corners_preds.detach(), proposals,
-                feed_dict[constants.KEY_STEREO_CALIB_P2_ORIG])
+                feed_dict[constants.KEY_STEREO_CALIB_P2])
             prediction_dict[constants.KEY_CORNERS_2D] = corners_preds
 
         if self.training:
@@ -375,6 +379,53 @@ class TwoStageRetinaLayer(Model):
             return prediction_dict, loss_dict
         else:
             return prediction_dict
+
+    def calc_local_corners(self, dims, ry):
+        # import ipdb
+        # ipdb.set_trace()
+        h = dims[:, 0]
+        w = dims[:, 1]
+        l = dims[:, 2]
+        zeros = torch.zeros_like(l).type_as(l)
+        # rotation_matrix = geometry_utils.torch_ry_to_rotation_matrix(ry)
+
+        zeros = torch.zeros_like(ry[:, 0])
+        ones = torch.ones_like(ry[:, 0])
+        cos = torch.cos(ry[:, 0])
+        sin = torch.sin(ry[:, 0])
+        # norm = torch.norm(ry, dim=-1)
+        cos = cos
+        sin = sin
+
+        rotation_matrix = torch.stack(
+            [cos, zeros, sin, zeros, ones, zeros, -sin, zeros, cos],
+            dim=-1).reshape(-1, 3, 3)
+
+        x_corners = torch.stack(
+            [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2],
+            dim=0)
+        y_corners = torch.stack(
+            [zeros, zeros, zeros, zeros, -h, -h, -h, -h], dim=0)
+        z_corners = torch.stack(
+            [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2],
+            dim=0)
+
+        # shape(N, 3, 8)
+        box_points_coords = torch.stack(
+            (x_corners, y_corners, z_corners), dim=0)
+        # rotate and translate
+        # shape(N, 3, 8)
+        corners_3d = torch.bmm(rotation_matrix,
+                               box_points_coords.permute(2, 0, 1))
+
+        return corners_3d.permute(0, 2, 1)
+
+    def decode_center_depth(self, dims_preds, final_boxes_2d_xywh, p2):
+        f = p2[:, 0, 0]
+        h_2d = final_boxes_2d_xywh[:, :, -1] + 1e-6
+        h_3d = dims_preds[:, :, 0]
+        depth_preds = f.unsqueeze(-1) * h_3d / h_2d
+        return depth_preds.unsqueeze(-1)
 
     def loss(self, prediction_dict, feed_dict):
         loss_dict = {}
@@ -385,7 +436,7 @@ class TwoStageRetinaLayer(Model):
         loc1_target = targets[constants.KEY_BOXES_2D]
         loc2_target = targets[constants.KEY_BOXES_2D_REFINE]
         os_target = targets[constants.KEY_OBJECTNESS]
-        corners_2d_target = targets[constants.KEY_CORNERS_2D]
+        corners_target = targets[constants.KEY_CORNERS_3D_GRNET]
         # dims_target = targets[constants.KEY_DIMS]
         # orients_target = targets[constants.KEY_ORIENTS_V2]
 
@@ -419,18 +470,171 @@ class TwoStageRetinaLayer(Model):
         # import ipdb
         # ipdb.set_trace()
         # 3d loss
-        corners_loss = common_loss.calc_loss(self.rcnn_corners_loss,
-                                             corners_2d_target)
+        # corners_loss = common_loss.calc_loss(self.rcnn_corners_loss,
+        # corners_2d_target)
+
+        # import ipdb
+        # ipdb.set_trace()
+        preds = corners_target['pred']
+        targets = corners_target['target']
+        weights = corners_target['weight']
+        proposals = prediction_dict[constants.KEY_PROPOSALS]
+        p2 = feed_dict[constants.KEY_STEREO_CALIB_P2]
+        image_info = feed_dict[constants.KEY_IMAGE_INFO]
+        weights = weights.unsqueeze(-1)
+
+        local_corners_gt = targets[:, :, :24]
+        location_gt = targets[:, :, 24:27]
+        dims_gt = targets[:, :, 27:]
+        N, M = local_corners_gt.shape[:2]
+
+        global_corners_gt = (local_corners_gt.view(N, M, 8, 3) +
+                             location_gt.view(N, M, 1, 3)).view(N, M, -1)
+        center_depth_gt = location_gt[:, :, 2:]
+
+        mean_dims = torch.tensor([1.8, 1.8, 3.7]).type_as(preds)
+        dims_preds = torch.exp(preds[:, :, :3]) * mean_dims
+        # import ipdb
+        # ipdb.set_trace()
+        dims_loss = self.l1_loss(dims_preds, dims_gt) * weights
+        ry_preds = preds[:, :, 3:4]
+        # ray_angle = -torch.atan2(location_gt[:, :, 2],
+        # location_gt[:, :, 0])
+        # ry_preds = ry_preds + ray_angle.unsqueeze(-1)
+        local_corners_preds = []
+        # calc local corners preds
+        for batch_ind in range(N):
+            local_corners_preds.append(
+                self.calc_local_corners(dims_preds[batch_ind].detach(),
+                                        ry_preds[batch_ind]))
+        local_corners_preds = torch.stack(local_corners_preds, dim=0)
+
+        center_2d_deltas_preds = preds[:, :, 4:6]
+        center_depth_preds = preds[:, :, 6:]
+        # import ipdb
+        # ipdb.set_trace()
+        # decode center_2d
+        proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals)
+        center_depth_init = self.decode_center_depth(dims_preds,
+                                                     proposals_xywh, p2)
+        center_depth_preds = center_depth_init * center_depth_preds
+        center_2d_preds = (center_2d_deltas_preds * proposals_xywh[:, :, 2:] +
+                           proposals_xywh[:, :, :2])
+        # center_depth_preds_detach = center_depth_preds.detach()
+
+        # import ipdb
+        # ipdb.set_trace()
+        # use gt depth to cal loss to make sure the gradient smooth
+        location_preds = []
+        for batch_ind in range(N):
+            location_preds.append(
+                geometry_utils.torch_points_2d_to_points_3d(
+                    center_2d_preds[batch_ind], center_depth_preds[batch_ind],
+                    p2[batch_ind]))
+        location_preds = torch.stack(location_preds, dim=0)
+        global_corners_preds = (location_preds.view(N, M, 1, 3) +
+                                local_corners_preds.view(N, M, 8, 3)).view(
+                                    N, M, -1)
+
+        # import ipdb
+        # ipdb.set_trace()
+        # corners depth loss and center depth loss
+        corners_depth_preds = local_corners_preds.view(N, M, 8, 3)[..., -1]
+        corners_depth_gt = local_corners_gt.view(N, M, 8, 3)[..., -1]
+
+        # import ipdb
+        # ipdb.set_trace()
+        center_depth_loss = self.l1_loss(center_depth_preds,
+                                         center_depth_gt) * weights
+
+        # location loss
+        location_loss = self.l1_loss(location_preds, location_gt) * weights
+
+        # global corners loss
+        global_corners_loss = self.l1_loss(global_corners_preds,
+                                           global_corners_gt) * weights
+
+        # proj 2d loss
+        corners_2d_preds = []
+        corners_2d_gt = []
+        for batch_ind in range(N):
+            corners_2d_preds.append(
+                geometry_utils.torch_points_3d_to_points_2d(
+                    global_corners_preds[batch_ind].view(-1, 3),
+                    p2[batch_ind]))
+            corners_2d_gt.append(
+                geometry_utils.torch_points_3d_to_points_2d(
+                    global_corners_gt[batch_ind].view(-1, 3), p2[batch_ind]))
+
+        corners_2d_preds = torch.stack(corners_2d_preds, dim=0).view(N, M, -1)
+        corners_2d_gt = torch.stack(corners_2d_gt, dim=0).view(N, M, -1)
+
+        # image filter
+        # import ipdb
+        # ipdb.set_trace()
+        zeros = torch.zeros_like(image_info[:, 0])
+        image_shape = torch.stack(
+            [zeros, zeros, image_info[:, 1], image_info[:, 0]], dim=-1)
+        image_shape = image_shape.type_as(corners_2d_gt).view(-1, 4)
+        image_filter = geometry_utils.torch_window_filter(
+            corners_2d_gt.view(N, -1, 2), image_shape,
+            deltas=200).float().view(N, M, -1)
+
+        # import ipdb
+        # ipdb.set_trace()
+        encoded_corners_2d_gt = corners_2d_gt.view(N, M, 8, 2)
+        encoded_corners_2d_preds = corners_2d_preds.view(N, M, 8, 2)
+        # import ipdb
+        # ipdb.set_trace()
+        corners_2d_loss = self.l1_loss(
+            encoded_corners_2d_preds.view(N, M, -1),
+            encoded_corners_2d_gt.view(N, M, -1)) * weights
+        corners_2d_loss = (
+            corners_2d_loss.view(N, M, 8, 2) * image_filter.unsqueeze(-1))
+        # import ipdb
+        # ipdb.set_trace()
+        # mask = self.select_corners(global_corners_gt)
+        # mask = mask.unsqueeze(-1).expand_as(corners_2d_loss).float()
+        corners_2d_loss = corners_2d_loss.view(N, M, -1)
+        corners_depth_loss = self.l1_loss(
+            corners_depth_preds, corners_depth_gt) * weights * image_filter
+
+        # import ipdb
+        # ipdb.set_trace()
+        # corners_3d_gt = []
+        # for batch_ind in range(N):
+        # corners_3d_gt.append(
+        # geometry_utils.torch_points_2d_to_points_3d(
+        # corners_2d_preds[batch_ind].view(-1, 2),
+        # corners_depth_preds[batch_ind].view(-1), p2[batch_ind]))
+        # corners_3d_gt = torch.stack(corners_3d_gt, dim=0).view(N, M, -1)
+
+        # dim_target = targets[stage_ind][3]
+        # rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
+        # self.rcnn_bbox_loss, dim_target, True)
+
+        global_corners_loss = self.l1_loss(global_corners_preds,
+                                           global_corners_gt) * weights
+
         # rpn_orients_loss = common_loss.calc_loss(self.rcnn_orient_loss,
         # corners_2d_target) * 100
 
         # loss
 
+        # import ipdb
+        # ipdb.set_trace()
         # loss_dict['total_loss'] = total_loss
+        pos = weights > 0  # [N,#anchors]
+        num_pos = pos.data.long().sum().clamp(min=1).float()
+
         loss_dict['loc_loss'] = loc_loss
         loss_dict['os_loss'] = os_loss
         loss_dict['conf_loss'] = conf_loss
-        loss_dict['corners_loss'] = corners_loss
+        # loss_dict['corners_2d_loss'] = corners_2d_loss.sum() / num_pos * 0.1
+        loss_dict['dims_loss'] = dims_loss.sum() / num_pos * 10
+        loss_dict['global_corners_loss'] = global_corners_loss.sum() / num_pos * 10
+        loss_dict['location_loss'] = location_loss.sum() / num_pos * 10
+        loss_dict['center_depth_loss'] = center_depth_loss.sum() / num_pos * 10
         # loss_dict['orients_loss'] = rpn_orients_loss
 
         return loss_dict
