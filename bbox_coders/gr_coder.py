@@ -113,6 +113,20 @@ class Corner3DCoder(object):
         return depth_preds
 
     @staticmethod
+    def decode_ry(encoded_ry_preds, proposals_xywh, p2):
+        slope, encoded_points = torch.split(encoded_ry_preds, [1, 2], dim=-1)
+        slope = slope * proposals_xywh[:, :, 3:4] / (
+            proposals_xywh[:, :, 2:3] + 1e-7)
+        points1 = encoded_points * proposals_xywh[:, :,
+                                                  2:] + proposals_xywh[:, :, :2]
+        points2_x = points1[:, :, :1] - 1
+        points2_y = points1[:, :, 1:] - slope
+        points2 = torch.cat([points2_x, points2_y], dim=-1)
+        lines = torch.cat([points1, points2], dim=-1)
+        ry = geometry_utils.torch_pts_2d_to_dir_3d(lines, p2)
+        return ry
+
+    @staticmethod
     def decode(encoded_corners_3d_all, final_boxes_2d, p2):
         """
         """
@@ -125,17 +139,22 @@ class Corner3DCoder(object):
         # instance_depth = encoded_corners_3d_all[:, 26:]
         mean_dims = torch.tensor([1.8, 1.8, 3.7]).type_as(final_boxes_2d)
         dims_preds = torch.exp(encoded_corners_3d_all[:, :3]) * mean_dims
-        ry_preds = encoded_corners_3d_all[:, 3:4]
+        encoded_ry_preds = encoded_corners_3d_all[:, 3:6]
+        final_boxes_2d_xywh = geometry_utils.torch_xyxy_to_xywh(
+            final_boxes_2d.unsqueeze(0)).squeeze(0)
+        ry_preds = Corner3DCoder.decode_ry(
+            encoded_ry_preds.unsqueeze(0), final_boxes_2d_xywh.unsqueeze(0),
+            p2.unsqueeze(0)).squeeze(0)
+        ry_preds = ry_preds.unsqueeze(-1)
 
         local_corners_3d = Corner3DCoder.calc_local_corners(
             dims_preds, ry_preds)
-        encoded_C_2d = encoded_corners_3d_all[:, 4:6]
-        # instance_depth = encoded_corners_3d_all[:, 7:]
+        encoded_C_2d = encoded_corners_3d_all[:, 6:8]
+        # instance_depth = encoded_corners_3d_all[:, 8:]
 
         # decode them first
         # instance_depth = 1 / (instance_depth_inv + 1e-8)
-        final_boxes_2d_xywh = geometry_utils.torch_xyxy_to_xywh(
-            final_boxes_2d.unsqueeze(0)).squeeze(0)
+
         instance_depth = Corner3DCoder.decode_center_depth(
             dims_preds, final_boxes_2d_xywh, p2)
         C_2d = encoded_C_2d * final_boxes_2d_xywh[:,

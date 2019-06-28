@@ -74,8 +74,9 @@ def calc_location(dims, dets_2d, ry, p2):
     ones = np.ones_like(ry)
     R = np.stack(
         [
-            np.cos(ry), zeros, np.sin(ry), zeros, ones, zeros, -np.sin(ry),
-            zeros, np.cos(ry)
+            np.cos(ry), zeros,
+            np.sin(ry), zeros, ones, zeros, -np.sin(ry), zeros,
+            np.cos(ry)
         ],
         axis=-1).reshape(num, 3, 3)
 
@@ -186,8 +187,8 @@ def match(boxes_2d, corners, trans_3d, r, p):
     corners_3d = np.expand_dims(
         corners_3d.transpose((0, 2, 1)), axis=1) + trans_3d
     corners_3d = corners_3d.reshape(-1, 3)
-    corners_3d_homo = np.hstack((corners_3d, np.ones(
-        (corners_3d.shape[0], 1))))
+    corners_3d_homo = np.hstack((corners_3d, np.ones((corners_3d.shape[0],
+                                                      1))))
 
     corners_2d = np.dot(p, corners_3d_homo.T)
     corners_2d_xy = corners_2d[:2, :] / corners_2d[2, :]
@@ -219,8 +220,9 @@ def ry_to_rotation_matrix(rotation_y):
     ones = np.ones_like(rotation_y)
     rotation_matrix = np.stack(
         [
-            np.cos(rotation_y), zeros, np.sin(rotation_y), zeros, ones, zeros,
-            -np.sin(rotation_y), zeros, np.cos(rotation_y)
+            np.cos(rotation_y), zeros,
+            np.sin(rotation_y), zeros, ones, zeros, -np.sin(rotation_y), zeros,
+            np.cos(rotation_y)
         ],
         axis=-1).reshape(-1, 3, 3)
     return rotation_matrix
@@ -356,8 +358,10 @@ def torch_ry_to_rotation_matrix(rotation_y):
     ones = torch.ones_like(rotation_y)
     rotation_matrix = torch.stack(
         [
-            torch.cos(rotation_y), zeros, torch.sin(rotation_y), zeros, ones,
-            zeros, -torch.sin(rotation_y), zeros, torch.cos(rotation_y)
+            torch.cos(rotation_y), zeros,
+            torch.sin(rotation_y), zeros, ones, zeros, -torch.sin(rotation_y),
+            zeros,
+            torch.cos(rotation_y)
         ],
         dim=-1).reshape(-1, 3, 3)
     return rotation_matrix
@@ -402,10 +406,11 @@ def torch_points_3d_to_points_2d(points_3d, p2):
     # ipdb.set_trace()
     format_checker.check_tensor_shape(points_3d, [None, 3])
     format_checker.check_tensor_shape(p2, [3, 4])
-    points_3d_homo = torch.cat((points_3d, torch.ones_like(points_3d[:, -1:])),
-                               dim=-1)
-    points_2d_homo = torch.matmul(p2, points_3d_homo.transpose(
-        0, 1)).transpose(0, 1)
+    points_3d_homo = torch.cat(
+        (points_3d, torch.ones_like(points_3d[:, -1:])), dim=-1)
+    points_2d_homo = torch.matmul(p2, points_3d_homo.transpose(0,
+                                                               1)).transpose(
+                                                                   0, 1)
     points_2d_homo = points_2d_homo / points_2d_homo[:, -1:]
     return points_2d_homo[:, :2]
 
@@ -441,9 +446,9 @@ def torch_pts_2d_to_dir_3d(lines, p2):
     A = lines[:, :, 3] - lines[:, :, 1]
     B = lines[:, :, 0] - lines[:, :, 2]
     C = lines[:, :, 2] * lines[:, :, 1] - lines[:, :, 0] * lines[:, :, 3]
-    plane = torch.bmm(p2.permute(0, 2, 1),
-                      torch.stack(
-                          [A, B, C], dim=-1).permute(0, 2, 1)).permute(0, 2, 1)
+    plane = torch.bmm(
+        p2.permute(0, 2, 1),
+        torch.stack([A, B, C], dim=-1).permute(0, 2, 1)).permute(0, 2, 1)
     a = plane[:, :, 0]
     c = plane[:, :, 2]
     ry = torch_dir_to_angle(c, -a)
@@ -585,14 +590,15 @@ def torch_points_2d_to_points_3d(points_2d, depth, p2):
     format_checker.check_tensor_shape(depth, [None, 1])
     format_checker.check_tensor_shape(p2, [3, 4])
 
-    points_2d_homo = torch.cat([points_2d, torch.ones_like(points_2d[:, -1:])],
-                               dim=-1)
+    points_2d_homo = torch.cat(
+        [points_2d, torch.ones_like(points_2d[:, -1:])], dim=-1)
     K = p2[:3, :3]
     KT = p2[:, 3]
     T = torch.matmul(torch.inverse(K), KT)
     K_inv = torch.inverse(K)
-    points_3d = torch.matmul(K_inv, (depth * points_2d_homo).permute(
-        1, 0)).permute(1, 0)
+    points_3d = torch.matmul(K_inv,
+                             (depth * points_2d_homo).permute(1, 0)).permute(
+                                 1, 0)
 
     # no rotation
     return points_3d - T
@@ -660,12 +666,53 @@ def pseudo_3d_to_3d(points_2d, p2, mean_dims=[]):
 
 
 def local_corners_to_global_corners(local_corners_3d):
-    alpha = compute_ray_angle(
-    C_2d.unsqueeze(0), p2.unsqueeze(0)).squeeze(0)
+    alpha = compute_ray_angle(C_2d.unsqueeze(0), p2.unsqueeze(0)).squeeze(0)
 
     # loop here
 
     R_inv = torch_ry_to_rotation_matrix(
         alpha.view(-1)).type_as(encoded_corners_3d_all)
-    global_corners_3d = torch.matmul(
-        R_inv, local_corners_3d) + C.unsqueeze(-1)
+    global_corners_3d = torch.matmul(R_inv, local_corners_3d) + C.unsqueeze(-1)
+
+
+def points_3d_to_plane(points_3d):
+    """
+    Args:
+        points_3d: shape(N, M, 3)
+    Returns:
+        planes: shape(N, M, 4)
+    """
+    num_points = 3
+    plane_points = points_3d[:, :num_points, ]
+    bias = -np.ones_like(plane_points[:, 1])[..., None]
+    planes = np.matmul(np.linalg.inv(plane_points), bias)[..., 0]
+    planes = np.concatenate([planes, np.ones_like(planes[:, -1:])], axis=-1)
+    return planes
+
+
+def boxes_3d_to_plane(label_boxes_3d):
+    """
+    Args:
+        label_boxes_3d: shape(N, 7) (xyz,hwl, ry)
+    Returns:
+        planes: shape(N, 4, 4)
+    """
+    corners_3d = boxes_3d_to_corners_3d(label_boxes_3d)
+    front_plane = corners_3d[:, [0, 1, 5, 4]]
+    right_plane = corners_3d[:, [1, 2, 6, 5]]
+    rear_plane = corners_3d[:, [3, 2, 6, 7]]
+    left_plane = corners_3d[:, [3, 0, 4, 7]]
+    bottom_plane = corners_3d[:, [0, 1, 2, 3]]
+    top_plane = corners_3d[:, [4, 5, 6, 7]]
+    plane_points = np.stack(
+        [
+            front_plane, right_plane, rear_plane, left_plane, bottom_plane,
+            top_plane
+        ],
+        axis=1)
+    N, M = plane_points.shape[:2]
+    planes = points_3d_to_plane(plane_points.reshape(-1, 4, 3))
+
+    # postprocess planes direction
+
+    return planes.reshape(N, M, 4)

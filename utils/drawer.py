@@ -125,8 +125,8 @@ class ImageVisualizer(object):
             self.visualize_single_image(image_path, results_path, label_path,
                                         calib_path)
             dura_time = time.time() - start_time
-            sys.stdout.write(
-                '\r{}/{}/{}'.format(ind + 1, total_num, dura_time))
+            sys.stdout.write('\r{}/{}/{}'.format(ind + 1, total_num,
+                                                 dura_time))
             sys.stdout.flush()
 
     def get_sample_name_from_path(self, path):
@@ -159,15 +159,13 @@ class ImageVisualizer(object):
                 label_dir + "/{}.txt".format(sample_name),
                 delimiter=' ',
                 dtype=str,
-                usecols=np.arange(
-                    start=0, step=1, stop=16))
+                usecols=np.arange(start=0, step=1, stop=16))
         else:
             p = np.loadtxt(
                 label_dir + "/{}.txt".format(sample_name),
                 delimiter=' ',
                 dtype=str,
-                usecols=np.arange(
-                    start=0, step=1, stop=15))
+                usecols=np.arange(start=0, step=1, stop=15))
 
         # Check if the output is single dimensional or multi dimensional
         if len(p.shape) > 1:
@@ -191,8 +189,8 @@ class ImageVisualizer(object):
                 obj.h = float(p[idx, 8])
                 obj.w = float(p[idx, 9])
                 obj.l = float(p[idx, 10])
-                obj.t = (float(p[idx, 11]), float(p[idx, 12]),
-                         float(p[idx, 13]))
+                obj.t = (float(p[idx, 11]), float(p[idx, 12]), float(
+                    p[idx, 13]))
                 obj.ry = float(p[idx, 14])
                 if results:
                     obj.score = float(p[idx, 15])
@@ -353,9 +351,9 @@ class ImageVisualizer(object):
             rectangle_bgr = (0, 0, 0)
             (text_width, text_height) = cv2.getTextSize(
                 text, font, fontScale=font_scale, thickness=1)[0]
-            box_coords = (
-                (int(box[0]), int(box[1])),
-                (int(box[0]) + text_width - 2, int(box[1]) - text_height - 2))
+            box_coords = ((int(box[0]),
+                           int(box[1])), (int(box[0]) + text_width - 2,
+                                          int(box[1]) - text_height - 2))
             cv2.rectangle(image, box_coords[0], box_coords[1], rectangle_bgr,
                           cv2.FILLED)
             cv2.putText(
@@ -609,10 +607,10 @@ class ImageVisualizer(object):
                                  2)
 
             # for i in range(6):
-                # corners_image = np.asarray(corners_image)
-                # side_plane = np.asarray(corners_image[connected_plane[i]])
-                # image_corners = ImageVisualizer.fill(image_corners, side_plane,
-                                                     # self.side_plane_colors[i])
+            # corners_image = np.asarray(corners_image)
+            # side_plane = np.asarray(corners_image[connected_plane[i]])
+            # image_corners = ImageVisualizer.fill(image_corners, side_plane,
+            # self.side_plane_colors[i])
         # rotate bev_image
         # bev_image = cv2.rotate(bev_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
@@ -653,6 +651,9 @@ class ImageVisualizer(object):
             sample_name = self.get_sample_name_from_path(image_path)
             saved_path = self.get_saved_path(sample_name)
             cv2.imwrite(saved_path, image)
+
+    def render_image_and_depthmap(self, image_path, boxes_2d, depth_map, p2):
+        pass
 
     @staticmethod
     def fill(img, points, color):

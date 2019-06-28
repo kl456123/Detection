@@ -252,11 +252,26 @@ class FPNGRNetModel(FPNFasterRCNN):
         self.class_agnostic_3d = False
         # self.freeze_2d = model_config.get('freeze_2d', False)
 
+    def decode_ry(self, encoded_ry_preds, proposals_xywh, p2):
+        slope, encoded_points = torch.split(encoded_ry_preds, [1, 2], dim=-1)
+        # import ipdb
+        # ipdb.set_trace()
+        slope = slope * proposals_xywh[:, :, 3:4] / (
+            proposals_xywh[:, :, 2:3] + 1e-7)
+        points1 = encoded_points * proposals_xywh[:, :,
+                                                  2:] + proposals_xywh[:, :, :2]
+        points2_x = points1[:, :, :1] - 1
+        points2_y = points1[:, :, 1:] - slope
+        points2 = torch.cat([points2_x, points2_y], dim=-1)
+        lines = torch.cat([points1, points2], dim=-1)
+        ry = geometry_utils.torch_pts_2d_to_dir_3d(lines, p2)
+        return ry
+
     def init_modules(self):
         super().init_modules()
         # combine corners and its visibility
         self.rcnn_corners_preds = nn.ModuleList(
-            [nn.Linear(1024, 4 + 2 + 1) for _ in range(self.num_stages)])
+            [nn.Linear(1024, 3 + 3 + 2 + 1) for _ in range(self.num_stages)])
         # self.rcnn_visibility_preds = nn.ModuleList(
         # [nn.Linear(1024, 2 * 8) for _ in range(self.num_stages)])
 
@@ -414,7 +429,10 @@ class FPNGRNetModel(FPNFasterRCNN):
             # import ipdb
             # ipdb.set_trace()
             dims_loss = self.l1_loss(dims_preds, dims_gt) * weights
-            ry_preds = preds[:, :, 3:4]
+            encoded_ry_preds = preds[:, :, 3:6]
+            proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals)
+            ry_preds = self.decode_ry(encoded_ry_preds, proposals_xywh,
+                                      p2).unsqueeze(-1)
             # ray_angle = -torch.atan2(location_gt[:, :, 2], location_gt[:, :, 0])
             # ry_preds = ry_preds + ray_angle.unsqueeze(-1)
             local_corners_preds = []
@@ -425,12 +443,11 @@ class FPNGRNetModel(FPNFasterRCNN):
                                             ry_preds[batch_ind]))
             local_corners_preds = torch.stack(local_corners_preds, dim=0)
 
-            center_2d_deltas_preds = preds[:, :, 4:6]
-            center_depth_preds = preds[:, :, 6:]
+            center_2d_deltas_preds = preds[:, :, 6:8]
+            center_depth_preds = preds[:, :, 8:]
             # import ipdb
             # ipdb.set_trace()
             # decode center_2d
-            proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals)
             center_depth_init = self.decode_center_depth(
                 dims_preds, proposals_xywh, p2)
             center_depth_preds = center_depth_init * center_depth_preds

@@ -351,11 +351,20 @@ rm results/images/*
     
     
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 1000 \
+    --checkpoint 128000 \
     --load_dir /data/object/liangxiong/test \
-    --net fpn_grnet \
+    --net mobileye \
     --thresh 0.5 \
     --dataset mono_3d_kitti
+
+# CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
+    # --checkpoint 364000 \
+    # --load_dir /data/object/liangxiong/test \
+    # --net maskrcnn \
+    # --thresh 0.5 \
+    # --dataset mono_3d_kitti
+    # --img_dir /data/2011_09_26/2011_09_26_drive_0084_sync/image_02/data \
+    # --calib_file ./000000.txt
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
     # --img_dir /data/pengwu/yizhuang/seq/keyframes/ \

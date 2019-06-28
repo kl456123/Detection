@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 
 from data.datasets.kitti import KITTIDataset
+from wavedata.tools.obj_detection import obj_utils
 from core import constants
 from utils import geometry_utils
 import numpy as np
 from utils.registry import DATASETS
 from utils.box_vis import compute_box_3d
 import torch
+
+from utils import pointcloud_utils
+from PIL import Image
 
 MEAN_DIMS = {
     # KITTI
@@ -90,6 +94,7 @@ class Mono3DKITTIDataset(KITTIDataset):
 
     def get_sample(self, index):
         sample = super().get_sample(index)
+        # image
         mean_dims = self._generate_mean_dims()
         sample[constants.KEY_MEAN_DIMS] = mean_dims
 
@@ -97,17 +102,53 @@ class Mono3DKITTIDataset(KITTIDataset):
             # use boxes_3d_proj rather than boxes 2d
             label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
             p2 = sample[constants.KEY_STEREO_CALIB_P2]
-            boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d,
-                                                                p2)
+            boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(
+                label_boxes_3d, p2)
             sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj
 
         if not self.training:
             sample[constants.KEY_STEREO_CALIB_P2_ORIG] = np.copy(
                 sample[constants.KEY_STEREO_CALIB_P2])
+
+        # if self.training:
+        # sample[constants.KEY_LABEL_POINTCLOUDS] = pc
+
         return sample
 
     def pad_sample(self, sample):
         sample = super().pad_sample(sample)
+        image_path = sample[constants.KEY_IMAGE_PATH]
+        sample_name = self.get_sample_name_from_path(image_path)
+        pc = obj_utils.get_lidar_point_cloud(
+            int(sample_name),
+            self.calib_dir,
+            self.velo_dir,
+            im_size=None,
+            min_intensity=None)
+        p2 = sample[constants.KEY_STEREO_CALIB_P2]
+        h, w = sample[constants.KEY_IMAGE_INFO].astype(np.int)[:2]
+
+        label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
+        num_instances = sample[constants.KEY_NUM_INSTANCES]
+        depth = np.zeros((h, w), dtype=np.float32)
+        # 0 refers to bg
+        mask = np.zeros((h, w), dtype=np.int64)
+
+        for i in range(num_instances):
+            label_box_3d = label_boxes_3d[i]
+            instance_pc = pointcloud_utils.box_3d_filter(label_box_3d, pc[:3])
+
+            # draw depth
+            instance_depth = pointcloud_utils.cam_pts_to_rect_depth(
+                instance_pc[:3, :], K=p2[:3, :3], h=h, w=w)
+            mask[instance_depth>0] = i + 1
+            depth = depth + instance_depth
+
+        # import matplotlib.pyplot as plt
+        # plt.imshow(depth)
+        # plt.show()
+        sample[constants.KEY_LABEL_DEPTHMAP] = depth[None]
+        sample[constants.KEY_INSTANCES_MASK] = mask[None]
         # boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
         # boxes_2d_proj = sample[constants.KEY_LABEL_BOXES_2D]
         # p2 = sample[constants.KEY_STEREO_CALIB_P2]
@@ -172,8 +213,8 @@ class Mono3DKITTIDataset(KITTIDataset):
         cond = (direction[:, 0] * direction[:, 1]) == 0
         cls_orients = np.zeros_like(cond, dtype=np.float32)
         cls_orients[cond] = -1
-        cls_orients[~cond] = (
-            (direction[~cond, 1] / direction[~cond, 0]) > 0).astype(np.float32)
+        cls_orients[~cond] = ((direction[~cond, 1] / direction[~cond, 0]) >
+                              0).astype(np.float32)
 
         reg_orients = np.abs(direction)
 
