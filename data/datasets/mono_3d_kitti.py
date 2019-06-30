@@ -145,7 +145,7 @@ class Mono3DKITTIDataset(KITTIDataset):
             depth = depth + instance_depth
 
         # import matplotlib.pyplot as plt
-        # plt.imshow(depth)
+        # plt.imshow(mask)
         # plt.show()
         sample[constants.KEY_LABEL_DEPTHMAP] = depth[None]
         sample[constants.KEY_INSTANCES_MASK] = mask[None]

@@ -130,7 +130,7 @@ class MaskRCNNModel(FPNFasterRCNN):
                     constants.KEY_LABEL_BOXES_2D]
                 gt_dict[constants.KEY_CLASSES] = None
                 gt_dict[constants.KEY_BOXES_2D] = None
-                # gt_dict[constants.KEY_CORNERS_3D_GRNET] = None
+                gt_dict[constants.KEY_CORNERS_3D_GRNET] = None
                 # gt_dict[constants.KEY_INSTANCES_MASK] = None
                 # gt_dict[constants.KEY_KEYPOINTS] = None
                 # gt_dict[constants.KEY_CORNERS_VISIBILITY] = None
@@ -241,8 +241,8 @@ class MaskRCNNModel(FPNFasterRCNN):
 
                 # depth map loss units
                 loss_units[constants.KEY_DEPTHMAP]['weight'] = weights
-                # loss_units[constants.KEY_CORNERS_3D_GRNET][
-                    # 'pred'] = rcnn_depth_preds
+                loss_units[constants.KEY_CORNERS_3D_GRNET][
+                    'pred'] = rcnn_depth_preds
 
                 proposals_depth_map = self.crop_depth_map(
                     proposals,
@@ -274,8 +274,8 @@ class MaskRCNNModel(FPNFasterRCNN):
                     loss_units[constants.KEY_CLASSES],
                     loss_units[constants.KEY_BOXES_2D],
                     loss_units[constants.KEY_DEPTHMAP],
+                    loss_units[constants.KEY_CORNERS_3D_GRNET],
                     loss_units[constants.KEY_INSTANCES_MASK]
-                    # loss_units[constants.KEY_CORNERS_3D_GRNET]
                     # loss_units[constants.KEY_KEYPOINTS],
                     # loss_units[constants.KEY_DIMS]
                 ])
@@ -342,8 +342,7 @@ class MaskRCNNModel(FPNFasterRCNN):
                 weights[batch_ind] > 0]
             # match
             match_single_image = match[batch_ind]
-            pos_match_single_image = match_single_image[
-                weights[batch_ind] > 0]
+            pos_match_single_image = match_single_image[weights[batch_ind] > 0]
 
             for proposals_ind in range(pos_proposals_single_image.shape[0]):
                 box = pos_proposals_single_image[proposals_ind]
@@ -490,6 +489,8 @@ class MaskRCNNModel(FPNFasterRCNN):
         return mask_loss
 
     def instance_mask_loss(self, mask_target):
+        import ipdb
+        ipdb.set_trace()
         mask_preds = mask_target['pred']
         pos_mask = mask_target['target']
         weights = mask_target['weight']
@@ -499,7 +500,6 @@ class MaskRCNNModel(FPNFasterRCNN):
         pos_mask_preds = mask_preds.view(-1, mask_preds.shape[-1])[pos_filter]
         mask_loss = self.mask_loss()
         return mask_loss
-
 
     def loss(self, prediction_dict, feed_dict):
         """
@@ -521,6 +521,8 @@ class MaskRCNNModel(FPNFasterRCNN):
             # rcnn_corners_loss = rcnn_corners_loss + common_loss.calc_loss(
             # self.rcnn_cls_loss, orient_target, True)
 
+            # import ipdb
+            # ipdb.set_trace()
             depth_target = targets[stage_ind][3]
             center_depth_preds = depth_target['pred']
             center_depth_gt = depth_target['target'][:, :, 26:27]
@@ -538,15 +540,18 @@ class MaskRCNNModel(FPNFasterRCNN):
             # rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
             # self.rcnn_bbox_loss, dim_target, True)
 
-
             # instance mask loss
             instance_mask_target = targets[stage_ind][4]
-            rcnn_instance_loss = rcnn_instance_loss + self.instance_mask_loss(instance_mask_target)
+            rcnn_instance_loss = rcnn_instance_loss + self.instance_mask_loss(
+                instance_mask_target)
 
         loss_dict.update({
-            'rcnn_mask_loss': rcnn_mask_loss.sum() / num_pos,
-            'rcnn_depth_loss': rcnn_depth_loss.sum() / num_pos,
-            'rcnn_instance_loss': rcnn_instance_loss.sum() / num_pos
+            'rcnn_mask_loss':
+            rcnn_mask_loss.sum() / num_pos,
+            'rcnn_depth_loss':
+            rcnn_depth_loss.sum() / num_pos,
+            'rcnn_instance_loss':
+            rcnn_instance_loss.sum() / num_pos
             # 'rcnn_corners_loss': rcnn_corners_loss,
             #  'rcnn_dim_loss': rcnn_dim_loss
         })

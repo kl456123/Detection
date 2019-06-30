@@ -351,7 +351,7 @@ rm results/images/*
     
     
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 128000 \
+    --checkpoint 596000 \
     --load_dir /data/object/liangxiong/test \
     --net mobileye \
     --thresh 0.5 \

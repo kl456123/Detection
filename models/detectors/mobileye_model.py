@@ -360,14 +360,13 @@ class FPNCornersModel(FPNFasterRCNN):
             height_gt = target[:, :, 8:12]
             corners_pred = pred[:, :, :8]
             corners_gt = target[:, :, :8]
-            visibility = target[:, :, 12:]
+            # visibility = target[:, :, 12:]
 
             N, M = corners_pred.shape[:2]
             corners_loss = self.l1_loss(
-                corners_pred, corners_gt) * weight.unsqueeze(-1) * torch.stack(
-                    [visibility] * 2, dim=-1).view(N, M, -1)
+                corners_pred, corners_gt) * weight.unsqueeze(-1).view(N, M, -1)
             height_loss = self.l1_loss(
-                height_pred, height_gt) * weight.unsqueeze(-1) * visibility
+                height_pred, height_gt) * weight.unsqueeze(-1)
             mobileye_loss = torch.cat([corners_loss, height_loss], dim=-1)
 
             # mobileye_loss = self.l1_loss(pred, target) * weight.unsqueeze(-1)
