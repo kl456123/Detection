@@ -141,14 +141,14 @@ class Mono3DKITTIDataset(KITTIDataset):
             # draw depth
             instance_depth = pointcloud_utils.cam_pts_to_rect_depth(
                 instance_pc[:3, :], K=p2[:3, :3], h=h, w=w)
-            mask[instance_depth>0] = i + 1
+            mask[instance_depth > 0] = i + 1
             depth = depth + instance_depth
 
         # import matplotlib.pyplot as plt
         # plt.imshow(mask)
         # plt.show()
         sample[constants.KEY_LABEL_DEPTHMAP] = depth[None]
-        sample[constants.KEY_INSTANCES_MASK] = mask[None]
+        sample[constants.KEY_LABEL_INSTANCES_MASK] = mask[None]
         # boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
         # boxes_2d_proj = sample[constants.KEY_LABEL_BOXES_2D]
         # p2 = sample[constants.KEY_STEREO_CALIB_P2]

@@ -336,15 +336,18 @@ class MobilEyeTargetAssigner(RegTargetAssigner):
         p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
         image_info = kwargs[constants.KEY_IMAGE_INFO]
         proposals = kwargs[constants.KEY_PROPOSALS]
+        label_boxes_2d = kwargs[constants.KEY_BOXES_2D]
 
         # prepare coder
         # 2d coder config
         coder = bbox_coders.build({'type': constants.KEY_MOBILEYE})
         label_boxes_3d = cls.generate_assigned_label(
             cls, kwargs[constants.KEY_MATCH], label_boxes_3d)
+        label_boxes_2d = cls.generate_assigned_label(
+            cls, kwargs[constants.KEY_MATCH], label_boxes_2d)
 
         reg_targets_batch = coder.encode_batch(label_boxes_3d, proposals, p2,
-                                               image_info)
+                                               image_info, label_boxes_2d)
 
         reg_targets_batch[match == -1] = 0
         # no need grad_fn

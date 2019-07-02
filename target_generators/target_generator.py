@@ -151,6 +151,10 @@ class TargetGenerator(object):
             # list
             loss_units = batch_ops.filter_tensor_container(loss_units,
                                                            batch_sampled_mask)
+
+            # match stats
+            match = batch_ops.filter_tensor_container(match, batch_sampled_mask)
+            auxiliary_dict[constants.KEY_MATCH] = match
         # generate pred
         # add pred for loss_unit
         for key in proposals_dict:

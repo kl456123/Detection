@@ -1,8 +1,8 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 8,
-            "num_workers": 8,
+            "batch_size": 1,
+            "num_workers": 1,
             "shuffle": true
         },
         "dataset_config": {
@@ -60,7 +60,7 @@
         "eval_out_rois": "./results/rois",
         "nms": 0.3,
         "rng_seed": 3,
-        "test_type": "test_corners_3d",
+        "test_type": "test_pc",
         "thresh": 0.5
     },
     "eval_data_config": {
@@ -208,7 +208,7 @@
         "disp_interval": 800,
         "num_iters": 600000,
         "optimizer_config": {
-            "base_lr": 0.001,
+            "base_lr": 0.005,
             "bias_lr_factor": 1,
             "eps": 1e-08,
             "momentum": 0.9,

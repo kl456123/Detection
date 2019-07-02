@@ -163,7 +163,6 @@ class FPNCornersModel(FPNFasterRCNN):
                 rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
                 rcnn_cls_probs).detach()
 
-
             # rcnn_corners_preds = coder.decode_batch(
             # rcnn_corners_preds.detach(), proposals)
 
@@ -176,8 +175,8 @@ class FPNCornersModel(FPNFasterRCNN):
             # rcnn_feat_maps, rois.view(-1, 5), im_info[0][:2])
 
             # shape(N,C,1,1)
-            pooled_feat_for_depth = self.third_stage_feature(pooled_feat)
-            pooled_feat_for_depth = pooled_feat_for_depth.mean(3).mean(2)
+            # pooled_feat_for_depth = self.third_stage_feature(pooled_feat)
+            # pooled_feat_for_depth = pooled_feat_for_depth.mean(3).mean(2)
             # rcnn_depth_preds = self.rcnn_depth_preds[i](pooled_feat_for_depth)
 
             # encode
@@ -211,10 +210,10 @@ class FPNCornersModel(FPNFasterRCNN):
         rcnn_corners_preds = coder.decode_batch(rcnn_corners_preds.detach(),
                                                 proposals)
         prediction_dict[constants.KEY_CORNERS_2D] = rcnn_corners_preds
-        if self.training:
-            corners_2d_gt = coder.decode_batch(
-                loss_units[constants.KEY_MOBILEYE]['target'], proposals)
-            prediction_dict['corners_2d_gt'] = corners_2d_gt
+        # if self.training:
+        # corners_2d_gt = coder.decode_batch(
+        # loss_units[constants.KEY_MOBILEYE]['target'], proposals)
+        # prediction_dict['corners_2d_gt'] = corners_2d_gt
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
             prediction_dict[constants.KEY_STATS] = multi_stage_stats
@@ -290,12 +289,12 @@ class FPNCornersModel(FPNFasterRCNN):
         # combine corners and its visibility
         in_channels = 1024
         self.rcnn_corners_preds = nn.ModuleList(
-            [nn.Linear(in_channels, 8 + 4) for _ in range(self.num_stages)])
+            [nn.Linear(in_channels, 11) for _ in range(self.num_stages)])
         # self.rcnn_depth_preds = nn.ModuleList(
         # [nn.Linear(in_channels, 1 * 8 + 1) for _ in range(self.num_stages)])
 
-        self.third_stage_feature = copy.deepcopy(
-            self.feature_extractor.second_stage_feature)
+        # self.third_stage_feature = copy.deepcopy(
+            # self.feature_extractor.second_stage_feature)
         # self.rcnn_center_depth_preds = nn.ModuleList(
         # [nn.Linear(1024, 1) for _ in range(self.num_stages)])
         # self.rcnn_visibility_preds = nn.ModuleList(
@@ -338,11 +337,11 @@ class FPNCornersModel(FPNFasterRCNN):
         """
         loss_dict = super().loss(prediction_dict, feed_dict)
         targets = prediction_dict[constants.KEY_TARGETS]
-        corners_2d = prediction_dict[constants.KEY_CORNERS_2D]
-        corners_2d_gt = prediction_dict['corners_2d_gt']
-        rcnn_corners_loss = 0
-        rcnn_dim_loss = 0
-        slope_loss = 0
+        # corners_2d = prediction_dict[constants.KEY_CORNERS_2D]
+        # corners_2d_gt = prediction_dict['corners_2d_gt']
+        # rcnn_corners_loss = 0
+        # rcnn_dim_loss = 0
+        # slope_loss = 0
         # import ipdb
         # ipdb.set_trace()
 
@@ -356,30 +355,42 @@ class FPNCornersModel(FPNFasterRCNN):
             num_pos = num_pos.clamp(min=1)
             # import ipdb
             # ipdb.set_trace()
-            height_pred = pred[:, :, 8:12]
-            height_gt = target[:, :, 8:12]
-            corners_pred = pred[:, :, :8]
-            corners_gt = target[:, :, :8]
-            # visibility = target[:, :, 12:]
+            height_pred = pred[:, :, 6:9]
+            height_gt = target[:, :, 6:9]
+            corners_pred = pred[:, :, :6]
+            corners_gt = target[:, :, :6]
+            visibility_gt = target[:, :, 9]
+            visibility_pred = pred[:, :, 9:11]
 
             N, M = corners_pred.shape[:2]
             corners_loss = self.l1_loss(
-                corners_pred, corners_gt) * weight.unsqueeze(-1).view(N, M, -1)
-            height_loss = self.l1_loss(
-                height_pred, height_gt) * weight.unsqueeze(-1)
+                corners_pred, corners_gt) * weight.unsqueeze(-1).view(
+                    N, M, -1)
+            visibility_weights = torch.ones_like(corners_loss)
+            visibility_weights[:, :, 2] = visibility_gt
+            visibility_weights[:, :, 3] = visibility_gt
+            corners_loss = corners_loss * visibility_weights
+            height_loss = self.l1_loss(height_pred,
+                                       height_gt) * weight.unsqueeze(
+                                           -1) * visibility_weights[:, :, ::2]
             mobileye_loss = torch.cat([corners_loss, height_loss], dim=-1)
 
             # mobileye_loss = self.l1_loss(pred, target) * weight.unsqueeze(-1)
 
             # get slope for pred and gt
 
-            bottom_corners_pred = corners_2d[:, :, :4]
-            bottom_corners_gt = corners_2d_gt[:, :, :4]
-            slope_pred = self.get_slope(bottom_corners_pred)
-            slope_gt = self.get_slope(bottom_corners_gt)
+            # bottom_corners_pred = corners_2d[:, :, :4]
+            # bottom_corners_gt = corners_2d_gt[:, :, :4]
+            # slope_pred = self.get_slope(bottom_corners_pred)
+            # slope_gt = self.get_slope(bottom_corners_gt)
 
-            slope_loss = slope_loss + self.l1_loss(
-                slope_pred, slope_gt) * weight.unsqueeze(-1).unsqueeze(-1)
+            # slope_loss = slope_loss + self.l1_loss(
+            # slope_pred, slope_gt) * weight.unsqueeze(-1).unsqueeze(-1)
+            # import ipdb
+            # ipdb.set_trace()
+            visibility_loss = self.rcnn_cls_loss(
+                visibility_pred.view(-1, 2),
+                visibility_gt.long().view(-1)) * weight.view(-1)
             # rcnn_corners_loss = rcnn_corners_loss + common_loss.calc_loss(
             # self.rcnn_corners_loss, orient_target, True)
 
@@ -389,6 +400,7 @@ class FPNCornersModel(FPNFasterRCNN):
 
         loss_dict.update({
             'mobileye_loss': mobileye_loss.sum() / num_pos,
+            'visibility_loss': visibility_loss.sum() / num_pos
             # 'slope_loss': slope_loss.sum() / num_pos
             # 'rcnn_corners_loss': rcnn_corners_loss,
             #  'rcnn_dim_loss': rcnn_dim_loss

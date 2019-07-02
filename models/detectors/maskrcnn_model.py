@@ -72,6 +72,11 @@ class KeyPointPredictor(nn.Module):
 
 @DETECTORS.register('maskrcnn')
 class MaskRCNNModel(FPNFasterRCNN):
+    def init_param(self, model_config):
+        super().init_param(model_config)
+        self.mask_enable = False
+        self.depth_enable = True
+
     def maskrcnn_pyramid_rcnn_pooling(self, rcnn_feat_maps, rois_batch,
                                       input_size):
         pooled_feats = []
@@ -103,7 +108,10 @@ class MaskRCNNModel(FPNFasterRCNN):
 
     def forward(self, feed_dict):
 
+        # self.crop_instance_map_gt(feed_dict)
+
         im_info = feed_dict[constants.KEY_IMAGE_INFO]
+        batch_size = im_info.shape[0]
 
         prediction_dict = {}
 
@@ -130,7 +138,8 @@ class MaskRCNNModel(FPNFasterRCNN):
                     constants.KEY_LABEL_BOXES_2D]
                 gt_dict[constants.KEY_CLASSES] = None
                 gt_dict[constants.KEY_BOXES_2D] = None
-                gt_dict[constants.KEY_CORNERS_3D_GRNET] = None
+                if self.depth_enable:
+                    gt_dict[constants.KEY_CORNERS_3D_GRNET] = None
                 # gt_dict[constants.KEY_INSTANCES_MASK] = None
                 # gt_dict[constants.KEY_KEYPOINTS] = None
                 # gt_dict[constants.KEY_CORNERS_VISIBILITY] = None
@@ -139,14 +148,16 @@ class MaskRCNNModel(FPNFasterRCNN):
 
                 # auxiliary_dict(used for encoding)
                 auxiliary_dict = {}
-                auxiliary_dict[constants.KEY_STEREO_CALIB_P2] = feed_dict[
-                    constants.KEY_STEREO_CALIB_P2]
+                if self.depth_enable:
+                    auxiliary_dict[constants.KEY_STEREO_CALIB_P2] = feed_dict[
+                        constants.KEY_STEREO_CALIB_P2]
+                    auxiliary_dict[constants.KEY_BOXES_3D] = feed_dict[
+                        constants.KEY_LABEL_BOXES_3D]
                 auxiliary_dict[constants.KEY_BOXES_2D] = feed_dict[
                     constants.KEY_LABEL_BOXES_2D]
                 auxiliary_dict[constants.KEY_CLASSES] = feed_dict[
                     constants.KEY_LABEL_CLASSES]
-                auxiliary_dict[constants.KEY_BOXES_3D] = feed_dict[
-                    constants.KEY_LABEL_BOXES_3D]
+
                 auxiliary_dict[constants.KEY_NUM_INSTANCES] = feed_dict[
                     constants.KEY_NUM_INSTANCES]
                 auxiliary_dict[constants.KEY_PROPOSALS] = proposals
@@ -170,16 +181,7 @@ class MaskRCNNModel(FPNFasterRCNN):
             pooled_feat = self.pyramid_rcnn_pooling(rcnn_feat_maps,
                                                     rois.view(-1, 5),
                                                     im_info[0][:2])
-            mask_pooled_feat = self.maskrcnn_pyramid_rcnn_pooling(
-                rcnn_feat_maps, rois.view(-1, 5), im_info[0][:2])
-            depth_map = self.keypoint_predictor(mask_pooled_feat)
 
-            instance_map = self.keypoint_predictor(mask_pooled_feat)
-
-            # keypoint_scores = keypoint_heatmap.view(-1, 56 * 56)
-            # keypoint_probs = F.softmax(keypoint_scores, dim=-1)
-
-            # shape(N,C,1,1)
             pooled_feat_for_corners = self.feature_extractor.second_stage_feature(
                 pooled_feat)
             pooled_feat_for_corners = pooled_feat_for_corners.mean(3).mean(2)
@@ -195,7 +197,6 @@ class MaskRCNNModel(FPNFasterRCNN):
 
             rcnn_cls_probs = F.softmax(rcnn_cls_scores, dim=1)
 
-            batch_size = rois.shape[0]
             rcnn_cls_scores = rcnn_cls_scores.view(batch_size, -1,
                                                    self.n_classes)
             rcnn_cls_probs = rcnn_cls_probs.view(batch_size, -1,
@@ -206,109 +207,112 @@ class MaskRCNNModel(FPNFasterRCNN):
             rcnn_dim_preds = rcnn_dim_preds.view(batch_size, -1, 3)
 
             rcnn_depth_preds = rcnn_depth_preds.view(batch_size, -1, 1)
-
-            # decode for next stage
-
-            # keypoint_coder = bbox_coders.build({
-            # 'type':
-            # constants.KEY_KEYPOINTS_HEATMAP
-            # })
-            # resolution = keypoint_coder.resolution
+            if not self.training:
+                coder = bbox_coders.build(
+                    self.target_generators[i]
+                    .target_generator_config['coder_config'])
+                proposals = coder.decode_batch(rcnn_bbox_preds,
+                                               proposals).detach()
+                rois = box_ops.box2rois(proposals)
+                mask_pooled_feat = self.maskrcnn_pyramid_rcnn_pooling(
+                    rcnn_feat_maps, rois.view(-1, 5), im_info[0][:2])
+            else:
+                mask_pooled_feat = self.maskrcnn_pyramid_rcnn_pooling(
+                    rcnn_feat_maps, rois.view(-1, 5), im_info[0][:2])
             resolution = 28
-            depth_map = depth_map.view(batch_size, -1, resolution * resolution)
-            instance_map = instance_map.view(batch_size, -1,
-                                             resolution * resolution)
-            # keypoints = keypoint_coder.decode_batch(proposals,
-            # keypoint_heatmap)
+            batch_size = rois.shape[0]
+            if self.depth_enable:
+                depth_map = self.depth_map_predictor(mask_pooled_feat)
+                depth_map = depth_map.view(batch_size, -1,
+                                           resolution * resolution)
 
-            # coder = bbox_coders.build({'type': constants.KEY_DIMS})
-            # rcnn_dim_preds = coder.decode_batch(
-            # rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
-            # rcnn_cls_probs).detach()
+            if self.mask_enable:
+                instance_map = self.instance_map_predictor(mask_pooled_feat)
+                instance_map = instance_map.view(batch_size, -1,
+                                                 resolution * resolution * 2)
+
+            # keypoint_scores = keypoint_heatmap.view(-1, 56 * 56)
+            # keypoint_probs = F.softmax(keypoint_scores, dim=-1)
 
             # shape(N,C,1,1)
-            # import ipdb
-            # ipdb.set_trace()
 
             if self.training:
                 loss_units[constants.KEY_CLASSES]['pred'] = rcnn_cls_scores
                 loss_units[constants.KEY_BOXES_2D]['pred'] = rcnn_bbox_preds
                 # loss_units[constants.KEY_DIMS]['pred'] = rcnn_dim_preds
                 # loss_units[constants.KEY_KEYPOINTS]['pred'] = keypoint_heatmap
-                loss_units[constants.KEY_DEPTHMAP] = {}
-                loss_units[constants.KEY_DEPTHMAP]['pred'] = depth_map
                 weights = loss_units[constants.KEY_BOXES_2D]['weight']
+                if self.depth_enable:
+                    loss_units[constants.KEY_DEPTHMAP] = {}
+                    loss_units[constants.KEY_DEPTHMAP]['pred'] = depth_map
 
-                # depth map loss units
-                loss_units[constants.KEY_DEPTHMAP]['weight'] = weights
-                loss_units[constants.KEY_CORNERS_3D_GRNET][
-                    'pred'] = rcnn_depth_preds
+                    # depth map loss units
+                    loss_units[constants.KEY_DEPTHMAP]['weight'] = weights
+                    loss_units[constants.KEY_CORNERS_3D_GRNET][
+                        'pred'] = rcnn_depth_preds
+                    # import ipdb
+                    # ipdb.set_trace()
+                    fg_map = self.crop_instance_map(
+                        proposals,
+                        feed_dict[constants.KEY_LABEL_INSTANCES_MASK],
+                        weights,
+                        auxiliary_dict[constants.KEY_MATCH],
+                        mask_size=resolution)
+                    loss_units[constants.KEY_DEPTHMAP]['fg_weight'] = fg_map
 
-                proposals_depth_map = self.crop_depth_map(
-                    proposals,
-                    feed_dict[constants.KEY_LABEL_DEPTHMAP],
-                    weights,
-                    mask_size=resolution)
-                loss_units[constants.KEY_DEPTHMAP][
-                    'target'] = proposals_depth_map
+                    proposals_depth_map = self.crop_depth_map(
+                        proposals,
+                        feed_dict[constants.KEY_LABEL_DEPTHMAP],
+                        weights,
+                        mask_size=resolution)
+                    loss_units[constants.KEY_DEPTHMAP][
+                        'target'] = proposals_depth_map
 
-                # instance map loss units
-                proposals_instance_map = self.crop_instance_map(
-                    proposals,
-                    feed_dict[constants.KEY_INSTANCES_MASK],
-                    weights,
-                    loss_units[constants.KEY_CLASSES]['target'],
-                    mask_size=resolution)
-                instance_mask_units = {
-                    'pred': instance_map,
-                    'weight': weights,
-                    'target': proposals_instance_map
-                }
-                loss_units[constants.KEY_INSTANCES_MASK] = instance_mask_units
+                if self.mask_enable:
+                    # instance map loss units
+                    proposals_instance_map = self.crop_instance_map(
+                        proposals,
+                        feed_dict[constants.KEY_LABEL_INSTANCES_MASK],
+                        weights,
+                        auxiliary_dict[constants.KEY_MATCH],
+                        feed_dict[constants.KEY_IMAGE_INFO],
+                        mask_size=resolution)
+                    instance_mask_units = {
+                        'pred': instance_map,
+                        'weight': weights,
+                        'target': proposals_instance_map
+                    }
+                    loss_units[constants.
+                               KEY_LABEL_INSTANCES_MASK] = instance_mask_units
 
-                # loss_units[constants.KEY_CORNERS_VISIBILITY][
-                # 'pred'] = rcnn_visibility_preds
-                # import ipdb
-                # ipdb.set_trace()
                 multi_stage_loss_units.append([
                     loss_units[constants.KEY_CLASSES],
                     loss_units[constants.KEY_BOXES_2D],
-                    loss_units[constants.KEY_DEPTHMAP],
-                    loss_units[constants.KEY_CORNERS_3D_GRNET],
-                    loss_units[constants.KEY_INSTANCES_MASK]
-                    # loss_units[constants.KEY_KEYPOINTS],
-                    # loss_units[constants.KEY_DIMS]
                 ])
-                multi_stage_stats.append(stats)
 
-            coder = bbox_coders.build(self.target_generators[i]
-                                      .target_generator_config['coder_config'])
-            proposals = coder.decode_batch(rcnn_bbox_preds, proposals).detach()
+                if self.depth_enable:
+                    multi_stage_loss_units[0].extend([
+                        loss_units[constants.KEY_DEPTHMAP],
+                        loss_units[constants.KEY_CORNERS_3D_GRNET]
+                    ])
+                if self.mask_enable:
+                    multi_stage_loss_units[0].append(
+                        loss_units[constants.KEY_LABEL_INSTANCES_MASK])
+                multi_stage_stats.append(stats)
 
         if self.training:
             prediction_dict[constants.KEY_TARGETS] = multi_stage_loss_units
             prediction_dict[constants.KEY_STATS] = multi_stage_stats
-            # prediction_dict['center_depth'] = rcnn_depth_preds
         else:
             prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
 
             image_info = feed_dict[constants.KEY_IMAGE_INFO]
             image_info = image_info.unsqueeze(1).unsqueeze(1)
-            # import ipdb
-            # ipdb.set_trace()
             proposals[:, :, ::2] = proposals[:, :, ::2] / image_info[..., 3]
             proposals[:, :, 1::2] = proposals[:, :, 1::2] / image_info[..., 2]
             prediction_dict[constants.KEY_BOXES_2D] = proposals
             prediction_dict[
                 constants.KEY_DEPTHMAP] = depth_map + rcnn_depth_preds
-            # prediction_dict[constants.KEY_DIMS] = rcnn_dim_preds
-
-            # keypoints[..., 0] = keypoints[..., 0] / image_info[
-            # ..., 3].unsqueeze(-1)
-            # keypoints[..., 1] = keypoints[..., 1] / image_info[
-            # ..., 2].unsqueeze(-1)
-            # # shape(N,M,8,2)
-            # prediction_dict[constants.KEY_CORNERS_2D] = keypoints
 
         if self.training:
             loss_dict = self.loss(prediction_dict, feed_dict)
@@ -316,11 +320,31 @@ class MaskRCNNModel(FPNFasterRCNN):
         else:
             return prediction_dict
 
+    def crop_instance_map_gt(self, feed_dict):
+        # import ipdb
+        # ipdb.set_trace()
+        instance_map = feed_dict[constants.KEY_LABEL_INSTANCES_MASK]
+        label_boxes_2d = feed_dict[constants.KEY_LABEL_BOXES_2D]
+        num_instances = feed_dict[constants.KEY_NUM_INSTANCES]
+        image_info = feed_dict[constants.KEY_IMAGE_INFO]
+        x = label_boxes_2d[..., ::2] / image_info[:, 3][..., None, None]
+        y = label_boxes_2d[..., 1::2] / image_info[:, 2][..., None, None]
+        orig_boxes_2d = torch.stack(
+            [x[..., 0], y[..., 0], x[..., 1], y[..., 1]], dim=-1).long()
+
+        for batch_ind in range(label_boxes_2d.shape[0]):
+            for box_id in range(num_instances):
+                box = orig_boxes_2d[batch_ind][box_id]
+
+                cropped_mask = instance_map[batch_ind:batch_ind + 1, :, box[1]:
+                                            box[3], box[0]:box[2]]
+
     def crop_instance_map(self,
                           proposals,
                           depth_map,
                           weights,
                           match,
+                          image_info=None,
                           mask_size=28,
                           device='cuda'):
         """
@@ -331,10 +355,22 @@ class MaskRCNNModel(FPNFasterRCNN):
         Returns:
             proposals_depth_map: shape(N, M, mask_size*mask_size)
         """
+        # import ipdb
+        # ipdb.set_trace()
+        # import matplotlib.pyplot as plt
+        # plt.imshow(depth_map.cpu().numpy()[0, 0])
+
         N, M = proposals.shape[:2]
         H, W = depth_map.shape[-2:]
+        if image_info is not None:
+            x = proposals[..., ::2] / image_info[:, 3][..., None, None]
+            y = proposals[..., 1::2] / image_info[:, 2][..., None, None]
+            proposals = torch.stack(
+                [x[..., 0], y[..., 0], x[..., 1], y[..., 1]], dim=-1)
         proposals = proposals.long()
         depth_targets = []
+        # zero refers to bg
+        match = match + 1
         for batch_ind in range(N):
             # proposals
             proposals_single_image = proposals[batch_ind]
@@ -348,16 +384,27 @@ class MaskRCNNModel(FPNFasterRCNN):
                 box = pos_proposals_single_image[proposals_ind]
                 cropped_mask = depth_map[batch_ind:batch_ind + 1, :, box[1]:
                                          box[3], box[0]:box[2]]
+                # plt.imshow(cropped_mask.cpu().numpy()[0, 0])
+                # plt.show()
                 instance_mask = torch.zeros_like(cropped_mask)
                 instance_mask[cropped_mask == pos_match_single_image[
                     proposals_ind]] = 1
+
                 instance_mask = F.upsample_bilinear(
                     instance_mask.float(), size=mask_size)
-                instance_mask[instance_mask >= 0.5] = 1
-                instance_mask[instance_mask < 0.5] = 0
+                instance_mask[instance_mask > 0] = 1
+                # instance_mask[instance_mask < 0.5] = 0
+                # plt.imshow(instance_mask.cpu().numpy()[0, 0])
+                # plt.show()
+
                 depth_targets.append(instance_mask.long())
 
-        depth_targets = torch.cat(depth_targets, dim=1)
+        # import ipdb
+        # ipdb.set_trace()
+        if len(depth_targets) == 0:
+            depth_targets = torch.zeros(1, 0, 28, 28).type_as(depth_map)
+        else:
+            depth_targets = torch.cat(depth_targets, dim=1)
         return depth_targets.view(-1, mask_size * mask_size)
 
     def crop_depth_map(self,
@@ -374,6 +421,7 @@ class MaskRCNNModel(FPNFasterRCNN):
         Returns:
             proposals_depth_map: shape(N, M, mask_size*mask_size)
         """
+        # import matplotlib.pyplot as plt
         N, M = proposals.shape[:2]
         H, W = depth_map.shape[-2:]
         proposals = proposals.long()
@@ -389,6 +437,8 @@ class MaskRCNNModel(FPNFasterRCNN):
                         depth_map[batch_ind:batch_ind + 1, :, box[1]:box[3],
                                   box[0]:box[2]],
                         size=mask_size))
+                # plt.imshow(depth_targets[-1].cpu().numpy()[0, 0])
+                # plt.show()
 
         depth_targets = torch.cat(depth_targets, dim=1)
         return depth_targets.view(-1, mask_size * mask_size)
@@ -423,34 +473,21 @@ class MaskRCNNModel(FPNFasterRCNN):
 
     def init_modules(self):
         super().init_modules()
-        # combine corners and its visibility
-        # self.rcnn_corners_preds = nn.ModuleList(
-        # [nn.Linear(1024, 4 * 8) for _ in range(self.num_stages)])
-
-        # self.third_stage_feature = copy.deepcopy(
-        # self.feature_extractor.second_stage_feature)
-        # self.rcnn_center_depth_preds = nn.ModuleList(
-        # [nn.Linear(1024, 1) for _ in range(self.num_stages)])
-        # self.rcnn_visibility_preds = nn.ModuleList(
-        # [nn.Linear(1024, 2 * 8) for _ in range(self.num_stages)])
-
         # not class agnostic for dims
         self.rcnn_dim_preds = nn.ModuleList(
             [nn.Linear(1024, 3) for _ in range(self.num_stages)])
 
-        #  self.rcnn_orient_loss = OrientationLoss()
-        # self.rcnn_corners_loss = CornersLoss(
-        # use_filter=self.use_filter, training_depth)
-
         self.maskrcnn_pooling = AdaptiveROIAlign((14, 14), 2)
-        self.keypoint_predictor = KeyPointPredictor(256, 1)
+        if self.depth_enable:
+            self.depth_map_predictor = KeyPointPredictor(256, 1)
+        if self.mask_enable:
+            self.instance_map_predictor = KeyPointPredictor(256, 2)
         self.rcnn_depth_preds = nn.ModuleList(
             [nn.Linear(1024, 1) for _ in range(self.num_stages)])
         self.l1_loss = nn.L1Loss(reduction='none')
+        self.l2_loss = nn.MSELoss(reduction='none')
+        self.smooth_l1_loss = nn.SmoothL1Loss(reduction='none')
         self.mask_loss = nn.CrossEntropyLoss(reduction='none')
-        # self.rcnn_kp_loss = functools.partial(
-        # F.cross_entropy, reduce=False, ignore_index=-1)
-        # self.rcnn_kp_loss = KeyPointLoss()
 
     def depth_map_loss(self, mask_target, center_depth_gt):
         """
@@ -464,6 +501,7 @@ class MaskRCNNModel(FPNFasterRCNN):
         mask_preds = mask_target['pred']
         pos_mask = mask_target['target']
         weights = mask_target['weight']
+        fg_map = mask_target['fg_weight']
         # positive sample filter
         pos_filter = weights.view(-1) > 0
         pos_mask_preds = mask_preds.view(-1, mask_preds.shape[-1])[pos_filter]
@@ -476,21 +514,27 @@ class MaskRCNNModel(FPNFasterRCNN):
         non_zero_filter = pos_mask > 0
         non_zero_mask_deltas_preds = pos_mask_preds[non_zero_filter]
         non_zero_mask_deltas_gt = pos_mask_deltas_gt[non_zero_filter]
+        non_zero_fg_map = fg_map[non_zero_filter]
         # non_zero_center_depth_gt = pos_center_depth_gt[non_zero_filter]
 
         # fg mask filter
 
-        fg_filter = torch.abs(non_zero_mask_deltas_gt) < 2.5
+        # import ipdb
+        # ipdb.set_trace()
+        # prevent bg and ground plane
+        fg_filter = non_zero_fg_map > 0
+        fg_filter = (torch.abs(non_zero_mask_deltas_gt) <
+                     2.5) & (non_zero_fg_map > 0)
 
-        mask_loss = self.l1_loss(non_zero_mask_deltas_preds[fg_filter],
-                                 non_zero_mask_deltas_gt[fg_filter])
+        mask_loss = self.smooth_l1_loss(non_zero_mask_deltas_preds[fg_filter],
+                                        non_zero_mask_deltas_gt[fg_filter])
         # num_pos = weights[weights > 0].float().sum()
         # num_pos = num_pos.clamp(min=1)
         return mask_loss
 
     def instance_mask_loss(self, mask_target):
-        import ipdb
-        ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
         mask_preds = mask_target['pred']
         pos_mask = mask_target['target']
         weights = mask_target['weight']
@@ -498,7 +542,10 @@ class MaskRCNNModel(FPNFasterRCNN):
         # positive sample filter
         pos_filter = weights.view(-1) > 0
         pos_mask_preds = mask_preds.view(-1, mask_preds.shape[-1])[pos_filter]
-        mask_loss = self.mask_loss()
+        if pos_mask.numel() == 0:
+            return torch.zeros(1).type_as(pos_mask_preds)
+        mask_loss = self.mask_loss(
+            pos_mask_preds.view(-1, self.n_classes), pos_mask.view(-1))
         return mask_loss
 
     def loss(self, prediction_dict, feed_dict):
@@ -523,37 +570,43 @@ class MaskRCNNModel(FPNFasterRCNN):
 
             # import ipdb
             # ipdb.set_trace()
-            depth_target = targets[stage_ind][3]
-            center_depth_preds = depth_target['pred']
-            center_depth_gt = depth_target['target'][:, :, 26:27]
-            weights = depth_target['weight']
 
-            rcnn_depth_loss = rcnn_depth_loss + self.l1_loss(
-                center_depth_preds, center_depth_gt) * weights.unsqueeze(-1)
-            num_pos = weights[weights > 0].float().sum()
-            num_pos = num_pos.clamp(min=1)
+            if self.mask_enable:
+                instance_mask_target = targets[stage_ind][-1]
+                weights = instance_mask_target['weight']
+                num_pos = weights[weights > 0].float().sum()
+                num_pos = num_pos.clamp(min=1)
+                rcnn_instance_loss = rcnn_instance_loss + self.instance_mask_loss(
+                    instance_mask_target).sum() / num_pos
 
-            depth_map_target = targets[stage_ind][2]
-            rcnn_mask_loss = rcnn_mask_loss + self.depth_map_loss(
-                depth_map_target, center_depth_gt)
+            if self.depth_enable:
+                depth_target = targets[stage_ind][3]
+                center_depth_preds = depth_target['pred']
+                center_depth_gt = depth_target['target'][:, :, 26:27]
+                weights = depth_target['weight']
+                num_pos = weights[weights > 0].float().sum()
+                num_pos = num_pos.clamp(min=1)
+
+                rcnn_depth_loss = rcnn_depth_loss + (
+                    self.l1_loss(center_depth_preds, center_depth_gt
+                                 ) * weights.unsqueeze(-1)).sum() / num_pos
+
+                depth_map_target = targets[stage_ind][2]
+                rcnn_mask_loss = rcnn_mask_loss + self.depth_map_loss(
+                    depth_map_target, center_depth_gt).sum() / num_pos
             # dim_target = targets[stage_ind][3]
             # rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
             # self.rcnn_bbox_loss, dim_target, True)
 
             # instance mask loss
-            instance_mask_target = targets[stage_ind][4]
-            rcnn_instance_loss = rcnn_instance_loss + self.instance_mask_loss(
-                instance_mask_target)
 
-        loss_dict.update({
-            'rcnn_mask_loss':
-            rcnn_mask_loss.sum() / num_pos,
-            'rcnn_depth_loss':
-            rcnn_depth_loss.sum() / num_pos,
-            'rcnn_instance_loss':
-            rcnn_instance_loss.sum() / num_pos
-            # 'rcnn_corners_loss': rcnn_corners_loss,
-            #  'rcnn_dim_loss': rcnn_dim_loss
-        })
+        if self.mask_enable:
+            loss_dict.update({'rcnn_instance_loss': rcnn_instance_loss})
+
+        if self.depth_enable:
+            loss_dict.update({
+                'rcnn_mask_loss': rcnn_mask_loss,
+                'rcnn_depth_loss': rcnn_depth_loss
+            })
 
         return loss_dict

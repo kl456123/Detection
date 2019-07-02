@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # SWITCH that you only should care about
 DATASET_TYPE = 'mono_3d_kitti'
+# DATASET_TYPE = 'cityscape'
 #  DATASET_TYPE = 'keypoint_kitti'
 # DATASET_TYPE = 'nuscenes'
 # DATASET_TYPE = 'bdd'
@@ -10,10 +11,10 @@ DATASET_TYPE = 'mono_3d_kitti'
 # NET_TYPE = 'prnet'
 # NET_TYPE = 'prnet_mono_3d'
 # NET_TYPE = 'fpn_corners_3d'
-NET_TYPE = 'fpn_grnet'
+# NET_TYPE = 'fpn_grnet'
 # NET_TYPE = 'faster_rcnn'
 # NET_TYPE = 'fpn'
-#  NET_TYPE = 'maskrcnn'
+NET_TYPE = 'maskrcnn'
 # DATASET_TYPE = 'kitti'
 JOBS = False
 DEBUG = not JOBS
@@ -82,11 +83,14 @@ if NET_TYPE in ['fpn', 'prnet', 'faster_rcnn']:
     test_type = 'test_2d'
 elif NET_TYPE in [
         'fpn_corners_2d', 'fpn_corners_3d', 'prnet_mono_3d',
-        'fpn_corners_stable', 'maskrcnn', 'fpn_grnet'
+        'fpn_corners_stable', 'fpn_grnet'
 ]:
     test_type = 'test_corners_3d'
 elif NET_TYPE in ['fpn_mono_3d']:
     test_type = 'test_3d'
+elif NET_TYPE in ['maskrcnn']:
+
+    test_type = 'test_pc'
 else:
     raise TypeError('unknown test type!')
 
@@ -157,6 +161,13 @@ elif DATASET_TYPE == "nuscenes":
     data_path = "samples/CAM_FRONT"
     label_path = "."
     image_size = [384, 1280]
+elif DATASET_TYPE == 'cityscape':
+    dataset_type = 'cityscape'
+    classes = ["car"]
+    root_path = "/data/Cityscape"
+    data_path = "leftImg8bit_trainvaltest/leftImg8bit"
+    label_path = "./gtFine"
+    image_size = [384, 768]
 else:
     raise TypeError('dataset type {} is unknown !'.format(DATASET_TYPE))
 
@@ -215,6 +226,11 @@ def generate_dataset_config(training):
         pass
     elif dataset_type == 'nuscenes':
         dataset_config.update({"data_path": data_path, "label_path": "."})
+    elif dataset_type == 'cityscape':
+        dataset_config.update({
+            'data_path': data_path,
+            "label_path": "./gtFine"
+        })
     return dataset_config
 
 
