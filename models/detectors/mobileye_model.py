@@ -289,12 +289,12 @@ class FPNCornersModel(FPNFasterRCNN):
         # combine corners and its visibility
         in_channels = 1024
         self.rcnn_corners_preds = nn.ModuleList(
-            [nn.Linear(in_channels, 11) for _ in range(self.num_stages)])
+            [nn.Linear(in_channels, 16) for _ in range(self.num_stages)])
         # self.rcnn_depth_preds = nn.ModuleList(
         # [nn.Linear(in_channels, 1 * 8 + 1) for _ in range(self.num_stages)])
 
         # self.third_stage_feature = copy.deepcopy(
-            # self.feature_extractor.second_stage_feature)
+        # self.feature_extractor.second_stage_feature)
         # self.rcnn_center_depth_preds = nn.ModuleList(
         # [nn.Linear(1024, 1) for _ in range(self.num_stages)])
         # self.rcnn_visibility_preds = nn.ModuleList(
@@ -314,6 +314,7 @@ class FPNCornersModel(FPNFasterRCNN):
         # self.rcnn_corners_loss = CornersLoss(
         # use_filter=self.use_filter, training_depth=self.training_depth)
         self.l1_loss = nn.L1Loss(reduction='none')
+        self.l2_loss = nn.MSELoss(reduction='none')
 
     def get_slope(self, bottom_corners):
         """
@@ -353,54 +354,18 @@ class FPNCornersModel(FPNFasterRCNN):
             weight = mobileye_target['weight']
             num_pos = weight[weight > 0].float().sum()
             num_pos = num_pos.clamp(min=1)
-            # import ipdb
-            # ipdb.set_trace()
-            height_pred = pred[:, :, 6:9]
-            height_gt = target[:, :, 6:9]
-            corners_pred = pred[:, :, :6]
-            corners_gt = target[:, :, :6]
-            visibility_gt = target[:, :, 9]
-            visibility_pred = pred[:, :, 9:11]
+            N, M = pred.shape[:2]
 
-            N, M = corners_pred.shape[:2]
-            corners_loss = self.l1_loss(
-                corners_pred, corners_gt) * weight.unsqueeze(-1).view(
-                    N, M, -1)
-            visibility_weights = torch.ones_like(corners_loss)
-            visibility_weights[:, :, 2] = visibility_gt
-            visibility_weights[:, :, 3] = visibility_gt
-            corners_loss = corners_loss * visibility_weights
-            height_loss = self.l1_loss(height_pred,
-                                       height_gt) * weight.unsqueeze(
-                                           -1) * visibility_weights[:, :, ::2]
-            mobileye_loss = torch.cat([corners_loss, height_loss], dim=-1)
+            encoded_corners_2d = target[:, :, :16]
+            visibility = target[:, :, 16:]
 
-            # mobileye_loss = self.l1_loss(pred, target) * weight.unsqueeze(-1)
-
-            # get slope for pred and gt
-
-            # bottom_corners_pred = corners_2d[:, :, :4]
-            # bottom_corners_gt = corners_2d_gt[:, :, :4]
-            # slope_pred = self.get_slope(bottom_corners_pred)
-            # slope_gt = self.get_slope(bottom_corners_gt)
-
-            # slope_loss = slope_loss + self.l1_loss(
-            # slope_pred, slope_gt) * weight.unsqueeze(-1).unsqueeze(-1)
-            # import ipdb
-            # ipdb.set_trace()
-            visibility_loss = self.rcnn_cls_loss(
-                visibility_pred.view(-1, 2),
-                visibility_gt.long().view(-1)) * weight.view(-1)
-            # rcnn_corners_loss = rcnn_corners_loss + common_loss.calc_loss(
-            # self.rcnn_corners_loss, orient_target, True)
-
-            # dim_target = targets[stage_ind][3]
-            # rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
-            # self.rcnn_bbox_loss, dim_target, True)
+            mobileye_loss = self.l2_loss(
+                pred, encoded_corners_2d) * weight.unsqueeze(-1)
+            mobileye_loss = mobileye_loss.view(N, M, 8,
+                                               2) * visibility.unsqueeze(-1)
 
         loss_dict.update({
             'mobileye_loss': mobileye_loss.sum() / num_pos,
-            'visibility_loss': visibility_loss.sum() / num_pos
             # 'slope_loss': slope_loss.sum() / num_pos
             # 'rcnn_corners_loss': rcnn_corners_loss,
             #  'rcnn_dim_loss': rcnn_dim_loss

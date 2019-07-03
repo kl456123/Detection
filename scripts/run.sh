@@ -118,7 +118,7 @@ CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
     --config configs/test_config.json \
     --model /data/object/liangxiong/test/fpn_corners_3d/mono_3d_kitti/detector_600000.pth
 
-# CUDA_VISIBLE_DEVICES=0 python train.py --cuda \
+# CUDA_VISIBLE_DEVICES=1 python train.py --cuda \
     # --net mobileye \
     # --out_path /data/object/liangxiong/test \
     # --config configs/test_config.json \

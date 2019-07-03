@@ -1,4 +1,6 @@
 import os
+import torch
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 from core.utils.common import compile_cxx
 compile_cxx()

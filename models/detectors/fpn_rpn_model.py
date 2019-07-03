@@ -21,6 +21,35 @@ import bbox_coders
 
 @DETECTORS.register('fpn_rpn')
 class RPNModel(_RPNModel):
+    def check_proposals(self, proposals, debug=False):
+        # import ipdb
+        # ipdb.set_trace()
+        ws = proposals[:, :, 2] - proposals[:, :, 0]
+        hs = proposals[:, :, 3] - proposals[:, :, 1]
+        cond = ((ws[ws > 0].min() >= 2) & (hs[hs > 0].min() >= 2))
+        if debug:
+            if not cond:
+                import ipdb
+                ipdb.set_trace()
+        else:
+            assert cond
+
+    def remove_small_boxes(self, proposals, min_size=16):
+        """
+        Args:
+            proposals: shape(M, 4)
+            scores: shape(M)
+        Returns:
+            proposals
+            scores
+        """
+        # proposals = proposals.long()
+        ws = proposals[:, 2] - proposals[:, 0]
+        hs = proposals[:, 3] - proposals[:, 1]
+        size_filter = (ws >= min_size) & (hs >= min_size)
+        proposals = proposals[size_filter]
+        return proposals, size_filter
+
     def generate_proposal(self, rpn_cls_probs, anchors, rpn_bbox_preds,
                           im_info):
         # TODO create a new Function
@@ -49,24 +78,28 @@ class RPNModel(_RPNModel):
 
         # filer and clip
         proposals = box_ops.clip_boxes(proposals, im_info)
-
         # fg prob
         fg_probs = rpn_cls_probs[:, :, 1]
+        # remove too small bboxes
 
         # sort fg
-        _, fg_probs_order = torch.sort(fg_probs, dim=1, descending=True)
 
         # fg_probs_batch = torch.zeros(batch_size,
         # self.post_nms_topN).type_as(rpn_cls_probs)
         proposals_batch = torch.zeros(batch_size, self.post_nms_topN,
                                       4).type_as(rpn_bbox_preds)
         proposals_order = torch.zeros(
-            batch_size, self.post_nms_topN).fill_(-1).type_as(fg_probs_order)
+            batch_size, self.post_nms_topN).fill_(-1).type_as(fg_probs).long()
 
+        # import ipdb
+        # ipdb.set_trace()
         for i in range(batch_size):
             proposals_single = proposals[i]
-            fg_probs_single = fg_probs[i]
-            fg_order_single = fg_probs_order[i]
+            proposals_single, size_filter = self.remove_small_boxes(
+                proposals_single)
+            fg_probs_single = fg_probs[i][size_filter]
+            _, fg_order_single = torch.sort(fg_probs_single, descending=True)
+            # fg_order_single = fg_probs_order[i][size_filter]
             # pre nms
             if self.pre_nms_topN > 0:
                 fg_order_single = fg_order_single[:self.pre_nms_topN]
@@ -158,9 +191,12 @@ class RPNModel(_RPNModel):
         proposals_batch, proposals_order = self.generate_proposal(
             rpn_cls_probs, anchors, rpn_bbox_preds, im_info)
 
-        if self.training:
-            label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
-            proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
+        self.check_proposals(proposals_batch)
+
+        # if self.training:
+            # label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
+            # self.check_proposals(label_boxes_2d, debug=True)
+            # proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
 
         # postprocess
 

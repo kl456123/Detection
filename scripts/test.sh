@@ -351,9 +351,9 @@ rm results/images/*
     
     
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 1000 \
+    --checkpoint 128000 \
     --load_dir /data/object/liangxiong/test \
-    --net maskrcnn \
+    --net mobileye \
     --thresh 0.5 \
     --dataset mono_3d_kitti
 

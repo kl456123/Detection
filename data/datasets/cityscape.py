@@ -8,8 +8,11 @@ import cv2
 # wavedata for kitti
 from wavedata.tools.core import calib_utils
 from wavedata.tools.obj_detection import obj_utils
-from cityscapesscripts.evaluation import instance
-from cityscapesscripts.helpers.csHelpers import *
+try:
+    from cityscapesscripts.evaluation import instance
+    from cityscapesscripts.helpers.csHelpers import *
+except:
+    pass
 
 from core import constants
 from utils.registry import DATASETS

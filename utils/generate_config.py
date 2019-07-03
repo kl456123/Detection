@@ -14,9 +14,10 @@ DATASET_TYPE = 'mono_3d_kitti'
 # NET_TYPE = 'fpn_grnet'
 # NET_TYPE = 'faster_rcnn'
 # NET_TYPE = 'fpn'
-NET_TYPE = 'maskrcnn'
+# NET_TYPE = 'maskrcnn'
+NET_TYPE = 'mobileye'
 # DATASET_TYPE = 'kitti'
-JOBS = False
+JOBS = True
 DEBUG = not JOBS
 
 # enable debug mode
@@ -83,7 +84,7 @@ if NET_TYPE in ['fpn', 'prnet', 'faster_rcnn']:
     test_type = 'test_2d'
 elif NET_TYPE in [
         'fpn_corners_2d', 'fpn_corners_3d', 'prnet_mono_3d',
-        'fpn_corners_stable', 'fpn_grnet'
+        'fpn_corners_stable', 'fpn_grnet', 'mobileye'
 ]:
     test_type = 'test_corners_3d'
 elif NET_TYPE in ['fpn_mono_3d']:

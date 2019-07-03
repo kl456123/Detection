@@ -106,7 +106,16 @@ class MaskRCNNModel(FPNFasterRCNN):
         assert pooled_feat.shape[0] == rois_batch.shape[0]
         return pooled_feat
 
+    def check_proposals(self, proposals):
+        # import ipdb
+        # ipdb.set_trace()
+        ws = proposals[:, :, 2] - proposals[:, :, 0]
+        hs = proposals[:, :, 3] - proposals[:, :, 1]
+        assert (ws[ws > 0].min() >= 2) & (hs[hs > 0].min() >= 2)
+
     def forward(self, feed_dict):
+        # import ipdb
+        # ipdb.set_trace()
 
         # self.crop_instance_map_gt(feed_dict)
 
@@ -123,6 +132,7 @@ class MaskRCNNModel(FPNFasterRCNN):
         # rpn model
         prediction_dict.update(self.rpn_model.forward(feed_dict))
         proposals = prediction_dict['proposals']
+        self.check_proposals(proposals)
         multi_stage_loss_units = []
         multi_stage_stats = []
         for i in range(self.num_stages):
@@ -177,6 +187,9 @@ class MaskRCNNModel(FPNFasterRCNN):
 
                 # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
                 proposals = proposals_dict[constants.KEY_PRIMARY]
+
+            # check proposals
+            self.check_proposals(proposals)
             rois = box_ops.box2rois(proposals)
             pooled_feat = self.pyramid_rcnn_pooling(rcnn_feat_maps,
                                                     rois.view(-1, 5),
@@ -390,6 +403,10 @@ class MaskRCNNModel(FPNFasterRCNN):
                 instance_mask[cropped_mask == pos_match_single_image[
                     proposals_ind]] = 1
 
+                feat_shape = instance_mask.shape[-2:]
+                if feat_shape[0] == 0 or feat_shape[1] == 0:
+                    import ipdb
+                    ipdb.set_trace()
                 instance_mask = F.upsample_bilinear(
                     instance_mask.float(), size=mask_size)
                 instance_mask[instance_mask > 0] = 1
@@ -440,7 +457,10 @@ class MaskRCNNModel(FPNFasterRCNN):
                 # plt.imshow(depth_targets[-1].cpu().numpy()[0, 0])
                 # plt.show()
 
-        depth_targets = torch.cat(depth_targets, dim=1)
+        if len(depth_targets) == 0:
+            depth_targets = torch.zeros(1, 0, 28, 28).type_as(depth_map)
+        else:
+            depth_targets = torch.cat(depth_targets, dim=1)
         return depth_targets.view(-1, mask_size * mask_size)
 
     def squeeze_bbox_preds(self, rcnn_bbox_preds, rcnn_cls_targets, out_c=4):
@@ -559,9 +579,9 @@ class MaskRCNNModel(FPNFasterRCNN):
         targets = prediction_dict[constants.KEY_TARGETS]
         # center_depth = prediction_dict['center_depth']
         # rcnn_corners_loss = 0
-        rcnn_mask_loss = 0
-        rcnn_depth_loss = 0
-        rcnn_instance_loss = 0
+        rcnn_mask_loss = torch.zeros(1).float().to('cuda')
+        rcnn_depth_loss = torch.zeros(1).float().to('cuda')
+        rcnn_instance_loss = torch.zeros(1).float().to('cuda')
         # rcnn_dim_loss = 0
 
         for stage_ind in range(self.num_stages):
@@ -575,9 +595,10 @@ class MaskRCNNModel(FPNFasterRCNN):
                 instance_mask_target = targets[stage_ind][-1]
                 weights = instance_mask_target['weight']
                 num_pos = weights[weights > 0].float().sum()
-                num_pos = num_pos.clamp(min=1)
-                rcnn_instance_loss = rcnn_instance_loss + self.instance_mask_loss(
-                    instance_mask_target).sum() / num_pos
+                if num_pos > 0:
+                    # num_pos = num_pos.clamp(min=1)
+                    rcnn_instance_loss = rcnn_instance_loss + self.instance_mask_loss(
+                        instance_mask_target).sum() / num_pos
 
             if self.depth_enable:
                 depth_target = targets[stage_ind][3]
@@ -585,15 +606,16 @@ class MaskRCNNModel(FPNFasterRCNN):
                 center_depth_gt = depth_target['target'][:, :, 26:27]
                 weights = depth_target['weight']
                 num_pos = weights[weights > 0].float().sum()
-                num_pos = num_pos.clamp(min=1)
+                if num_pos > 0:
+                    # num_pos = num_pos.clamp(min=1)
 
-                rcnn_depth_loss = rcnn_depth_loss + (
-                    self.l1_loss(center_depth_preds, center_depth_gt
-                                 ) * weights.unsqueeze(-1)).sum() / num_pos
+                    rcnn_depth_loss = rcnn_depth_loss + (
+                        self.l1_loss(center_depth_preds, center_depth_gt
+                                     ) * weights.unsqueeze(-1)).sum() / num_pos
 
-                depth_map_target = targets[stage_ind][2]
-                rcnn_mask_loss = rcnn_mask_loss + self.depth_map_loss(
-                    depth_map_target, center_depth_gt).sum() / num_pos
+                    depth_map_target = targets[stage_ind][2]
+                    rcnn_mask_loss = rcnn_mask_loss + self.depth_map_loss(
+                        depth_map_target, center_depth_gt).sum() / num_pos
             # dim_target = targets[stage_ind][3]
             # rcnn_dim_loss = rcnn_dim_loss + common_loss.calc_loss(
             # self.rcnn_bbox_loss, dim_target, True)
