@@ -20,26 +20,90 @@ class Corner3DCoder(object):
         """
         # import ipdb
         # ipdb.set_trace()
+
         N, M = encoded_corners_3d_all.shape[:2]
-        encoded_corners_3d_all = encoded_corners_3d_all.view(N, M, 8, 2)
+        encoded_bottom_corners = encoded_corners_3d_all[:, :, :6]
+        encoded_heights = encoded_corners_3d_all[:, :, 6:9]
+        # visibility = encoded_corners_3d_all[:, :, 9:]
+        # invisible_cond = F.softmax(visibility, dim=-1)[..., 1] < 0.5
+        # encoded_bottom_corners = encoded_bottom_corners.view(-1, 6)
+        # import ipdb
+        # ipdb.set_trace()
+        # bugs of pytorch !!
+        # encoded_bottom_corners[invisible_cond.view(
+        # -1)][:, 2:4] = 1
+        # tmp = encoded_bottom_corners[invisible_cond.view(-1)]
+        # tmp = torch.cat([tmp[:, :2], tmp[:, :2], tmp[:, 4:6]], dim=-1)
+        # encoded_bottom_corners[invisible_cond.view(-1)] = tmp
+        # encoded_heights[invisible_cond.view(-1), 1] = encoded_heights[invisible_cond.view(-1), 0]
+        # encoded_heights[..., 1][invisible_cond.view(-1)] = encoded_heights[..., 0][invisible_cond.view(-1)]
+
+        # reshape back
+        # encoded_bottom_corners = encoded_bottom_corners.view(N, M, 3, 2)
+
+        # encoded_heights = encoded_heights.view(-1, 3)
+        # tmp = encoded_heights[invisible_cond.view(-1)]
+        # tmp = torch.stack([tmp[:, 0], tmp[:, 0], tmp[:, 2]], dim=-1)
+        # encoded_heights[invisible_cond.view(-1)] = tmp
+        # encoded_heights = encoded_heights.view(N, M, 3)
 
         proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals)
-        corners_2d = encoded_corners_3d_all * proposals_xywh[:, :, 2:].unsqueeze(
-            -2) + proposals_xywh[:, :, :2].unsqueeze(-2)
+        bottom_corners = encoded_bottom_corners.view(
+            N, M, 3, 2) * proposals_xywh[:, :, 2:].unsqueeze(
+                -2) + proposals_xywh[:, :, :2].unsqueeze(-2)
+        # import ipdb
+        # ipdb.set_trace()
+
+        top_corners_y = bottom_corners[...,
+                                       1] - encoded_heights * proposals_xywh[:, :,
+                                                                             -1].unsqueeze(
+                                                                                 -1
+                                                                             )
+        top_corners_x = bottom_corners[..., 0]
+        top_corners = torch.stack([top_corners_x, top_corners_y], dim=-1)
+
+        # append others
         # corners_2d = torch.cat(
-        # [corners_2d[:, :, :2], corners_2d[:, :, 2:4], torch.zeros_like(corners_2d[:, :,4:])], dim=2)
-        bottom_corners = corners_2d[:, :, [0, 2, 4, 6]]
-        top_corners = corners_2d[:, :, [1, 3, 5, 7]]
-        corners_2d = torch.cat([bottom_corners, top_corners], dim=2)
+        # [corners_2d, corners_2d[:, :, :1], corners_2d[:, :, 3:4]], dim=-2)
+
+        corners_2d = torch.cat(
+            [
+                bottom_corners, bottom_corners[:, :, :1], top_corners,
+                top_corners[:, :, :1]
+            ],
+            dim=-2)
         return corners_2d
 
     @staticmethod
-    def reorder_lines(lines):
-        lines = lines.view(-1, 2, 2, 2)
-        _, order = torch.sort(lines[:, :, 0, 0], dim=-1, descending=False)
-        order_lines = tensor_utils.multidim_index(lines.contiguous().view(
-            -1, 2, 4), order)
-        return order_lines
+    def decode(encoded_corners_3d_all, proposals, p2):
+        """
+        """
+        pass
+
+    @staticmethod
+    def get_occluded_filter(corners_3d):
+        # import ipdb
+        # ipdb.set_trace()
+        _, argmax = torch.max(torch.norm(corners_3d, dim=-1), dim=-1)
+        device = corners_3d.device
+
+        occluded_filter = torch.ones(corners_3d.shape[0], 4).to(device).float()
+        row = torch.arange(0, corners_3d.shape[0]).type_as(argmax)
+        occluded_filter[row, argmax] = 0
+        return occluded_filter
+
+    @staticmethod
+    def find_visible_side(bottom_corners_3d):
+        """
+        Args:
+            corners_3d: shape(N, 4, 3)
+        """
+        # start_corners_3d = bottom_corners_3d
+        dist = torch.norm(bottom_corners_3d, dim=-1)
+        _, order = torch.sort(dist, dim=-1, descending=False)
+        # visible_corners_3d = tensor_utils.multidim_index(
+        # bottom_corners_3d, order[:, :3])
+        return order[:, :3]
 
     @staticmethod
     def encode(label_boxes_3d, proposals, p2, image_info, label_boxes_2d):
@@ -52,35 +116,113 @@ class Corner3DCoder(object):
             center 3d location:
             local_corners:
         """
-        # import ipdb
-        # ipdb.set_trace()
-        N = label_boxes_3d.shape[0]
+        num_instances = label_boxes_3d.shape[0]
+        # global to local
         corners_2d = geometry_utils.torch_boxes_3d_to_corners_2d(
             label_boxes_3d, p2)
-        front_face_lines = corners_2d[:, [0, 4, 1, 5]]
-        rear_face_lines = corners_2d[:, [3, 7, 2, 6]]
-        front_face_lines = Corner3DCoder.reorder_lines(front_face_lines)
-        rear_face_lines = Corner3DCoder.reorder_lines(rear_face_lines)
 
-        reorder_corners_2d = torch.cat(
-            [front_face_lines, rear_face_lines], dim=1)
+        proposals_xywh = geometry_utils.torch_xyxy_to_xywh(
+            proposals.unsqueeze(0)).squeeze(0)
+        wh = proposals_xywh[:, 2:].unsqueeze(1)
+        xy = proposals_xywh[:, :2].unsqueeze(1)
 
-        proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals[None])[0]
-        encoded_corners_2d = (
-            reorder_corners_2d.view(-1, 8, 2) - proposals_xywh[:, :2][:, None]
-        ) / proposals_xywh[:, 2:][:, None]
+        corners_3d = geometry_utils.torch_boxes_3d_to_corners_3d(
+            label_boxes_3d)
+        bottom_corners_3d = corners_3d[:, [0, 1, 2, 3]]
+        visible_index = Corner3DCoder.find_visible_side(bottom_corners_3d)
+        visible_corners_3d = tensor_utils.multidim_index(
+            bottom_corners_3d, visible_index)
+        visible_side_line_2d = geometry_utils.torch_points_3d_to_points_2d(
+            visible_corners_3d.contiguous().view(-1, 3), p2).view(
+                num_instances, -1, 2)
+        visible_cond = (
+            visible_side_line_2d[:, 1, 0] - visible_side_line_2d[:, 0, 0]
+        ) * (visible_side_line_2d[:, 2, 0] - visible_side_line_2d[:, 0, 0]) < 0
 
-        image_shape = torch.tensor([0, 0, image_info[1], image_info[0]])
-        image_shape = image_shape.type_as(corners_2d).view(1, 4)
-        image_filter = geometry_utils.torch_window_filter(
-            reorder_corners_2d.view(-1, 8, 2), image_shape,
-            deltas=200).float()
+        # visible_index[invisible_cond, -1] = visible_index[invisible_cond, -2]
+        _, order = torch.sort(
+            visible_side_line_2d[..., 0], dim=-1, descending=False)
+        visible_index = tensor_utils.multidim_index(
+            visible_index.unsqueeze(-1), order).squeeze(-1)
 
-        total = torch.cat(
-            [encoded_corners_2d.view(N, -1),
-             image_filter.view(N, -1)], dim=-1)
+        # import ipdb
+        # ipdb.set_trace()
+        bottom_corners = corners_2d[:, [0, 1, 2, 3]]
+        top_corners = corners_2d[:, [4, 5, 6, 7]]
+        bottom_corners = tensor_utils.multidim_index(bottom_corners,
+                                                     visible_index)
+        top_corners = tensor_utils.multidim_index(top_corners, visible_index)
 
-        return total
+        # box truncated
+        # import ipdb
+        # ipdb.set_trace()
+        # bottom
+        # left
+        bottom_corners[:, 0, 0] = torch.min(bottom_corners[:, 0, 0],
+                                            label_boxes_2d[:, 2])
+        bottom_corners[:, 0, 0] = torch.max(bottom_corners[:, 0, 0],
+                                            label_boxes_2d[:, 0])
+
+        # right
+        bottom_corners[:, 2, 0] = torch.min(bottom_corners[:, 2, 0],
+                                            label_boxes_2d[:, 2])
+        bottom_corners[:, 2, 0] = torch.max(bottom_corners[:, 2, 0],
+                                            label_boxes_2d[:, 0])
+
+        # top
+        top_corners[:, 0, 0] = torch.min(top_corners[:, 0, 0],
+                                         label_boxes_2d[:, 2])
+        top_corners[:, 0, 0] = torch.max(top_corners[:, 0, 0],
+                                         label_boxes_2d[:, 0])
+
+        top_corners[:, 2, 0] = torch.min(top_corners[:, 2, 0],
+                                         label_boxes_2d[:, 2])
+        top_corners[:, 2, 0] = torch.max(top_corners[:, 2, 0],
+                                         label_boxes_2d[:, 0])
+
+        in_box_cond = (bottom_corners[:, 1, 0] < label_boxes_2d[:, 2]) & (
+            bottom_corners[:, 1, 0] > label_boxes_2d[:, 0])
+
+        # bottom_corners[:, [0, 2], 0] = bottom_corners[:, [0, 2], 0]
+        # top_corners[:, :, 0] = top_corners[:, :, 0].clamp(
+        # min=0, max=image_info[1])
+
+        encoded_bottom_corners = (bottom_corners - xy) / wh
+        # four height in image
+
+        # import ipdb
+        # ipdb.set_trace()
+        encoded_heights = (
+            bottom_corners[..., 1] - top_corners[..., 1]) / wh[..., 1]
+        visibility = visible_cond.float() * in_box_cond.float()
+        # import ipdb
+        # ipdb.set_trace()
+        index = torch.nonzero(visibility <= 0).view(-1)
+        tmp = encoded_bottom_corners[index]
+        tmp = torch.stack([tmp[:, 0], tmp[:, 0], tmp[:, 2]], dim=1)
+        encoded_bottom_corners[index] = tmp
+
+        tmp = encoded_heights[index]
+        tmp = torch.stack([tmp[:, 0], tmp[:, 0], tmp[:, 2]], dim=1)
+        encoded_heights[index] = tmp
+
+        # import ipdb
+        # ipdb.set_trace()
+        # encoded_bottom_corners = tensor_utils.multidim_index(
+        # encoded_bottom_corners, visible_index)
+        # encoded_heights = tensor_utils.multidim_index(
+        # encoded_heights.unsqueeze(-1), visible_index)
+        # tensor_utils.
+        # visibility = tensor_utils.multidim_index(
+        # visibility.unsqueeze(-1), visible_index).squeeze(-1)
+
+        return torch.cat(
+            [
+                encoded_bottom_corners.contiguous().view(num_instances, -1),
+                encoded_heights.contiguous().view(num_instances, -1),
+                visibility.unsqueeze(-1)
+            ],
+            dim=-1)
 
     @staticmethod
     def encode_batch(label_boxes_3d, proposals, p2, image_info,

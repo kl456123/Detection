@@ -2,7 +2,7 @@
     "data_config": {
         "dataloader_config": {
             "batch_size": 32,
-            "num_workers": 48,
+            "num_workers": 64,
             "shuffle": true
         },
         "dataset_config": {
