@@ -13,7 +13,7 @@ import torch.nn.functional as F
 @BBOX_CODERS.register(constants.KEY_MOBILEYE)
 class Corner3DCoder(object):
     @staticmethod
-    def decode_batch(encoded_corners_3d_all, proposals, keypoint_map):
+    def decode_batch(encoded_corners_3d_all, proposals, keypoint_map=None):
         """
         Args:
             encoded_corners_3d_all: shape(N, M, 12)
@@ -21,15 +21,10 @@ class Corner3DCoder(object):
         # import ipdb
         # ipdb.set_trace()
 
+        proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals)
         N, M = encoded_corners_3d_all.shape[:2]
         encoded_bottom_corners = encoded_corners_3d_all[:, :, :6]
         encoded_heights = encoded_corners_3d_all[:, :, 6:9]
-        keypoint_map = F.softmax(keypoint_map, dim=-1)
-        _, keypoint_index = keypoint_map.max(dim=-1)
-        resolution = 14
-        ratio = keypoint_index.float() / resolution
-        proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals)
-        mid_x = proposals[:, :, 0] + proposals_xywh[:, :, 2] * ratio.view(N,M)
 
         # visibility = encoded_corners_3d_all[:, :, 9:]
         # invisible_cond = F.softmax(visibility, dim=-1)[..., 1] < 0.5
@@ -58,9 +53,15 @@ class Corner3DCoder(object):
             N, M, 3, 2) * proposals_xywh[:, :, 2:].unsqueeze(
                 -2) + proposals_xywh[:, :, :2].unsqueeze(-2)
 
-
         # use cls results instead
-        bottom_corners[:, :, 1, 0] = mid_x
+        if keypoint_map is not None:
+            keypoint_map = F.softmax(keypoint_map, dim=-1)
+            _, keypoint_index = keypoint_map.max(dim=-1)
+            resolution = 14
+            ratio = keypoint_index.float() / resolution
+            mid_x = proposals[:, :, 0] + proposals_xywh[:, :, 2] * ratio.view(
+                N, M)
+            bottom_corners[:, :, 1, 0] = mid_x
         # import ipdb
         # ipdb.set_trace()
 
@@ -162,6 +163,10 @@ class Corner3DCoder(object):
         bottom_corners = tensor_utils.multidim_index(bottom_corners,
                                                      visible_index)
         top_corners = tensor_utils.multidim_index(top_corners, visible_index)
+        bottom_corners_3d = tensor_utils.multidim_index(
+            bottom_corners_3d, visible_index)
+        dist = torch.norm(bottom_corners_3d, dim=-1)
+        merge_left_cond = dist[:, 0] < dist[:, 2]
 
         # box truncated
         # import ipdb
@@ -202,11 +207,24 @@ class Corner3DCoder(object):
         # ipdb.set_trace()
         index = torch.nonzero(visibility <= 0).view(-1)
         tmp = bottom_corners[index]
-        tmp = torch.stack([tmp[:, 0], tmp[:, 0], tmp[:, 2]], dim=1)
+        merge_left_cond = merge_left_cond[index]
+        merge_right_cond = ~merge_left_cond
+        tmp_left = torch.stack([tmp[:, 0], tmp[:, 0], tmp[:, 2]], dim=1)
+        tmp_right = torch.stack([tmp[:, 0], tmp[:, 2], tmp[:, 2]], dim=1)
+        # tmp = torch.cat(
+            # [tmp_left[merge_left_cond], tmp_right[~merge_left_cond]], dim=0)
+        tmp[merge_left_cond] = tmp_left[merge_left_cond]
+        tmp[merge_right_cond] = tmp_right[merge_right_cond]
         bottom_corners[index] = tmp
 
         tmp = top_corners[index]
-        tmp = torch.stack([tmp[:, 0], tmp[:, 0], tmp[:, 2]], dim=1)
+        # tmp = torch.stack([tmp[:, 0], tmp[:, 0], tmp[:, 2]], dim=1)
+        tmp_left = torch.stack([tmp[:, 0], tmp[:, 0], tmp[:, 2]], dim=1)
+        tmp_right = torch.stack([tmp[:, 0], tmp[:, 2], tmp[:, 2]], dim=1)
+        tmp[merge_left_cond] = tmp[merge_left_cond]
+        tmp[merge_right_cond] = tmp[merge_right_cond]
+        # tmp = torch.cat(
+            # [tmp_left[merge_left_cond], tmp_right[~merge_left_cond]], dim=0)
         top_corners[index] = tmp
 
         # encode
