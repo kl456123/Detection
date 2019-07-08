@@ -84,8 +84,8 @@ class RPNModel(_RPNModel):
 
         # sort fg
 
-        # fg_probs_batch = torch.zeros(batch_size,
-        # self.post_nms_topN).type_as(rpn_cls_probs)
+        fg_probs_batch = torch.zeros(batch_size,
+                                     self.post_nms_topN).type_as(rpn_cls_probs)
         proposals_batch = torch.zeros(batch_size, self.post_nms_topN,
                                       4).type_as(rpn_bbox_preds)
         proposals_order = torch.zeros(
@@ -121,9 +121,9 @@ class RPNModel(_RPNModel):
             # padding 0 at the end.
             num_proposal = keep_idx_i.numel()
             proposals_batch[i, :num_proposal, :] = proposals_single
-            # fg_probs_batch[i, :num_proposal] = fg_probs_single
+            fg_probs_batch[i, :num_proposal] = fg_probs_single
             proposals_order[i, :num_proposal] = fg_order_single
-        return proposals_batch, proposals_order
+        return proposals_batch, fg_probs_batch, proposals_order,
 
     def forward(self, bottom_blobs):
         rpn_feat_maps = bottom_blobs['rpn_feat_maps']
@@ -188,15 +188,15 @@ class RPNModel(_RPNModel):
         # Proposal
         ###############################
         # note that proposals_order is used for track transform of propsoals
-        proposals_batch, proposals_order = self.generate_proposal(
+        proposals_batch, fg_probs_batch, proposals_order = self.generate_proposal(
             rpn_cls_probs, anchors, rpn_bbox_preds, im_info)
 
         self.check_proposals(proposals_batch)
 
         # if self.training:
-            # label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
-            # self.check_proposals(label_boxes_2d, debug=True)
-            # proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
+        # label_boxes_2d = bottom_blobs[constants.KEY_LABEL_BOXES_2D]
+        # self.check_proposals(label_boxes_2d, debug=True)
+        # proposals_batch = self.append_gt(proposals_batch, label_boxes_2d)
 
         # postprocess
 
@@ -208,6 +208,7 @@ class RPNModel(_RPNModel):
             # used for loss
             'rpn_bbox_preds': rpn_bbox_preds,
             'rpn_cls_probs': rpn_cls_probs,
+            'fg_probs': fg_probs_batch
         }
 
         return predict_dict

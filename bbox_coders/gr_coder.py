@@ -57,15 +57,15 @@ class Corner3DCoder(object):
         # .view(batch_size, num_boxes, -1)
         return corners_2d
 
-    @staticmethod
-    def decode_batch(encoded_corners_3d_all, final_boxes_2d, p2):
-        batch_size = encoded_corners_3d_all.shape[0]
-        orients_batch = []
-        for batch_ind in range(batch_size):
-            orients_batch.append(
-                Corner3DCoder.decode(encoded_corners_3d_all[batch_ind],
-                                     final_boxes_2d[batch_ind], p2[batch_ind]))
-        return torch.stack(orients_batch, dim=0)
+    # @staticmethod
+    # def decode_batch(encoded_corners_3d_all, final_boxes_2d, p2):
+    # batch_size = encoded_corners_3d_all.shape[0]
+    # orients_batch = []
+    # for batch_ind in range(batch_size):
+    # orients_batch.append(
+    # Corner3DCoder.decode(encoded_corners_3d_all[batch_ind],
+    # final_boxes_2d[batch_ind], p2[batch_ind]))
+    # return torch.stack(orients_batch, dim=0)
 
     @staticmethod
     def calc_local_corners(dims, ry):
@@ -127,59 +127,69 @@ class Corner3DCoder(object):
         return ry
 
     @staticmethod
-    def decode(encoded_corners_3d_all, final_boxes_2d, p2):
+    def decode_bbox(center_2d, center_depth, dims, ry, p2):
+        # location
+        location = []
+        N, M = center_2d.shape[:2]
+        for batch_ind in range(N):
+            location.append(
+                geometry_utils.torch_points_2d_to_points_3d(
+                    center_2d[batch_ind], center_depth[batch_ind],
+                    p2[batch_ind]))
+
+        location = torch.stack(location, dim=0)
+
+        # local corners
+        local_corners = []
+        for batch_ind in range(N):
+            local_corners.append(
+                Corner3DCoder.calc_local_corners(dims[batch_ind],
+                                                 ry[batch_ind]))
+        local_corners = torch.stack(local_corners, dim=0)
+
+        # global corners
+        global_corners = (
+            location.view(N, M, 1, 3) + local_corners.view(N, M, 8, 3)).view(
+                N, M, -1)
+        return global_corners
+
+    @staticmethod
+    def decode_batch(preds, final_boxes_2d, p2):
         """
         """
 
+        mean_dims = torch.tensor([1.8, 1.8, 3.7]).type_as(final_boxes_2d)
+        dims_preds = torch.exp(preds[:, :, :3]) * mean_dims
+        N, M = preds.shape[:2]
+
+        # center_depth
+        center_depth_preds = preds[:, :, 6:]
+        center_2d_deltas_preds = preds[:, :, 4:6]
+        proposals_xywh = geometry_utils.torch_xyxy_to_xywh(final_boxes_2d)
+        # center_2d
+        center_2d_preds = (center_2d_deltas_preds * proposals_xywh[:, :, 2:] +
+                           proposals_xywh[:, :, :2])
+
+        location_preds = []
+        for batch_ind in range(N):
+            location_preds.append(
+                geometry_utils.torch_points_2d_to_points_3d(
+                    center_2d_preds[batch_ind].view(-1, 2),
+                    center_depth_preds[batch_ind].view(-1), p2[batch_ind]))
+        location_preds = torch.stack(location_preds, dim=0).view(N, M, -1)
+
+        ry_preds = preds[:, :, 3:4]
+        ray_angle = -torch.atan2(location_preds[:, :, 2],
+                                 location_preds[:, :, 0])
+        # ry
+        ry_preds = ry_preds + ray_angle.unsqueeze(-1)
+
+        args = [center_2d_preds, center_depth_preds, dims_preds, ry_preds, p2]
         # import ipdb
         # ipdb.set_trace()
-        # local to global
-        # local_corners_3d = encoded_corners_3d_all[:, :24]
-        # encoded_C_2d = encoded_corners_3d_all[:, 24:26]
-        # instance_depth = encoded_corners_3d_all[:, 26:]
-        mean_dims = torch.tensor([1.8, 1.8, 3.7]).type_as(final_boxes_2d)
-        dims_preds = torch.exp(encoded_corners_3d_all[:, :3]) * mean_dims
-        encoded_ry_preds = encoded_corners_3d_all[:, 3:6]
-        final_boxes_2d_xywh = geometry_utils.torch_xyxy_to_xywh(
-            final_boxes_2d.unsqueeze(0)).squeeze(0)
-        ry_preds = Corner3DCoder.decode_ry(
-            encoded_ry_preds.unsqueeze(0), final_boxes_2d_xywh.unsqueeze(0),
-            p2.unsqueeze(0)).squeeze(0)
-        ry_preds = ry_preds.unsqueeze(-1)
+        global_corners_preds = Corner3DCoder.decode_bbox(*args)
 
-        local_corners_3d = Corner3DCoder.calc_local_corners(
-            dims_preds, ry_preds)
-        encoded_C_2d = encoded_corners_3d_all[:, 6:8]
-        # instance_depth = encoded_corners_3d_all[:, 8:]
-
-        # decode them first
-        # instance_depth = 1 / (instance_depth_inv + 1e-8)
-
-        instance_depth = Corner3DCoder.decode_center_depth(
-            dims_preds, final_boxes_2d_xywh, p2)
-        C_2d = encoded_C_2d * final_boxes_2d_xywh[:,
-                                                  2:] + final_boxes_2d_xywh[:, :
-                                                                            2]
-
-        C = geometry_utils.torch_points_2d_to_points_3d(
-            C_2d, instance_depth, p2)
-        local_corners_3d = local_corners_3d.view(-1, 8, 3).permute(0, 2, 1)
-        if enable_local_coord:
-            # camera view angle
-            alpha = geometry_utils.compute_ray_angle(
-                C_2d.unsqueeze(0), p2.unsqueeze(0)).squeeze(0)
-
-            # loop here
-
-            R_inv = geometry_utils.torch_ry_to_rotation_matrix(
-                alpha.view(-1)).type_as(encoded_corners_3d_all)
-            global_corners_3d = torch.matmul(
-                R_inv, local_corners_3d) + C.unsqueeze(-1)
-        else:
-            # may be slow
-            # R_inv = torch.inverse(R)
-            global_corners_3d = local_corners_3d + C.unsqueeze(-1)
-        return global_corners_3d.permute(0, 2, 1)
+        return global_corners_preds.view(N, M, 8, 3)
 
     @staticmethod
     def encode(label_boxes_3d, p2):
@@ -192,38 +202,27 @@ class Corner3DCoder(object):
             center 3d location:
             local_corners:
         """
+        #  import ipdb
+        #  ipdb.set_trace()
         # global to local
         global_corners_3d = geometry_utils.torch_boxes_3d_to_corners_3d(
             label_boxes_3d)
         location = label_boxes_3d[:, :3]
+        center_depth = location[:, -1:]
+        center_2d = geometry_utils.torch_points_3d_to_points_2d(location, p2)
+        ry = label_boxes_3d[:, -1:]
 
         num_boxes = global_corners_3d.shape[0]
 
-        if enable_local_coord:
-            # proj of 3d bbox center
-            location_2d = geometry_utils.torch_points_3d_to_points_2d(
-                location, p2)
-
-            alpha = geometry_utils.compute_ray_angle(
-                location_2d.unsqueeze(0), p2.unsqueeze(0)).squeeze(0)
-            R = geometry_utils.torch_ry_to_rotation_matrix(-alpha).type_as(
-                global_corners_3d)
-            local_corners_3d = torch.matmul(
-                R,
-                global_corners_3d.permute(0, 2, 1) -
-                location.unsqueeze(-1)).permute(0, 2, 1).contiguous().view(
-                    num_boxes, -1)
-        else:
-            # local coords
-            local_corners_3d = (global_corners_3d.permute(0, 2, 1) -
-                                location.unsqueeze(-1)).permute(
-                                    0, 2, 1).contiguous().view(num_boxes, -1)
+        # local_corners_3d = (global_corners_3d.permute(0, 2, 1) -
+        # location.unsqueeze(-1)).permute(
+        # 0, 2, 1).contiguous().view(num_boxes, -1)
 
         # instance depth
         # instance_depth = location[:, -1:]
         dims = label_boxes_3d[:, 3:6]
 
-        return torch.cat([local_corners_3d, location, dims], dim=-1)
+        return torch.cat([dims, ry, center_2d, center_depth, location], dim=-1)
 
     @staticmethod
     def encode_batch(label_boxes_3d, p2):
