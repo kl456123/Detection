@@ -1,15 +1,15 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 8,
-            "num_workers": 16,
+            "batch_size": 1,
+            "num_workers": 1,
             "shuffle": true
         },
         "dataset_config": {
             "classes": [
                 "Car"
             ],
-            "dataset_file": "data/train.txt",
+            "dataset_file": "data/demo.txt",
             "root_path": "/data",
             "type": "mono_3d_kitti",
             "use_proj_2d": false
@@ -20,9 +20,6 @@
             },
             {
                 "type": "random_brightness"
-            },
-            {
-                "type": "random_horizontal_flip"
             },
             {
                 "size": [
@@ -73,7 +70,7 @@
             "classes": [
                 "Car"
             ],
-            "dataset_file": "data/val.txt",
+            "dataset_file": "data/demo.txt",
             "root_path": "/data",
             "type": "mono_3d_kitti",
             "use_proj_2d": false
@@ -175,7 +172,7 @@
                 "type": "faster_rcnn"
             },
             "type": "fpn_rpn",
-            "use_focal_loss": true
+            "use_focal_loss": false
         },
         "target_generator_config": [
             {
@@ -203,10 +200,10 @@
         "use_focal_loss": false
     },
     "train_config": {
-        "checkpoint_interval": 4000,
+        "checkpoint_interval": 100,
         "clip_gradient": 10,
-        "disp_interval": 800,
-        "num_iters": 600000,
+        "disp_interval": 100,
+        "num_iters": 1000,
         "optimizer_config": {
             "base_lr": 0.001,
             "bias_lr_factor": 1,

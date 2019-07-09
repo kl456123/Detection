@@ -258,7 +258,7 @@ if __name__ == '__main__':
         'data_path': 'object/training/image_2',
         'label_path': 'object/training/label_2',
         'classes': ['Car', 'Pedestrian', 'Truck'],
-        'dataset_file': './data/train.txt'
+        'dataset_file': './data/demo.txt'
     }
     nuscenes_dataset_config = {
         'root_path': '/data/nuscenes_kitti',
@@ -282,7 +282,7 @@ if __name__ == '__main__':
     from data import transforms
     transform = transforms.build(transforms_config)
     dataset = Mono3DKITTIDataset(
-        nuscenes_dataset_config, transform, training=True)
+        kitti_dataset_config, transform, training=True)
     for sample in dataset:
         # sample = dataset[4]
         dataset.visuliaze_sample(sample)

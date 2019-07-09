@@ -2,7 +2,7 @@
     "data_config": {
         "dataloader_config": {
             "batch_size": 32,
-            "num_workers": 48,
+            "num_workers": 64,
             "shuffle": true
         },
         "dataset_config": {
@@ -20,9 +20,6 @@
             },
             {
                 "type": "random_brightness"
-            },
-            {
-                "type": "random_horizontal_flip"
             },
             {
                 "size": [
@@ -226,7 +223,7 @@
                 120000,
                 240000
             ],
-            "type": "multi_step",
+            "type": "step",
             "warmup_factor": 0.333,
             "warmup_iters": 2000,
             "warmup_method": "linear"

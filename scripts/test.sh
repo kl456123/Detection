@@ -351,13 +351,13 @@ rm results/images/*
     
     
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 84000 \
+    --checkpoint 72000 \
     --load_dir /data/object/liangxiong/test \
-    --net mobileye \
+    --net fpn_grnet \
     --thresh 0.5 \
-    --dataset mono_3d_kitti \
-    --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
-    --calib_file ./000000.txt
+    --dataset mono_3d_kitti
+    # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
+    # --calib_file ./000000.txt
 
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
     # --checkpoint 364000 \

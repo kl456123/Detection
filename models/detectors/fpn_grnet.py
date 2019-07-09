@@ -148,11 +148,11 @@ class FPNGRNetModel(FPNFasterRCNN):
                 rcnn_corners_preds = coder.decode_batch(
                     rcnn_corners_preds.detach(), proposals,
                     feed_dict[constants.KEY_STEREO_CALIB_P2])
-                # coder = bbox_coders.build(
-                # self.target_generators[i]
-                # .target_generator_config['coder_config'])
-                # proposals = coder.decode_batch(rcnn_bbox_preds,
-                # proposals).detach()
+                coder = bbox_coders.build(
+                    self.target_generators[i]
+                    .target_generator_config['coder_config'])
+                proposals = coder.decode_batch(rcnn_bbox_preds,
+                                               proposals).detach()
                 coder = bbox_coders.build({'type': constants.KEY_DIMS})
                 rcnn_dim_preds = coder.decode_batch(
                     rcnn_dim_preds, feed_dict[constants.KEY_MEAN_DIMS],
@@ -163,10 +163,7 @@ class FPNGRNetModel(FPNFasterRCNN):
             prediction_dict[constants.KEY_STATS] = multi_stage_stats
             prediction_dict[constants.KEY_PROPOSALS] = proposals
         else:
-            fg_probs = prediction_dict['fg_probs']
-            rcnn_cls_scores[..., 0] = 1 - fg_probs
-            rcnn_cls_scores[..., 1] = fg_probs
-            prediction_dict[constants.KEY_CLASSES] = rcnn_cls_scores
+            prediction_dict[constants.KEY_CLASSES] = rcnn_cls_probs
 
             image_info = feed_dict[constants.KEY_IMAGE_INFO]
             proposals[:, :, ::2] = proposals[:, :, ::
@@ -277,7 +274,7 @@ class FPNGRNetModel(FPNFasterRCNN):
         depth_preds = f.unsqueeze(-1) * h_3d / h_2d
         return depth_preds.unsqueeze(-1)
 
-    def decode_bbox(self, center_2d, center_depth, dims, ry, p2):
+    def decode_bbox(self, center_2d, center_depth, dims, ry, p2, to_2d=False):
         # location
         location = []
         N, M = center_2d.shape[:2]
@@ -300,6 +297,13 @@ class FPNGRNetModel(FPNFasterRCNN):
         global_corners = (
             location.view(N, M, 1, 3) + local_corners.view(N, M, 8, 3)).view(
                 N, M, -1)
+        if to_2d:
+            corners_2d = []
+            corners_2d.append(
+                geometry_utils.torch_points_3d_to_points_2d(
+                    global_corners[batch_ind].view(-1, 3), p2[batch_ind]))
+            corners_2d = torch.stack(corners_2d, dim=0).view(N, M, -1)
+            return corners_2d
         return global_corners
 
     def loss(self, prediction_dict, feed_dict):
@@ -309,8 +313,7 @@ class FPNGRNetModel(FPNFasterRCNN):
         """
         # import ipdb
         # ipdb.set_trace()
-        loss_dict = self.rpn_model.loss(prediction_dict, feed_dict)
-        #  loss_dict = super().loss(prediction_dict, feed_dict)
+        loss_dict = super().loss(prediction_dict, feed_dict)
         targets = prediction_dict[constants.KEY_TARGETS]
         # rcnn_corners_loss = 0
         # rcnn_dim_loss = 0
@@ -323,6 +326,7 @@ class FPNGRNetModel(FPNFasterRCNN):
         center_depth_loss = 0
         location_loss = 0
         global_corners_loss = 0
+        to_2d = True
 
         for stage_ind in range(self.num_stages):
             corners_target = targets[stage_ind][2]
@@ -342,7 +346,7 @@ class FPNGRNetModel(FPNFasterRCNN):
             center_depth_gt = targets[:, :, 6:7]
             location_gt = targets[:, :, 7:10]
             global_corners_gt = self.decode_bbox(center_2d_gt, center_depth_gt,
-                                                 dims_gt, ry_gt, p2)
+                                                 dims_gt, ry_gt, p2, to_2d)
 
             # preds
             # dims
@@ -361,22 +365,32 @@ class FPNGRNetModel(FPNFasterRCNN):
                 center_2d_deltas_preds * proposals_xywh[:, :, 2:] +
                 proposals_xywh[:, :, :2])
 
-            #  import ipdb
-            #  ipdb.set_trace()
+            # import ipdb
+            # ipdb.set_trace()
             for index, item in enumerate(
                 [('center_2d_loss', center_2d_preds), ('center_depth_loss',
                                                        center_depth_preds),
                  ('dims', dims_preds), ('ry', ry_preds)]):
-                #  if index in [0, 2]:
-                #  continue
-                args = [center_2d_gt, center_depth_gt, dims_gt, ry_gt, p2]
+                # if index in [0, 1, 3]:
+                    # continue
+                args = [
+                    center_2d_gt, center_depth_gt, dims_gt, ry_gt, p2, to_2d
+                ]
                 args[index] = item[1]
                 loss_name = item[0]
                 global_corners_preds = self.decode_bbox(*args)
 
-                loss = self.smooth_l1_loss(global_corners_preds,
-                                           global_corners_gt) * weights
+
+                pos_global_corners_preds = global_corners_preds.view(
+                    -1, 16)[weights.view(-1) > 0]
+                pos_global_corners_gt = global_corners_gt.view(
+                    -1, 16)[weights.view(-1) > 0]
+                loss = self.l1_loss(pos_global_corners_preds,
+                                           pos_global_corners_gt)
+
                 loss_dict[loss_name] = loss.sum() / num_pos
+        # import ipdb
+        # ipdb.set_trace()
 
         loss_dict.update({
             #  'global_corners_loss': global_corners_loss / num_pos,
