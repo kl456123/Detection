@@ -350,8 +350,8 @@ rm results/images/*
     # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
     
     
-CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 72000 \
+CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
+    --checkpoint 8000 \
     --load_dir /data/object/liangxiong/test \
     --net fpn_grnet \
     --thresh 0.5 \

@@ -191,6 +191,9 @@ class KITTIDataset(DetDataset):
         all_label_classes[:num_boxes] = label_classes
         all_label_boxes_2d[:num_boxes] = label_boxes_2d
         all_label_boxes_3d[:num_boxes] = label_boxes_3d
+        all_label_boxes_2d[num_boxes:] = label_boxes_2d[0]
+        all_label_boxes_3d[num_boxes:] = label_boxes_3d[0]
+        all_label_classes[num_boxes:] = label_classes[0]
 
         sample[constants.KEY_NUM_INSTANCES] = np.asarray(
             num_boxes, dtype=np.int32)

@@ -310,7 +310,7 @@ class Corners3DTargetAssigner(RegTargetAssigner):
 class Corners3DGRNetTargetAssigner(RegTargetAssigner):
     @classmethod
     def assign_target(cls, **kwargs):
-        match = kwargs[constants.KEY_MATCH]
+        # match = kwargs[constants.KEY_MATCH]
         label_boxes_3d = kwargs[constants.KEY_BOXES_3D]
         p2 = kwargs[constants.KEY_STEREO_CALIB_P2]
 
@@ -322,7 +322,7 @@ class Corners3DGRNetTargetAssigner(RegTargetAssigner):
         reg_targets_batch = cls.generate_assigned_label(
             cls, kwargs[constants.KEY_MATCH], reg_targets_batch)
 
-        reg_targets_batch[match == -1] = 0
+        # reg_targets_batch[match == -1] = 0
         # no need grad_fn
         return reg_targets_batch
 
