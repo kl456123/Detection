@@ -11,6 +11,7 @@ from utils.registry import TRANSFORMS
 from abc import ABC, abstractmethod
 from utils import geometry_utils
 from utils.geometry_utils import ProjectMatrixTransform
+from utils.geometry_utils import Boxes3DTransformer
 
 
 class Transform(object):
@@ -156,7 +157,10 @@ class RandomZoomOut(Transform):
         left = np.random.uniform(0, remain) * width
         top = np.random.uniform(0, remain) * height
         rect = np.array(
-            [int(left), int(top), int(left + width), int(top + height)])
+            [int(left),
+             int(top),
+             int(left + width),
+             int(top + height)])
         mean_img[rect[1]:rect[3], rect[0]:rect[2], :] = np.array(image)
 
         current_boxes = boxes.copy()
@@ -244,7 +248,10 @@ class RandomSampleCrop(Transform):
                     top = np.random.uniform(height - h)
 
                 rect = np.array(
-                    [int(left), int(top), int(left + w), int(top + h)])
+                    [int(left),
+                     int(top),
+                     int(left + w),
+                     int(top + h)])
                 # Calculate IoU (jaccard overlap) b/t the cropped and gt boxes.
                 overlap = jaccard_numpy(boxes, rect)
                 # Is min and max overlap constraint satisfied? if not try again.
@@ -270,8 +277,8 @@ class RandomSampleCrop(Transform):
                 if not mask.any():
                     continue
 
-                current_boxes = boxes[mask, :].copy(
-                )  # take only matching gt boxes
+                current_boxes = boxes[
+                    mask, :].copy()  # take only matching gt boxes
                 current_labels = labels[mask]  # take only matching gt labels
 
                 # should we use the box left and top corner or the crop's
@@ -394,8 +401,17 @@ class RandomHorizontalFlip(Transform):
             if sample.get(constants.KEY_STEREO_CALIB_P2) is not None:
                 p2 = sample[constants.KEY_STEREO_CALIB_P2]
                 w = img.size[0]
-                new_p2 = ProjectMatrixTransform.horizontal_flip(p2, w)
-                sample[constants.KEY_STEREO_CALIB_P2] = new_p2
+                label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
+                image_info = sample[constants.KEY_IMAGE_INFO]
+                sample[
+                    constants.
+                    KEY_LABEL_BOXES_3D] = Boxes3DTransformer.horizontal_flip(
+                        label_boxes_3d, image_info, p2)
+
+                # p2 = sample[constants.KEY_STEREO_CALIB_P2]
+                # w = img.size[0]
+                # new_p2 = ProjectMatrixTransform.horizontal_flip(p2, w)
+                # sample[constants.KEY_STEREO_CALIB_P2] = new_p2
 
         return sample
 
@@ -776,7 +792,10 @@ class RandomSampleCropV2(Transform):
         left = np.random.uniform(0, ratio - 1) * width
         top = np.random.uniform(0, ratio - 1) * height
         rect = np.array(
-            [int(left), int(top), int(left + width), int(top + height)])
+            [int(left),
+             int(top),
+             int(left + width),
+             int(top + height)])
         mean_img[rect[1]:rect[3], rect[0]:rect[2], :] = np.array(
             image, dtype=np.uint8)
 
@@ -794,8 +813,8 @@ class RandomSampleCropV2(Transform):
                 np.uint8)), current_boxes, current_labels, zero_img
 
         else:
-            return Image.fromarray(
-                mean_img.astype(np.uint8)), current_boxes, current_labels
+            return Image.fromarray(mean_img.astype(
+                np.uint8)), current_boxes, current_labels
 
     @staticmethod
     def __random_crop(image,
@@ -812,7 +831,9 @@ class RandomSampleCropV2(Transform):
             top = np.random.uniform(0, height - patch_size)
 
             rect = np.array([
-                int(left), int(top), int(left + patch_size),
+                int(left),
+                int(top),
+                int(left + patch_size),
                 int(top + patch_size)
             ])
 
@@ -832,7 +853,8 @@ class RandomSampleCropV2(Transform):
             current_image = np.array(image)
             current_image = current_image[rect[1]:rect[3], rect[0]:rect[2], :]
 
-            current_boxes = boxes[mask, :].copy()  # take only matching gt boxes
+            current_boxes = boxes[
+                mask, :].copy()  # take only matching gt boxes
             current_labels = labels[mask]  # take only matching gt labels
 
             # should we use the box left and top corner or the crop's
@@ -903,7 +925,8 @@ class RandomSampleCropV2(Transform):
             if not mask.any():
                 continue
 
-            current_boxes = boxes[mask, :].copy()  # take only matching gt boxes
+            current_boxes = boxes[
+                mask, :].copy()  # take only matching gt boxes
             current_labels = labels[mask]  # take only matching gt labels
 
             # should we use the box left and top corner or the crop's

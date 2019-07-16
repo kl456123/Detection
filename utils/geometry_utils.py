@@ -2,6 +2,7 @@
 import numpy as np
 import torch
 from core.utils import format_checker
+from utils import image_utils
 
 
 ##########################
@@ -716,3 +717,135 @@ def boxes_3d_to_plane(label_boxes_3d):
     # postprocess planes direction
 
     return planes.reshape(N, M, 4)
+
+
+class Boxes3DTransformer(object):
+    @classmethod
+    def horizontal_flip(cls, label_boxes_3d, image_shape, p2):
+        """
+        Args:
+            label_boxes_3d: shape(N, 7) (xyz, hwl, ry)
+            image_shape: (h, w)
+            p2: shape(3, 4)
+        """
+        d = label_boxes_3d[:, 2]
+        x = label_boxes_3d[:, 0]
+        w = image_shape[1]
+        alpha = label_boxes_3d[:, -1]
+        f = p2[0, 0]
+        u = p2[0, 2]
+        T_x = p2[0, 3]
+
+        # new x coords
+        x = (d * w - 2 * u * d - 2 * T_x - f * x) / f
+        #  alpha = np.pi - alpha if alpha > 0 else -np.pi - alpha
+        cond = alpha > 0
+        alpha[cond] = np.pi - alpha[cond]
+        alpha[~cond] = -np.pi - alpha[~cond]
+
+        # assign
+        label_boxes_3d[:, 0] = x
+        label_boxes_3d[:, -1] = alpha
+        return label_boxes_3d
+
+    @classmethod
+    def crop(cls, label_boxes_3d, offset, p2):
+        x = label_boxes_3d[:, 0]
+        y = label_boxes_3d[:, 1]
+        d = label_boxes_3d[:, 2]
+        f = p2[0, 0]
+        x = offset[0] * d / f + x
+        y = offset[1] * d / f + x
+
+        # assign
+        label_boxes_3d[:, 0] = x
+        label_boxes_3d[:, 1] = y
+        return label_boxes_3d
+
+
+def torch_calc_local_corners(dims, ry):
+    # import ipdb
+    # ipdb.set_trace()
+    h = dims[:, 0]
+    w = dims[:, 1]
+    l = dims[:, 2]
+    zeros = torch.zeros_like(l).type_as(l)
+    # rotation_matrix = geometry_utils.torch_ry_to_rotation_matrix(ry)
+
+    zeros = torch.zeros_like(ry[:, 0])
+    ones = torch.ones_like(ry[:, 0])
+    cos = torch.cos(ry[:, 0])
+    sin = torch.sin(ry[:, 0])
+    # norm = torch.norm(ry, dim=-1)
+    cos = cos
+    sin = sin
+
+    rotation_matrix = torch.stack(
+        [cos, zeros, sin, zeros, ones, zeros, -sin, zeros, cos],
+        dim=-1).reshape(-1, 3, 3)
+
+    x_corners = torch.stack(
+        [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2], dim=0)
+    y_corners = torch.stack(
+        [zeros, zeros, zeros, zeros, -h, -h, -h, -h], dim=0)
+    z_corners = torch.stack(
+        [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2], dim=0)
+
+    # shape(N, 3, 8)
+    box_points_coords = torch.stack((x_corners, y_corners, z_corners), dim=0)
+    # rotate and translate
+    # shape(N, 3, 8)
+    corners_3d = torch.bmm(rotation_matrix, box_points_coords.permute(2, 0, 1))
+
+    return corners_3d.permute(0, 2, 1)
+
+
+def torch_points_3d_to_cylinder_points_2d(points_3d, p2, radus):
+    points_2d = torch_points_3d_to_points_2d(points_3d, p2)
+    cylinder_points_2d = image_utils.plane_to_cylinder(points_2d, p2, radus)
+    return cylinder_points_2d
+
+
+def points_3d_to_cylinder_points_2d(points_3d, p2, radus):
+    points_2d = points_3d_to_points_2d(points_3d, p2)
+    cylinder_points_2d = image_utils.plane_to_cylinder(points_2d, p2, radus)
+    return cylinder_points_2d
+
+
+def torch_cylinder_points_2d_to_points_3d(cylinder_points_2d, depth, p2,
+                                          radus):
+    points_2d = image_utils.cylinder_to_plane(cylinder_points_2d, p2, radus)
+    points_3d = torch_points_2d_to_points_3d(points_2d, depth, p2)
+    return points_3d
+
+
+def torch_cylinder_points_2d_to_points_3d_v2(cylinder_points_2d, dist, p2,
+                                             radus):
+    """
+        Note that depth here refers to distance in 3d space
+    """
+    # import ipdb
+    # ipdb.set_trace()
+    # pixel to ray angle
+    theta_offset = cylinder_points_2d[:, 0] / radus
+    f = p2[0, 0]
+    u0 = p2[0, 2]
+    theta_start = -torch.atan(u0 / f) - 0.5 * np.pi
+    theta = theta_start + theta_offset
+    depth = -dist * torch.sin(theta[:, None])
+    return torch_cylinder_points_2d_to_points_3d(cylinder_points_2d, depth, p2,
+                                                 radus)
+
+
+def torch_boxes_3d_to_cylinder_corners_2d(boxes, p2, radus):
+    corners_3d = torch_boxes_3d_to_corners_3d(boxes)
+    corners_2d = torch_points_3d_to_cylinder_points_2d(
+        corners_3d.reshape((-1, 3)), p2, radus).reshape(-1, 8, 2)
+    return corners_2d
+
+
+def boxes_3d_to_cylinder_corners_2d(boxes, p2, radus):
+    corners_3d = boxes_3d_to_corners_3d(boxes)
+    corners_2d = points_3d_to_cylinder_points_2d(
+        corners_3d.reshape((-1, 3)), p2, radus).reshape(-1, 8, 2)
+    return corners_2d

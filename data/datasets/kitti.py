@@ -12,6 +12,7 @@ from wavedata.tools.obj_detection import obj_utils
 from core import constants
 from utils.registry import DATASETS
 import cv2
+from utils import image_utils
 
 
 @DATASETS.register('kitti')
@@ -22,6 +23,7 @@ class KITTIDataset(DetDataset):
         self._root_path = os.path.join(config['root_path'], 'object/training')
         self._dataset_file = None
         self._cam_idx = 2
+        self.use_cylinder = config.get('use_cylinder', False)
 
         # some different input methods
         if config.get('dataset_file') is not None:
@@ -48,6 +50,8 @@ class KITTIDataset(DetDataset):
             self._calib_file = None
 
         self.transforms = transform
+        if self.use_cylinder:
+            self.radus = config.get('radus', 864)
 
         # classes to be trained
         # 0 refers to bg
@@ -89,9 +93,9 @@ class KITTIDataset(DetDataset):
         matches the difficulty criteria.
         """
 
-        return ((obj.occlusion <= self.OCCLUSION[difficulty]) and
-                (obj.truncation <= self.TRUNCATION[difficulty]) and
-                (obj.y2 - obj.y1) >= self.HEIGHT[difficulty])
+        return ((obj.occlusion <= self.OCCLUSION[difficulty])
+                and (obj.truncation <= self.TRUNCATION[difficulty])
+                and (obj.y2 - obj.y1) >= self.HEIGHT[difficulty])
 
     def filter_sample_names(self, sample_names):
         loaded_sample_names = []
@@ -180,10 +184,10 @@ class KITTIDataset(DetDataset):
         label_boxes_2d = sample[constants.KEY_LABEL_BOXES_2D]
         label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
         label_classes = sample[constants.KEY_LABEL_CLASSES]
-        all_label_boxes_3d = np.zeros(
-            (self.max_num_boxes, label_boxes_3d.shape[1]))
-        all_label_boxes_2d = np.zeros(
-            (self.max_num_boxes, label_boxes_2d.shape[1]))
+        all_label_boxes_3d = np.zeros((self.max_num_boxes,
+                                       label_boxes_3d.shape[1]))
+        all_label_boxes_2d = np.zeros((self.max_num_boxes,
+                                       label_boxes_2d.shape[1]))
         all_label_classes = np.zeros((self.max_num_boxes, ))
         # assign it with bg label
         all_label_classes[...] = 0
@@ -222,6 +226,15 @@ class KITTIDataset(DetDataset):
         else:
             return os.path.join(self.calib_dir, '{}.txt'.format(sample_name))
 
+    def preprocess_image(self, image, p2):
+        # PIL to cv2
+        image = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
+        cylinder_image = image_utils.cylinder_project(
+            image, p2, radus=self.radus)
+        image = Image.fromarray(
+            cv2.cvtColor(cylinder_image, cv2.COLOR_BGR2RGB).astype(np.uint8))
+        return image
+
     def get_training_sample(self, index):
         image_path = self.sample_names[index]
 
@@ -249,8 +262,9 @@ class KITTIDataset(DetDataset):
         obj_labels = self.filter_labels(obj_labels, self.classes)
         label_boxes_3d = np.asarray(
             [self._obj_label_to_box_3d(obj_label) for obj_label in obj_labels])
-        label_boxes_2d = np.asarray(
-            [self._obj_label_to_box_2d(obj_label) for obj_label in obj_labels])
+        label_boxes_2d = np.asarray([
+            self._obj_label_to_box_2d(obj_label) for obj_label in obj_labels
+        ]).astype(np.float32)
         label_classes = [
             self._class_str_to_index(obj_label.type)
             for obj_label in obj_labels
@@ -258,15 +272,20 @@ class KITTIDataset(DetDataset):
         label_classes = np.asarray(label_classes, dtype=np.int32)
 
         # image_info = list(image_info).append(num_boxes)
+        if self.use_cylinder:
+            label_boxes_2d = label_boxes_2d.reshape(-1, 2)
+            label_boxes_2d = image_utils.plane_to_cylinder(
+                label_boxes_2d, stereo_calib_p2, self.radus).reshape(-1, 4)
+            image_input = self.preprocess_image(image_input, stereo_calib_p2)
 
         transform_sample = {}
         transform_sample[constants.KEY_IMAGE] = image_input
         transform_sample[
-            constants.KEY_STEREO_CALIB_P2] = stereo_calib_p2.astype(np.float32)
+            constants.KEY_STEREO_CALIB_P2] = stereo_calib_p2.astype(
+                np.float32)
         transform_sample[constants.KEY_LABEL_BOXES_3D] = label_boxes_3d.astype(
             np.float32)
-        transform_sample[constants.KEY_LABEL_BOXES_2D] = label_boxes_2d.astype(
-            np.float32)
+        transform_sample[constants.KEY_LABEL_BOXES_2D] = label_boxes_2d
         transform_sample[constants.KEY_LABEL_CLASSES] = label_classes
         transform_sample[constants.KEY_IMAGE_PATH] = image_path
 
@@ -303,7 +322,8 @@ class KITTIDataset(DetDataset):
         transform_sample = {}
         transform_sample[constants.KEY_IMAGE] = image_input
         transform_sample[
-            constants.KEY_STEREO_CALIB_P2] = stereo_calib_p2.astype(np.float32)
+            constants.KEY_STEREO_CALIB_P2] = stereo_calib_p2.astype(
+                np.float32)
         transform_sample[constants.KEY_IMAGE_PATH] = image_path
 
         # (h,w,scale)
@@ -359,8 +379,12 @@ if __name__ == '__main__':
         'data_path': 'object/training/image_2',
         'label_path': 'object/training/label_2',
         'classes': ['Car', 'Pedestrian', 'Truck'],
-        'dataset_file': './data/train.txt'
+        'dataset_file': './data/train.txt',
+        'use_cylinder': True,
+        'radus': 864,
     }
     dataset = KITTIDataset(dataset_config)
-    sample = dataset[0]
-    print(sample.keys())
+    #  sample = dataset[0]
+    #  print(sample.keys())
+    for sample in dataset:
+        dataset.visualize_samplev2(sample)

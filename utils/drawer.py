@@ -529,6 +529,7 @@ class ImageVisualizer(object):
 
     def render_image_corners_2d(self,
                                 image_path,
+                                image=None,
                                 corners_2d=None,
                                 boxes_2d=None,
                                 corners_3d=None,
@@ -542,7 +543,8 @@ class ImageVisualizer(object):
         num_boxes = corners_2d.shape[0]
         corners_2d = corners_2d.astype(np.int32).tolist()
 
-        image = self.parse_image(image_path)
+        if image is None:
+            image = self.parse_image(image_path)
         connected_points = [[2, 4, 5], [1, 3, 6], [2, 4, 7], [1, 3, 8],
                             [1, 6, 8], [2, 5, 7], [3, 6, 8], [4, 5, 7]]
         connected_plane = [[0, 1, 5, 4], [0, 4, 7, 3], [3, 7, 6, 2],

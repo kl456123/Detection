@@ -29,10 +29,11 @@ import bbox_coders
 from core.utils.analyzer import Analyzer
 
 from utils import geometry_utils
+from core import ops
 
 
-@DETECTORS.register('fpn_grnet')
-class FPNGRNetModel(FPNFasterRCNN):
+@DETECTORS.register('fpn_cylinder')
+class FPNCylinderModel(FPNFasterRCNN):
     def forward(self, feed_dict):
         im_info = feed_dict[constants.KEY_IMAGE_INFO]
 
@@ -91,6 +92,12 @@ class FPNGRNetModel(FPNFasterRCNN):
                 # note here base_feat (N,C,H,W),rois_batch (N,num_proposals,5)
                 proposals = proposals_dict[constants.KEY_PRIMARY]
             rois = box_ops.box2rois(proposals)
+
+            rcnn_cylinder_feat_maps = []
+            for feat_map in rcnn_feat_maps:
+                rcnn_cylinder_feat_maps.append(
+                    ops.cylinderize(feat_map,
+                                    feed_dict[constants.KEY_STEREO_CALIB_P2]))
             pooled_feat = self.pyramid_rcnn_pooling(rcnn_feat_maps,
                                                     rois.view(-1, 5),
                                                     im_info[0][:2])

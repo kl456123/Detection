@@ -235,8 +235,8 @@ class Mono3DKITTIDataset(KITTIDataset):
     # return np.stack([mid0, mid1], axis=1)
 
     def visuliaze_sample(self, sample):
-        import ipdb
-        ipdb.set_trace()
+        #  import ipdb
+        #  ipdb.set_trace()
         image = sample[constants.KEY_IMAGE]
         num_instances = sample[constants.KEY_NUM_INSTANCES]
         # if image.shape[0] == 3:
@@ -245,11 +245,35 @@ class Mono3DKITTIDataset(KITTIDataset):
 
         label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D][:num_instances]
         p2 = sample[constants.KEY_STEREO_CALIB_P2]
-        boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d, p2)
-        sample[constants.KEY_LABEL_BOXES_2D] = boxes_3d_proj
+        # boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d, p2)
+        cylinder_corners_2d = geometry_utils.boxes_3d_to_cylinder_corners_2d(
+            label_boxes_3d, p2, radus=864)
+        # boxes_2d = sample[constants.KEY_LABEL_BOXES_2D][:num_instances]
+        # boxes_2d = boxes_3d_proj
         from utils.visualize import visualize_bbox
+        from utils.drawer import ImageVisualizer
         image = np.asarray(image)
-        visualize_bbox(image, boxes_3d_proj, save=True)
+        # visualize_bbox(image, boxes_2d, save=True)
+        image_dir = '/data/object/training/image_2'
+        result_dir = './results/data'
+        save_dir = 'results/images'
+        calib_dir = '/data/object/training/calib'
+        label_dir = None
+        calib_file = None
+        visualizer = ImageVisualizer(
+            image_dir,
+            result_dir,
+            label_dir=label_dir,
+            calib_dir=calib_dir,
+            calib_file=calib_file,
+            online=True,
+            save_dir=save_dir)
+        image_path = sample[constants.KEY_IMAGE_PATH]
+        visualizer.render_image_corners_2d(
+            image_path,
+            image=image,
+            corners_2d=cylinder_corners_2d,
+            p2=p2)
 
 
 if __name__ == '__main__':
@@ -257,8 +281,10 @@ if __name__ == '__main__':
         'root_path': '/data',
         'data_path': 'object/training/image_2',
         'label_path': 'object/training/label_2',
-        'classes': ['Car', 'Pedestrian', 'Truck'],
-        'dataset_file': './data/train.txt'
+        'classes': ['Car'],
+        'dataset_file': './data/train.txt',
+        'use_cylinder': True,
+        'radus': 864
     }
     nuscenes_dataset_config = {
         'root_path': '/data/nuscenes_kitti',
@@ -273,16 +299,12 @@ if __name__ == '__main__':
         "type": "random_brightness"
     }, {
         "type": "random_horizontal_flip"
-    }, {
-        "type": "fix_ratio_resize",
-        "size": [384, 1280],
-        "min_size": 500,
-        "max_size": 1280
     }]
     from data import transforms
     transform = transforms.build(transforms_config)
+    #  transform = None
     dataset = Mono3DKITTIDataset(
-        nuscenes_dataset_config, transform, training=True)
+        kitti_dataset_config, transform, training=True)
     for sample in dataset:
         # sample = dataset[4]
         dataset.visuliaze_sample(sample)

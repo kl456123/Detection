@@ -13,7 +13,7 @@ enable_local_coord = False
 @BBOX_CODERS.register(constants.KEY_CORNERS_3D_GRNET)
 class Corner3DCoder(object):
     @staticmethod
-    def decode_batch_new(encoded_corners_2d_all, final_boxes_2d, p2):
+    def decode_batch(encoded_corners_2d_all, final_boxes_2d, p2):
         """
         Args:
             encoded_corners_2d: shape(N, M, 8 * 4)
@@ -23,42 +23,52 @@ class Corner3DCoder(object):
             corners_2d: shape(N, M, 8, 2)
         """
         N, M = encoded_corners_2d_all.shape[:2]
-        # encoded_corners_2d = torch.cat([encoded_corners_2d_all[:,:,::4],encoded_corners_2d_all[:,:,1::4]],dim=-1)
-        # visibility = torch.cat([encoded_corners_2d_all[:,:,2::4],encoded_corners_2d_all[:,:,3::4]],dim=-1)
-        # encoded_corners_2d_all = encoded_corners_2d_all.view(N, M, 8, 4)
-        # encoded_corners_2d = encoded_corners_2d_all[:, :, :, :2].contiguous(
-        # ).view(N, M, -1)
-        # visibility = encoded_corners_2d_all[:, :, :, 2:].contiguous().view(
-        # N, M, -1)
 
-        encoded_corners_2d = encoded_corners_2d_all[:, :, :16]
+        local_corners_3d = 3*torch.tanh(encoded_corners_2d_all[:, :, :24])
+        depth = encoded_corners_2d_all[:, :, 24:25]
+        center_cylinder_2d = encoded_corners_2d_all[:, :, 25:27]
 
-        format_checker.check_tensor_shape(encoded_corners_2d, [None, None, 16])
+        # format_checker.check_tensor_shape(encoded_corners_2d, [None, None, 16])
         # format_checker.check_tensor_shape(visibility, [None, None, 16])
         format_checker.check_tensor_shape(final_boxes_2d, [None, None, 4])
 
-        batch_size = encoded_corners_2d.shape[0]
-        num_boxes = encoded_corners_2d.shape[1]
-
         final_boxes_2d_xywh = geometry_utils.torch_xyxy_to_xywh(final_boxes_2d)
         # left_top = final_boxes_2d[:, :, :2].unsqueeze(2)
-        mid = final_boxes_2d_xywh[:, :, :2].unsqueeze(2)
-        wh = final_boxes_2d_xywh[:, :, 2:].unsqueeze(2)
-        encoded_corners_2d = encoded_corners_2d.view(batch_size, num_boxes, 8,
-                                                     2)
-        # visibility = visibility.view(batch_size, num_boxes, 8, 2)
-        # visibility = F.softmax(visibility, dim=-1)[:, :, :, 1]
-        corners_2d = encoded_corners_2d * wh + mid
+        mid = final_boxes_2d_xywh[:, :, :2]
+        wh = final_boxes_2d_xywh[:, :, 2:]
+        center_cylinder_2d = center_cylinder_2d * wh + mid
 
-        # remove invisibility points
-        # import ipdb
-        # ipdb.set_trace()
-        # corners_2d[visibility > 0.5] = -1
-        # .view(batch_size, num_boxes, -1)
-        return corners_2d
+        #  import ipdb
+        #  ipdb.set_trace()
+        locations = []
+        for batch_ind in range(N):
+            locations.append(
+                geometry_utils.torch_cylinder_points_2d_to_points_3d_v2(
+                    center_cylinder_2d[batch_ind],
+                    depth[batch_ind],
+                    p2[batch_ind],
+                    radus=864))
+        locations = torch.stack(locations, dim=0)
+
+        # camera view angle
+        ray_angle = -torch.atan2(locations[:, :, 2], locations[:, :, 0])
+        #  alpha = geometry_utils.compute_ray_angle(
+        #  C_2d.unsqueeze(0), p2.unsqueeze(0)).squeeze(0)
+
+        # loop here
+
+        #  import ipdb
+        #  ipdb.set_trace()
+        R_inv = geometry_utils.torch_ry_to_rotation_matrix(
+            ray_angle.view(-1)).type_as(local_corners_3d)
+        local_corners_3d = local_corners_3d.view(-1, 8, 3).permute(0, 2, 1)
+        global_corners_3d = torch.bmm(
+            R_inv, local_corners_3d) + locations.view(-1, 3, 1)
+
+        return global_corners_3d.permute(0, 2, 1).view(N, M, 8, 3)
 
     @staticmethod
-    def decode_batch(encoded_corners_3d_all, final_boxes_2d, p2):
+    def decode_batch_old(encoded_corners_3d_all, final_boxes_2d, p2):
         batch_size = encoded_corners_3d_all.shape[0]
         orients_batch = []
         for batch_ind in range(batch_size):
@@ -188,42 +198,37 @@ class Corner3DCoder(object):
             coordinates frame
 
         Returns:
-            depth of center:
-            center 3d location:
+            depth of center: here refers to abs distance between camera center and object center
             local_corners:
         """
         # global to local
-        global_corners_3d = geometry_utils.torch_boxes_3d_to_corners_3d(
-            label_boxes_3d)
-        location = label_boxes_3d[:, :3]
-
-        num_boxes = global_corners_3d.shape[0]
-
-        if enable_local_coord:
-            # proj of 3d bbox center
-            location_2d = geometry_utils.torch_points_3d_to_points_2d(
-                location, p2)
-
-            alpha = geometry_utils.compute_ray_angle(
-                location_2d.unsqueeze(0), p2.unsqueeze(0)).squeeze(0)
-            R = geometry_utils.torch_ry_to_rotation_matrix(-alpha).type_as(
-                global_corners_3d)
-            local_corners_3d = torch.matmul(
-                R,
-                global_corners_3d.permute(0, 2, 1) -
-                location.unsqueeze(-1)).permute(0, 2, 1).contiguous().view(
-                    num_boxes, -1)
-        else:
-            # local coords
-            local_corners_3d = (global_corners_3d.permute(0, 2, 1) -
-                                location.unsqueeze(-1)).permute(
-                                    0, 2, 1).contiguous().view(num_boxes, -1)
-
-        # instance depth
-        # instance_depth = location[:, -1:]
         dims = label_boxes_3d[:, 3:6]
+        location = label_boxes_3d[:, :3]
+        ry = label_boxes_3d[:, -1:]
+        ray_angle = -torch.atan2(location[:, 2], location[:, 0])
+        local_angle = ry - ray_angle[:, None]
+        local_corners_3d = geometry_utils.torch_calc_local_corners(
+            dims, local_angle)
+        depth = torch.norm(location[..., [0, 2]], dim=-1, keepdim=True)
+        # depth = location[:, -1:]
 
-        return torch.cat([local_corners_3d, location, dims], dim=-1)
+        #  import ipdb
+        #  ipdb.set_trace()
+        location[:, 1] = location[:, 1] - 0.5 * dims[:, 0]
+        center_cylinder_2d = geometry_utils.torch_points_3d_to_cylinder_points_2d(
+            location, p2, radus=864)
+        local_corners_3d[..., 1] = local_corners_3d[..., 1] + 0.5 * dims[:, None, 0]
+        # center_cylinder_2d = geometry_utils.torch_points_3d_to_points_2d(location, p2)
+        #  corners_2d = geometry_utils.torch_boxes_3d_to_corners_2d(label_boxes_3d, p2)
+        #  boxes_2d = geometry_utils.torch_corners_2d_to_boxes_2d(corners_2d)
+        #  center_cylinder_2d = boxes_2d[:, :2]
+
+        return torch.cat(
+            [
+                local_corners_3d.contiguous().view(-1, 24), depth,
+                center_cylinder_2d
+            ],
+            dim=-1)
 
     @staticmethod
     def encode_batch(label_boxes_3d, p2):
