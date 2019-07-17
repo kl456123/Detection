@@ -737,7 +737,10 @@ class Boxes3DTransformer(object):
 
         # new x coords
         x = (d * w - 2 * u * d - 2 * T_x - f * x) / f
-        alpha = np.pi - alpha if alpha > 0 else -np.pi - alpha
+        # alpha = np.pi - alpha if alpha > 0 else -np.pi - alpha
+        cond = alpha > 0
+        alpha[cond] = np.pi - alpha[cond]
+        alpha[~cond] = -np.pi - alpha[~cond]
 
         # assign
         label_boxes_3d[:, 0] = x

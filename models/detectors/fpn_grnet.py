@@ -394,15 +394,15 @@ class FPNGRNetModel(FPNFasterRCNN):
                 [('center_2d_loss', center_2d_preds), ('center_depth_loss',
                                                        center_depth_preds),
                  ('dims', dims_preds), ('ry', ry_preds)]):
-                if index in [1]:
-                    to_2d = False
-                    pos_global_corners_gt = pos_global_corners_gt_3d
-                    proposals = None
-                else:
-                    #  continue
-                    to_2d = True
-                    pos_global_corners_gt = pos_global_corners_gt_2d
-                    proposals = proposals_xywh
+                # if index in [1]:
+                to_2d = False
+                pos_global_corners_gt = pos_global_corners_gt_3d
+                proposals = None
+                # else:
+                # #  continue
+                # to_2d = True
+                # pos_global_corners_gt = pos_global_corners_gt_2d
+                # proposals = proposals_xywh
                 args = [
                     center_2d_gt, center_depth_gt, dims_gt, ry_gt, p2, to_2d,
                     proposals
