@@ -2,7 +2,7 @@
     "data_config": {
         "dataloader_config": {
             "batch_size": 1,
-            "num_workers": 4,
+            "num_workers": 8,
             "shuffle": true
         },
         "dataset_config": {
@@ -13,15 +13,16 @@
             "root_path": "/data",
             "type": "mono_3d_kitti",
             "use_proj_2d": false,
-            "use_cylinder": true,
-            "radus": 864
+            "use_cylinder":true,
+            "radius":864
         },
         "transform_config": [
             {
                 "type": "random_hsv"
-            },
-            {
-                "type": "random_brightness"
+            }, {
+            "type": "random_brightness"
+            }, {
+            "type": "random_horizontal_flip"
             },
             {
                 "type": "to_tensor"
@@ -69,10 +70,11 @@
             "root_path": "/data",
             "type": "mono_3d_kitti",
             "use_proj_2d": false,
-            "use_cylinder": true,
-            "radus": 864
+            "use_cylinder":true,
+            "radius":864
         },
         "transform_config": [
+            
             {
                 "type": "to_tensor"
             },
@@ -199,7 +201,7 @@
             "bias_lr_factor": 1,
             "eps": 1e-08,
             "momentum": 0.9,
-            "type": "adam",
+            "type": "sgd",
             "weight_decay": 0,
             "weight_decay_bias": 0
         },

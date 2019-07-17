@@ -51,7 +51,7 @@ class KITTIDataset(DetDataset):
 
         self.transforms = transform
         if self.use_cylinder:
-            self.radus = config.get('radus', 864)
+            self.radius = config.get('radius', 864)
 
         # classes to be trained
         # 0 refers to bg
@@ -226,14 +226,6 @@ class KITTIDataset(DetDataset):
         else:
             return os.path.join(self.calib_dir, '{}.txt'.format(sample_name))
 
-    def preprocess_image(self, image, p2):
-        # PIL to cv2
-        image = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
-        cylinder_image = image_utils.cylinder_project(
-            image, p2, radus=self.radus)
-        image = Image.fromarray(
-            cv2.cvtColor(cylinder_image, cv2.COLOR_BGR2RGB).astype(np.uint8))
-        return image
 
     def get_training_sample(self, index):
         image_path = self.sample_names[index]
@@ -272,11 +264,11 @@ class KITTIDataset(DetDataset):
         label_classes = np.asarray(label_classes, dtype=np.int32)
 
         # image_info = list(image_info).append(num_boxes)
-        if self.use_cylinder:
-            label_boxes_2d = label_boxes_2d.reshape(-1, 2)
-            label_boxes_2d = image_utils.plane_to_cylinder(
-                label_boxes_2d, stereo_calib_p2, self.radus).reshape(-1, 4)
-            image_input = self.preprocess_image(image_input, stereo_calib_p2)
+        # if self.use_cylinder:
+            # label_boxes_2d = label_boxes_2d.reshape(-1, 2)
+            # label_boxes_2d = image_utils.plane_to_cylinder(
+                # label_boxes_2d, stereo_calib_p2, self.radus).reshape(-1, 4)
+            # image_input = self.preprocess_image(image_input, stereo_calib_p2)
 
         transform_sample = {}
         transform_sample[constants.KEY_IMAGE] = image_input
@@ -292,6 +284,7 @@ class KITTIDataset(DetDataset):
         # (h,w,scale)
         transform_sample[constants.KEY_IMAGE_INFO] = np.asarray(
             image_info, dtype=np.float32)
+        transform_sample[constants.KEY_RADIUS] = self.radius
 
         #  import ipdb
         #  ipdb.set_trace()
@@ -318,6 +311,9 @@ class KITTIDataset(DetDataset):
         # for each sample or single file for all samples
         calib_path = self.get_calib_path(sample_name)
         stereo_calib_p2 = self.load_projection_matrix(calib_path)
+
+        if self.use_cylinder:
+            image_input = self.preprocess_image(image_input, stereo_calib_p2)
 
         transform_sample = {}
         transform_sample[constants.KEY_IMAGE] = image_input
@@ -381,7 +377,7 @@ if __name__ == '__main__':
         'classes': ['Car', 'Pedestrian', 'Truck'],
         'dataset_file': './data/train.txt',
         'use_cylinder': True,
-        'radus': 864,
+        'radius': 864,
     }
     dataset = KITTIDataset(dataset_config)
     #  sample = dataset[0]

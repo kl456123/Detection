@@ -8,9 +8,11 @@ import numpy as np
 from utils.registry import DATASETS
 from utils.box_vis import compute_box_3d
 import torch
+from utils import image_utils
 
 from utils import pointcloud_utils
 from PIL import Image
+import cv2
 
 MEAN_DIMS = {
     # KITTI
@@ -149,6 +151,19 @@ class Mono3DKITTIDataset(KITTIDataset):
         # plt.show()
         sample[constants.KEY_LABEL_DEPTHMAP] = depth[None]
         sample[constants.KEY_LABEL_INSTANCES_MASK] = mask[None]
+
+        if self.use_cylinder:
+            label_boxes_2d = sample[constants.KEY_LABEL_BOXES_2D]
+            label_boxes_2d = label_boxes_2d.reshape(-1, 2)
+            stereo_calib_p2 = sample[constants.KEY_STEREO_CALIB_P2]
+            label_boxes_2d = image_utils.plane_to_cylinder(
+                label_boxes_2d, stereo_calib_p2, self.radius).reshape(-1, 4)
+            image_input = sample[constants.KEY_IMAGE]
+            image_input = self.preprocess_image(image_input, stereo_calib_p2)
+
+            # assign back
+            sample[constants.KEY_IMAGE] = image_input
+            sample[constants.KEY_LABEL_BOXES_2D] = label_boxes_2d
         # boxes_3d = sample[constants.KEY_LABEL_BOXES_3D]
         # boxes_2d_proj = sample[constants.KEY_LABEL_BOXES_2D]
         # p2 = sample[constants.KEY_STEREO_CALIB_P2]
@@ -233,6 +248,26 @@ class Mono3DKITTIDataset(KITTIDataset):
     # mid0 = (point0 + point1) / 2
     # mid1 = (point2 + point3) / 2
     # return np.stack([mid0, mid1], axis=1)
+    def preprocess_image(self, image, p2):
+        """
+        Args:
+            image: shape(CHW)
+        """
+        # PIL to cv2
+        if isinstance(image, torch.Tensor):
+            image = image.numpy().transpose((1, 2, 0))
+            cylinder_image = image_utils.cylinder_project(
+                image, p2, radus=self.radius)
+            cylinder_image = cylinder_image.transpose((2, 0, 1))
+            image = torch.from_numpy(cylinder_image)
+        else:
+            image = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
+            cylinder_image = image_utils.cylinder_project(
+                image, p2, radus=self.radius)
+            image = Image.fromarray(
+                cv2.cvtColor(cylinder_image, cv2.COLOR_BGR2RGB).astype(
+                    np.uint8))
+        return image
 
     def visuliaze_sample(self, sample):
         #  import ipdb
@@ -246,6 +281,8 @@ class Mono3DKITTIDataset(KITTIDataset):
         label_boxes_3d = sample[constants.KEY_LABEL_BOXES_3D][:num_instances]
         p2 = sample[constants.KEY_STEREO_CALIB_P2]
         # boxes_3d_proj = geometry_utils.boxes_3d_to_boxes_2d(label_boxes_3d, p2)
+        # import ipdb
+        # ipdb.set_trace()
         cylinder_corners_2d = geometry_utils.boxes_3d_to_cylinder_corners_2d(
             label_boxes_3d, p2, radus=864)
         # boxes_2d = sample[constants.KEY_LABEL_BOXES_2D][:num_instances]
@@ -270,10 +307,7 @@ class Mono3DKITTIDataset(KITTIDataset):
             save_dir=save_dir)
         image_path = sample[constants.KEY_IMAGE_PATH]
         visualizer.render_image_corners_2d(
-            image_path,
-            image=image,
-            corners_2d=cylinder_corners_2d,
-            p2=p2)
+            image_path, image=image, corners_2d=cylinder_corners_2d, p2=p2)
 
 
 if __name__ == '__main__':
@@ -282,7 +316,7 @@ if __name__ == '__main__':
         'data_path': 'object/training/image_2',
         'label_path': 'object/training/label_2',
         'classes': ['Car'],
-        'dataset_file': './data/train.txt',
+        'dataset_file': './data/demo.txt',
         'use_cylinder': True,
         'radus': 864
     }
@@ -299,6 +333,9 @@ if __name__ == '__main__':
         "type": "random_brightness"
     }, {
         "type": "random_horizontal_flip"
+    }, {
+        "size": [384, 1280],
+        "type": "fix_shape_resize"
     }]
     from data import transforms
     transform = transforms.build(transforms_config)

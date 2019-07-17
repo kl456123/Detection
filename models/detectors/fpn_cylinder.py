@@ -93,11 +93,21 @@ class FPNCylinderModel(FPNFasterRCNN):
                 proposals = proposals_dict[constants.KEY_PRIMARY]
             rois = box_ops.box2rois(proposals)
 
+            # cylinder image
             rcnn_cylinder_feat_maps = []
             for feat_map in rcnn_feat_maps:
                 rcnn_cylinder_feat_maps.append(
                     ops.cylinderize(feat_map,
                                     feed_dict[constants.KEY_STEREO_CALIB_P2]))
+            # cylinder rois
+            cylinder_proposals = box_ops.cylinderize(
+                proposals, feed_dict[constants.KEY_STEREO_CALIB_P2], radus=None)
+            cylinder_rois = box_ops.box2rois(cylinder_proposals)
+
+            cylinder_pooled_feat = self.pyramid_rcnn_pooling(
+                rcnn_cylinder_feat_maps, cylinder_rois.view(-1, 5),
+                im_info[0][:2])
+
             pooled_feat = self.pyramid_rcnn_pooling(rcnn_feat_maps,
                                                     rois.view(-1, 5),
                                                     im_info[0][:2])

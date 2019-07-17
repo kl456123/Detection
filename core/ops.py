@@ -2,7 +2,6 @@
 import torch
 from utils import image_utils
 import numpy as np
-from torch.autograd import Function
 
 
 def meshgrid(a, b):
@@ -26,15 +25,13 @@ def cylinderize(tensor, p2, radus=None):
     Returns:
         cylinder_tensor: shape(NCHW)
     """
-    import ipdb
-    ipdb.set_trace()
     device = tensor.device
     N, C, H, W = tensor.shape
 
-    tensor = tensor.permute(0, 2, 3, 1).view(H, W, -1)
+    tensor = tensor.permute(0, 2, 3, 1).view(N, H, W, -1)
     row = torch.arange(H).to(device)
     col = torch.arange(W).to(device)
-    y, x = meshgrid(row, col)
+    x, y = meshgrid(col, row)
     x = x.view(-1)
     y = y.view(-1)
     xy = torch.stack([x, y], dim=-1).float()
@@ -47,26 +44,13 @@ def cylinderize(tensor, p2, radus=None):
         radus = W / (
             image_utils.arctan(f * W / (u0 * (u0 - W) + f * f) + 0.5 * np.pi))
 
+    cylinder_tensor = []
     for batch_ind in range(N):
         uv = image_utils.cylinder_to_plane(xy, p2[batch_ind], radus[batch_ind])
-        cylinder_tensor[y, x] = image_utils.torch_batch_bilinear_intep(
-            tensor, uv)
+        cylinder_tensor.append(
+            image_utils.torch_batch_bilinear_intep(tensor[batch_ind], uv).view(
+                H, W, -1))
 
-    return cylinder_tensor
+    cylinder_tensor = torch.stack(cylinder_tensor, dim=0)
 
-
-class SparseToDense(Function):
-    @staticmethod
-    def forward(ctx, index, net_input, shape):
-        index, net_input = index.detach(), net_input.detach()
-
-        target_tensor = torch.zeros(shape)
-        target_tensor[index] = net_input
-
-        ctx.save_for_backward(index)
-        return target_tensor
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        index = ctx.saved_tensors
-        return grad_output[index]
+    return cylinder_tensor.permute(0, 3, 1, 2)

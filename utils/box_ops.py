@@ -3,6 +3,7 @@ import torch
 import similarity_calcs
 from utils import geometry_utils
 import numpy as np
+from utils import image_utils
 
 # from similarity_calcs.center_similarity_calc import CenterSimilarityCalc
 
@@ -234,3 +235,10 @@ def super_nms_faster(boxes):
         if keep.numel() > 0:
             remain_boxes.append(keep)
     return torch.cat(remain_boxes, dim=0)
+
+
+def cylinderize(label_boxes_2d, p2, radus):
+    label_boxes_2d = label_boxes_2d.reshape(-1, 2)
+    label_boxes_2d = image_utils.plane_to_cylinder(label_boxes_2d, p2,
+                                                   radus).view(-1, 4)
+    return label_boxes_2d

@@ -15,6 +15,7 @@ KEY_OBJECTNESS = 'objectness'
 
 KEY_STEREO_CALIB_P2 = 'stereo_calib_p2'
 KEY_STEREO_CALIB_P2_ORIG = 'stereo_calib_p2_orig'
+KEY_RADIUS = 'radius'
 
 # logger config key
 KEY_LOGGER_NAME = 'logger_name'

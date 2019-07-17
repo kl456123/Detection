@@ -721,6 +721,34 @@ def boxes_3d_to_plane(label_boxes_3d):
 
 class Boxes3DTransformer(object):
     @classmethod
+    def cylinder_horizontal_flip(cls, label_boxes_3d, image_shape, p2, radius):
+        """
+        Args:
+            label_boxes_3d: shape(N, 7) (xyz, hwl, ry)
+            image_shape: (h, w)
+            p2: shape(3, 4)
+        """
+        d = label_boxes_3d[:, 2]
+        x = label_boxes_3d[:, 0]
+        w = image_shape[1]
+        alpha = label_boxes_3d[:, -1]
+        f = p2[0, 0]
+        u = p2[0, 2]
+        T_x = p2[0, 3]
+
+        # new x coords
+        x = (d * w - 2 * u * d - 2 * T_x - f * x) / f
+        #  alpha = np.pi - alpha if alpha > 0 else -np.pi - alpha
+        cond = alpha > 0
+        alpha[cond] = np.pi - alpha[cond]
+        alpha[~cond] = -np.pi - alpha[~cond]
+
+        # assign
+        label_boxes_3d[:, 0] = x
+        label_boxes_3d[:, -1] = alpha
+        return label_boxes_3d
+
+    @classmethod
     def horizontal_flip(cls, label_boxes_3d, image_shape, p2):
         """
         Args:

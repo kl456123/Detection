@@ -137,12 +137,16 @@ def torch_batch_bilinear_intep(image, xypoints):
     Returns:
         pixel_value: shape(N, 3)
     """
+    # import ipdb
+    # ipdb.set_trace()
     x = xypoints[:, 0]
     y = xypoints[:, 1]
     h, w = image.shape[:2]
     outside_cond = (x >= w - 1) | (y >= h - 1) | (x < 0) | (y < 0)
-    x = x[~outside_cond]
-    y = y[~outside_cond]
+    x[outside_cond] = 0
+    y[outside_cond] = 0
+    # x = x[~outside_cond]
+    # y = y[~outside_cond]
     xmin = torch.floor(x).long()
     xmax = torch.ceil(x).long()
     ymin = torch.floor(y).long()
@@ -154,11 +158,12 @@ def torch_batch_bilinear_intep(image, xypoints):
     pixel_value = (1 - a) * (1 - b) * image[ymin, xmin] + a * (
         1 - b) * image[ymax, xmin] + (
             1 - a) * b * image[ymin, xmax] + a * b * image[ymax, xmax]
-    total_pixel_value = torch.zeros((xypoints.shape[0],
-                                     image.shape[-1])).type_as(image)
-    total_pixel_value[torch.nonzero(~outside_cond).view(-1)] = pixel_value
+    # total_pixel_value = torch.zeros((xypoints.shape[0],
+    # image.shape[-1])).type_as(image)
+    # total_pixel_value[torch.nonzero(~outside_cond).view(-1)] = pixel_value
+    pixel_value[torch.nonzero(outside_cond).view(-1)] = 0
 
-    return total_pixel_value
+    return pixel_value
 
 
 def cylinder_to_plane(xy, p2, radus):
@@ -176,10 +181,12 @@ def cylinder_to_plane(xy, p2, radus):
 
 
 def plane_to_cylinder(uv, p2, radus):
+    #  import ipdb
+    #  ipdb.set_trace()
     u0 = p2[0, 2]
     f = p2[0, 0]
     u = uv[:, 0]
-    x = arctan(u * f / (f * f + (u0 - u) * u0)) * radus
+    x = arctan2(u * f , (f * f + (u0 - u) * u0)) * radus
     y = uv[:, 1]
 
     return stack([x, y], axis=-1)
@@ -201,6 +208,14 @@ def arctan(x):
     else:
         x = np.arctan(x)
     x[x < 0] = x[x < 0] + 0.5 * np.pi
+    return x
+
+
+def arctan2(y, x):
+    if isinstance(x, torch.Tensor):
+        x = torch.atan2(y, x)
+    else:
+        x = np.arctan2(y, x)
     return x
 
 
