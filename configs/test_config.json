@@ -2,7 +2,7 @@
     "data_config": {
         "dataloader_config": {
             "batch_size": 1,
-            "num_workers": 8,
+            "num_workers": 1,
             "shuffle": true
         },
         "dataset_config": {
@@ -74,7 +74,6 @@
             "radius":864
         },
         "transform_config": [
-            
             {
                 "type": "to_tensor"
             },
@@ -211,11 +210,10 @@
             "lr_decay_gamma": 0.1,
             "lr_decay_step": 60000,
             "milestones": [
-                60000,
                 120000,
                 240000
             ],
-            "type": "step",
+            "type": "multi_step",
             "warmup_factor": 0.333,
             "warmup_iters": 2000,
             "warmup_method": "linear"

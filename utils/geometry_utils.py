@@ -728,24 +728,24 @@ class Boxes3DTransformer(object):
             image_shape: (h, w)
             p2: shape(3, 4)
         """
-        d = label_boxes_3d[:, 2]
-        x = label_boxes_3d[:, 0]
         w = image_shape[1]
-        alpha = label_boxes_3d[:, -1]
+        theta_offset = w / 2.0 / radius
         f = p2[0, 0]
-        u = p2[0, 2]
-        T_x = p2[0, 3]
+        u0 = p2[0, 2]
+        theta_start = torch.atan(u0 / f) + 0.5 * np.pi
+        theta_mid = theta_start + theta_offset
 
-        # new x coords
-        x = (d * w - 2 * u * d - 2 * T_x - f * x) / f
-        #  alpha = np.pi - alpha if alpha > 0 else -np.pi - alpha
-        cond = alpha > 0
-        alpha[cond] = np.pi - alpha[cond]
-        alpha[~cond] = -np.pi - alpha[~cond]
+        theta_1 = np.arctan2(label_boxes_3d[:, 2], label_boxes_3d[:, 0])
+        theta_2 = 2 * theta_mid - theta_1
+        dist = np.linalg.norm(label_boxes_3d[:, [0, 2]], axis=-1)
+        z = dist * np.sin(theta_2)
+        x = dist * np.cos(theta_2)
+        ry = 2 * label_boxes_3d[:, -1] - (-theta_mid)
 
-        # assign
         label_boxes_3d[:, 0] = x
-        label_boxes_3d[:, -1] = alpha
+        label_boxes_3d[:, 2] = z
+        label_boxes_3d[:, -1] = ry
+
         return label_boxes_3d
 
     @classmethod

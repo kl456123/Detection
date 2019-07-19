@@ -400,27 +400,27 @@ class FPNGRNetModel(FPNFasterRCNN):
             # calib_file = None
             # from utils.drawer import ImageVisualizer
             # visualizer = ImageVisualizer(
-                # image_dir,
-                # result_dir,
-                # label_dir=label_dir,
-                # calib_dir=calib_dir,
-                # calib_file=calib_file,
-                # online=True,
-                # save_dir=save_dir)
+            # image_dir,
+            # result_dir,
+            # label_dir=label_dir,
+            # calib_dir=calib_dir,
+            # calib_file=calib_file,
+            # online=True,
+            # save_dir=save_dir)
             # corners_3d = pos_global_corners_gt_3d.view(
-                # -1, 8, 3).cpu().detach().numpy()
+            # -1, 8, 3).cpu().detach().numpy()
             # image = feed_dict[constants.KEY_IMAGE].permute(
-                # 0, 2, 3, 1).cpu().detach().numpy()
+            # 0, 2, 3, 1).cpu().detach().numpy()
             # p2 = p2.cpu().detach().numpy()
             # corners_2d = geometry_utils.points_3d_to_cylinder_points_2d(corners_3d.reshape(-1, 3), p2[0], radus=864).reshape(-1, 8,2)
             # image_path = feed_dict[constants.KEY_IMAGE_PATH][0]
 
             # visualizer.render_image_corners_2d(
-                # image_path=image_path
-                 # # image=image[0],
-                # corners_3d=corners_3d,
-                # # corners_2d=corners_2d,
-                # p2=p2[0])
+            # image_path=image_path
+            # # image=image[0],
+            # corners_3d=corners_3d,
+            # # corners_2d=corners_2d,
+            # p2=p2[0])
             for index, item in enumerate(
                 [('center_2d_loss', center_2d_preds), ('center_depth_loss',
                                                        center_depth_preds),
@@ -446,8 +446,8 @@ class FPNGRNetModel(FPNFasterRCNN):
                 pos_global_corners_preds = global_corners_preds.view(
                     -1, num_channels)[weights.view(-1) > 0]
 
-                loss = self.smooth_l1_loss(pos_global_corners_preds,
-                                    pos_global_corners_gt)
+                loss = self.smooth_l1_loss(1 / 3.0 * pos_global_corners_preds,
+                                           1 / 3.0 * pos_global_corners_gt)
 
                 loss_dict[loss_name] = loss.sum() / num_pos
         # import ipdb

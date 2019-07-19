@@ -351,7 +351,7 @@ rm results/images/*
     
     
 CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    --checkpoint 8000 \
+    --checkpoint 216000 \
     --load_dir /data/object/liangxiong/test \
     --net fpn_grnet \
     --thresh 0.5 \
