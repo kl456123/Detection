@@ -10,8 +10,17 @@
 * pytorch1.0
 * python3.5
 
+## Prepare
+```bash
+# compile lib
+cd lib
+python setup.py build develop
+cd -
+```
+
 
 ## Training
+download pretrained model(res50, res18_pruned) from `smb://deepmotion1/public/liangxiong` first
 ```bash
 CUDA_VISIBLE_DEVICES=1 python trainval_net.py --cuda \
     --net mono_3d_final_plus \

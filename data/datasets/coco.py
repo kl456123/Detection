@@ -5,7 +5,10 @@ import os
 from PIL import Image, ImageOps
 
 from data.det_dataset import DetDataset
-from pycocotools.coco import COCO
+try:
+    from pycocotools.coco import COCO
+except:
+    pass
 import torch
 
 CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
@@ -166,8 +169,7 @@ def priorbox_cluster():
         'root_path': '/data/liangxiong/COCO2017',
         'data_path': 'train2017',
         'label_path': 'annotations/instances_train2017.json',
-        'classes':
-        ['car']
+        'classes': ['car']
     }
     loader = CocoDataset(dataset_config)
 
@@ -186,8 +188,9 @@ def priorbox_cluster():
                 (b[2] - b[0]) * (b[3] - b[1]) / shape[0] / shape[1])
             obj_area.append(area)
             box = [
-                1., max((b[2] - b[0]) / (b[3] - b[1] + 1),
-                        (b[3] - b[1]) / (b[2] - b[0] + 1))
+                1.,
+                max((b[2] - b[0]) / (b[3] - b[1] + 1),
+                    (b[3] - b[1]) / (b[2] - b[0] + 1))
             ]
             bbox.append(box)
 
