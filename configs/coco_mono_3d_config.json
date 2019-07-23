@@ -16,7 +16,7 @@
                 "Tram"
             ],
             "cache_bev": false,
-            "dataset_file": "trainval.txt",
+            "dataset_file": "train.txt",
             "root_path": "/data",
             "use_proj_2d":true,
             "use_rect_v2":false
