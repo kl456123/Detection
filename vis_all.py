@@ -3,9 +3,9 @@
 import os
 import argparse
 
-# img_dir = '/data/object/training/image_2'
+img_dir = '/data/object/training/image_2'
 # img_dir = '/data/bdd/bdd100k/images/100k/val'
-img_dir = '/data/dm202_3w/left_img'
+#  img_dir = '/data/dm202_3w/left_img'
 # img_dir = '/data/dm202_3w/right_img'
 # img_dir = '/data/pengwu/seq/keyframes'
 # img_dir = '/home/pengwu/mono3d/seq/frames'

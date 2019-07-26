@@ -8,12 +8,7 @@
         },
         "dataset_config": {
             "classes": [
-                "Car",
-                "Van",
-                "Truck",
-                "Pedestrian",
-                "Cyclist",
-                "Tram"
+                "Car"
             ],
             "cache_bev": false,
             "dataset_file": "train.txt",
@@ -64,12 +59,7 @@
         "bbox_reg": true,
         "class_agnostic": true,
         "classes": [
-            "Car",
-            "Van",
-            "Truck",
-            "Pedestrian",
-            "Cyclist",
-            "Tram"
+            "Car"
         ],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
@@ -88,12 +78,7 @@
         },
         "dataset_config": {
             "classes": [
-                "Car",
-                "Van",
-                "Truck",
-                "Pedestrian",
-                "Cyclist",
-                "Tram"
+                "Car"
             ],
             "dataset_file": "val.txt",
             "root_path": "/data",
@@ -119,30 +104,20 @@
         }
     },
     "model_config": {
-        "ndin":512,
+        "ndin":2048,
         "class_agnostic_3d": true,
         "use_self_attention":false,
         "class_agnostic": true,
         "classes": [
-            "Car",
-            "Van",
-            "Truck",
-            "Pedestrian",
-            "Cyclist",
-            "Tram"
+            "Car"
         ],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
-            "net_arch":"res18_pruned",
+            "net_arch":"res50",
             "pooling_size":7,
             "class_agnostic": true,
             "classes": [
-                "Car",
-                "Van",
-                "Truck",
-                "Pedestrian",
-                "Cyclist",
-                "Tram"
+                "Car"
             ],
             "img_channels": 3,
             "pretrained_path":"data/pretrained_model",
@@ -181,7 +156,7 @@
                     320
                 ]
             },
-            "din": 256,
+            "din": 1024,
             "min_size": 16,
             "nms_thresh": 0.7,
             "num_bbox_samples": 500,

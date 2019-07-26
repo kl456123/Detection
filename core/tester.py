@@ -241,7 +241,7 @@ def mono_test(eval_config, data_loader, model):
         classes = eval_config['classes']
         thresh = eval_config['thresh']
         # print(thresh)
-        # thresh = 0.5
+        thresh = 0.3
 
         dets = []
         res_rois = []
@@ -250,10 +250,10 @@ def mono_test(eval_config, data_loader, model):
         #  import ipdb
         #  ipdb.set_trace()
         # nms
-        new_scores = torch.zeros_like(scores)
-        _, scores_argmax = scores.max(dim=-1)
-        row = torch.arange(0, scores.shape[0]).type_as(scores_argmax)
-        new_scores[row, scores_argmax] = scores[row, scores_argmax]
+        # new_scores = torch.zeros_like(scores)
+        # _, scores_argmax = scores.max(dim=-1)
+        # row = torch.arange(0, scores.shape[0]).type_as(scores_argmax)
+        # new_scores[row, scores_argmax] = scores[row, scores_argmax]
         for j in range(1, len(classes) + 1):
             inds = torch.nonzero(scores[:, j] > thresh).view(-1)
             # if there is det
@@ -392,6 +392,7 @@ def mono_test(eval_config, data_loader, model):
                 res_rois.append([])
                 res_anchors.append([])
                 dets_3d.append([])
+                post_time = 0
 
 
         duration_time = time.time() - end_time
