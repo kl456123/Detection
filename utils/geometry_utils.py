@@ -228,7 +228,7 @@ def ry_to_rotation_matrix(rotation_y):
     return rotation_matrix
 
 
-def boxes_3d_to_corners_3d(boxes):
+def boxes_3d_to_corners_3d(boxes, center=False):
     """
     Args:
         boxes: shape(N, 7), (xyz,hwl, ry)
@@ -245,7 +245,11 @@ def boxes_3d_to_corners_3d(boxes):
 
     x_corners = np.array(
         [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2])
-    y_corners = np.array([zeros, zeros, zeros, zeros, -h, -h, -h, -h])
+    if center:
+        y_corners = np.array(
+            [h / 2, h / 2, h / 2, h / 2, -h / 2, -h / 2, -h / 2, -h / 2])
+    else:
+        y_corners = np.array([zeros, zeros, zeros, zeros, -h, -h, -h, -h])
     z_corners = np.array(
         [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2])
 
@@ -455,6 +459,19 @@ def torch_pts_2d_to_dir_3d(lines, p2):
     return ry
 
 
+def pts_2d_to_dir_3d(lines, p2):
+    A = lines[:, :, 3] - lines[:, :, 1]
+    B = lines[:, :, 0] - lines[:, :, 2]
+    C = lines[:, :, 2] * lines[:, :, 1] - lines[:, :, 0] * lines[:, :, 3]
+    plane = bmm(
+        p2.transpose(0, 2, 1),
+        np.stack([A, B, C], axis=-1).transpose(0, 2, 1)).transpose(0, 2, 1)
+    a = plane[:, :, 0]
+    c = plane[:, :, 2]
+    ry = -np.arctan2(-a, c)
+    return ry
+
+
 class ProjectMatrixTransform(object):
     def _format_check(p2, dtype=np.float32):
         pass
@@ -599,6 +616,33 @@ def torch_points_2d_to_points_3d(points_2d, depth, p2):
     points_3d = torch.matmul(K_inv,
                              (depth * points_2d_homo).permute(1, 0)).permute(
                                  1, 0)
+
+    # no rotation
+    return points_3d - T
+
+
+def points_2d_to_points_3d(points_2d, depth, p2):
+    """
+    Args:
+        points_2d: shape(N, 2)
+        depth: shape(N, ) or shape(N, 1)
+        p2: shape(3, 4)
+    """
+    if len(depth.shape) == 1:
+        depth = depth[..., None]
+    # format_checker.check_tensor_shape(points_2d, [None, 2])
+    # format_checker.check_tensor_shape(depth, [None, 1])
+    # format_checker.check_tensor_shape(p2, [3, 4])
+
+    points_2d_homo = np.concatenate(
+        [points_2d, np.ones_like(points_2d[:, -1:])], axis=-1)
+    K = p2[:3, :3]
+    KT = p2[:, 3]
+    T = np.dot(np.linalg.inv(K), KT)
+    K_inv = np.linalg.inv(K)
+    points_3d = np.dot(K_inv, (depth * points_2d_homo).transpose(1,
+                                                                 0)).transpose(
+                                                                     1, 0)
 
     # no rotation
     return points_3d - T

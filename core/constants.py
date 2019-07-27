@@ -59,6 +59,7 @@ KEY_MONO_3D_2D_PROJ = 'mono_3d_2d_proj'
 KEY_CORNERS_2D_STABLE = 'corners_2d_stable'
 KEY_DEPTHMAP = 'depth_map'
 KEY_MOBILEYE = 'mobileye'
+KEY_CENTER_DEPTH = 'center_depth'
 
 # key of stats
 KEY_STATS_RECALL = 'stats_recall'

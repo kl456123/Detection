@@ -24,8 +24,8 @@ class CornersLoss(nn.Module):
         Returns:
             pass
         """
-        # import ipdb
-        # ipdb.set_trace()
+        #  import ipdb
+        #  ipdb.set_trace()
         if self.training_depth:
             num_reg_col = 3
         else:
@@ -58,6 +58,7 @@ class CornersLoss(nn.Module):
             corners_preds[:, :, :, :2].contiguous().view(N, M, -1),
             corners_gt[:, :, :, :2].contiguous().view(N, M, -1))
 
+        center_depth_loss = self.smooth_l1(center_depth_preds, center_depth_gt)
         if self.training_depth:
             depth_loss = self.smooth_l1(
                 corners_preds[:, :, :, 2:].contiguous().view(N, M, -1),
@@ -66,8 +67,7 @@ class CornersLoss(nn.Module):
                 [corners_loss.view(N, M, 8, -1),
                  depth_loss.view(N, M, 8, -1)],
                 dim=-1)
-            center_depth_loss = self.smooth_l1(center_depth_preds,
-                                               center_depth_gt)
+
         else:
             reg_loss = corners_loss.view(N, M, 8, -1)
 
@@ -88,8 +88,7 @@ class CornersLoss(nn.Module):
         total_loss = total_loss.view(batch_size, num_samples, -1)
         # import ipdb
         # ipdb.set_trace()
-        if self.training_depth:
-            return torch.cat(
-                [total_loss, center_depth_loss.unsqueeze(-1)], dim=-1)
-        else:
-            return total_loss
+        #  if self.training_depth:
+        return torch.cat([total_loss, center_depth_loss.unsqueeze(-1)], dim=-1)
+        #  else:
+        # return total_loss

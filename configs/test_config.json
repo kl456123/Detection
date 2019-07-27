@@ -1,8 +1,8 @@
 {
     "data_config": {
         "dataloader_config": {
-            "batch_size": 32,
-            "num_workers": 64,
+            "batch_size": 8,
+            "num_workers": 32,
             "shuffle": true
         },
         "dataset_config": {
@@ -208,7 +208,7 @@
         "disp_interval": 800,
         "num_iters": 600000,
         "optimizer_config": {
-            "base_lr": 0.01,
+            "base_lr": 0.001,
             "bias_lr_factor": 1,
             "eps": 1e-08,
             "momentum": 0.9,

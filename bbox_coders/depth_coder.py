@@ -104,11 +104,11 @@ class Corner2DNearestCoder(object):
         corners_3d = geometry_utils.torch_points_2d_to_points_3d(
             corners_2d[:, :, :, :2].view(-1, 2), depth, p2[0]).view(
                 N, M, -1, 3)
-        # return corners_2d[:, :, Order.reorder()][..., :-1]
+        return corners_2d[:, :, Order.reorder()][..., :-1]
 
         # decoded depth
 
-        return corners_3d[:, :, Order.reorder()]
+        # return corners_3d[:, :, Order.reorder()]
 
     @staticmethod
     def reorder_boxes_4c_decode(boxes_4c):
@@ -204,8 +204,6 @@ class Corner2DNearestCoder(object):
 
     @staticmethod
     def encode(label_boxes_3d, label_boxes_2d, p2, image_info):
-        # import ipdb
-        # ipdb.set_trace()
         corners_3d = geometry_utils.torch_boxes_3d_to_corners_3d(
             label_boxes_3d)
         corners_2d = geometry_utils.torch_boxes_3d_to_corners_2d(

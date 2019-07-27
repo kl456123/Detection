@@ -334,11 +334,11 @@ rm results/images/*
 
 # CORNERS KITTI
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
-    # --checkpoint 1000 \
+    # --checkpoint 152000 \
     # --load_dir /data/object/liangxiong/test \
     # --net fpn_corners_2d \
     # --thresh 0.5 \
-    # --dataset mono_3d_kitti \
+    # --dataset mono_3d_kitti
     # --calib_dir /data/nuscenes/calibs \
     # --img_dir /data/nuscenes/samples/CAM_FRONT
     # --img_dir /data/dm202_3w/left_img \
@@ -351,13 +351,13 @@ rm results/images/*
     
     
 CUDA_VISIBLE_DEVICES=0 python test.py --cuda \
-    --checkpoint 36000 \
+    --checkpoint 60000 \
     --load_dir /data/object/liangxiong/test \
     --net fpn_grnet \
     --thresh 0.5 \
-    --dataset mono_3d_kitti
-    # --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
-    # --calib_file ./000000.txt
+    --dataset mono_3d_kitti \
+    --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
+    --calib_file ./000000.txt
 
 # CUDA_VISIBLE_DEVICES=1 python test.py --cuda \
     # --checkpoint 364000 \

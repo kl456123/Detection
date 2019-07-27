@@ -50,11 +50,36 @@ class Tester(object):
             online=False,
             save_dir=save_dir)
 
-    def _generate_label_path(self, image_path):
+    def _generate_label_path(self, image_path, eval_out=None):
+        if eval_out is None:
+            eval_out = self.eval_out
         image_name = os.path.basename(image_path)
         sample_name = os.path.splitext(image_name)[0]
         label_name = sample_name + '.txt'
-        return os.path.join(self.eval_out, label_name)
+        return os.path.join(eval_out, label_name)
+
+    def save_pseudo_3d(self, dets_2d, corners_2d, dims, depth, label_path):
+        """
+        format: x1,y1,x2,y2,corners_2d, dims, depth
+        """
+        num_instances = dets_2d.shape[0]
+        if num_instances == 0:
+            return
+        corners_2d = corners_2d.reshape(num_instances, -1)
+
+        # dims = np.zeros((num_instances, 3))
+        # depth = np.zeros((num_instances, 1))
+        dets = np.concatenate(
+            [dets_2d[:, :4], corners_2d, dims, depth, dets_2d[:, -1:]],
+            axis=-1).astype(np.str)
+
+        lines = []
+        for det in dets:
+            lines.append(' '.join(det))
+        res_str = '\n'.join(lines)
+
+        with open(label_path, 'w') as f:
+            f.write(res_str)
 
     def save_mono_3d_dets(self, dets, label_path):
         res_str = []
@@ -128,10 +153,11 @@ class Tester(object):
 
             scores = prediction[constants.KEY_CLASSES]
             boxes_2d = prediction[constants.KEY_BOXES_2D]
-            #  dims = prediction[constants.KEY_DIMS]
+            dims = prediction[constants.KEY_DIMS]
+            center_depth = prediction[constants.KEY_CENTER_DEPTH]
+            dims = torch.cat([dims, center_depth], dim=-1)
             corners_2d = prediction[constants.KEY_CORNERS_2D]
-            #  import ipdb
-            #  ipdb.set_trace()
+
             p2 = data[constants.KEY_STEREO_CALIB_P2_ORIG]
 
             # rcnn_3d = prediction['rcnn_3d']
@@ -150,13 +176,15 @@ class Tester(object):
             for batch_ind in range(batch_size):
                 boxes_2d_per_img = boxes_2d[batch_ind]
                 scores_per_img = scores[batch_ind]
-                #  dims_per_img = dims[batch_ind]
+                dims_per_img = dims[batch_ind]
                 corners_2d_per_img = corners_2d[batch_ind]
                 p2_per_img = p2[batch_ind]
 
                 num_cols = corners_2d.shape[-1]
                 dets = [np.zeros((0, 8, num_cols), dtype=np.float32)]
-                dets_2d = [np.zeros((0, 4), dtype=np.float32)]
+                dets_2d = [np.zeros((0, 5), dtype=np.float32)]
+                dets_depth = []
+                dets_dims = []
 
                 for class_ind in range(1, self.n_classes):
                     # cls thresh
@@ -166,7 +194,7 @@ class Tester(object):
                     if inds.numel() > 0:
                         # if self.class_agnostic:
                         threshed_boxes_2d_per_img = boxes_2d_per_img[inds]
-                        #  threshed_dims_per_img = dims_per_img[inds]
+                        threshed_dims_per_img = dims_per_img[inds]
                         threshed_corners_2d_per_img = corners_2d_per_img[inds]
                         # threshed_rcnn_3d_per_img = rcnn_3d_per_img[inds]
                         # else:
@@ -177,7 +205,7 @@ class Tester(object):
                             [
                                 threshed_boxes_2d_per_img,
                                 threshed_scores_per_img.unsqueeze(-1),
-                                #  threshed_dims_per_img,
+                                threshed_dims_per_img,
                             ],
                             dim=-1)
 
@@ -197,16 +225,20 @@ class Tester(object):
                             keep].detach().cpu().numpy()
 
                         dets.append(nms_corners_2d_per_img)
-                        dets_2d.append(nms_dets_per_img[:, :4])
+                        dets_2d.append(nms_dets_per_img[:, :5])
+                        dets_dims.append(nms_dets_per_img[:, 5:8])
+                        dets_depth.append(nms_dets_per_img[:, 8:])
                     else:
                         dets.append(
                             np.zeros((0, 8, num_cols), dtype=np.float32))
-                        dets_2d.append(np.zeros((0, 4)))
+                        dets_2d.append(np.zeros((0, 5)))
+                        dets_dims.append(np.zeros((0, 3), dtype=np.float32))
+                        dets_depth.append(np.zeros((0, 1), dtype=np.float32))
 
-                # import ipdb
-                # ipdb.set_trace()
                 corners = np.concatenate(dets, axis=0)
                 dets_2d = np.concatenate(dets_2d, axis=0)
+                dets_dims = np.concatenate(dets_dims, axis=0)
+                dets_depth = np.concatenate(dets_depth, axis=0)
                 corners_2d = None
                 corners_3d = None
                 if num_cols == 3:
@@ -222,8 +254,11 @@ class Tester(object):
                     p2=p2_per_img.cpu().numpy())
 
                 duration_time = time.time() - end_time
-                #  label_path = self._generate_label_path(image_path[batch_ind])
-                #  self.save_mono_3d_dets(dets, label_path)
+                label_path = self._generate_label_path(image_path[batch_ind],
+                                                       './results/corners')
+
+                self.save_pseudo_3d(dets_2d, corners, dets_dims, dets_depth,
+                                    label_path)
                 sys.stdout.write('\r{}/{},duration: {}'.format(
                     step + 1, num_samples, duration_time))
                 sys.stdout.flush()

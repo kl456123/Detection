@@ -415,10 +415,11 @@ class FPNGRNetModel(FPNFasterRCNN):
                 pos_global_corners_preds = global_corners_preds.view(
                     -1, num_channels)[weights.view(-1) > 0]
 
-                loss = self.l1_loss(pos_global_corners_preds,
-                                    pos_global_corners_gt)
+                loss = 3.0 / 8 * self.smooth_l1_loss(
+                    1 / 3.0 * pos_global_corners_preds,
+                    1 / 3.0 * pos_global_corners_gt)
 
-                loss_dict[loss_name] = loss.sum() / num_pos
+                loss_dict[loss_name] = loss.sum() / 10
         # import ipdb
         # ipdb.set_trace()
 
