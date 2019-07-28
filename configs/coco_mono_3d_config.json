@@ -13,7 +13,7 @@
             "cache_bev": false,
             "dataset_file": "train.txt",
             "root_path": "/data",
-            "use_proj_2d":true,
+            "use_proj_2d": false,
             "use_rect_v2":false
         },
         "name": "kitti",
@@ -82,7 +82,7 @@
             ],
             "dataset_file": "val.txt",
             "root_path": "/data",
-            "use_proj_2d":true,
+            "use_proj_2d": false,
             "use_rect_v2":false
         },
         "name": "kitti",
@@ -171,7 +171,7 @@
                 "similarity_calc_config":{
                     "type":"center"
                 },
-                "fg_thresh": 0.3,
+                "fg_thresh": 0.7,
                 "bg_thresh":0.3,
                 "coder_config": {
                     "type":"center",
@@ -191,8 +191,8 @@
             "similarity_calc_config":{
                 "type":"center"
             },
-            "fg_thresh": 0.3,
-            "bg_thresh":0.3,
+            "fg_thresh": 0.5,
+            "bg_thresh":0.5,
             "coder_config": {
                 "type":"center",
                 "bbox_inside_weights": [

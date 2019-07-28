@@ -5,6 +5,8 @@ from core.ops import get_angle
 from torch.nn import functional as F
 
 from utils import geometry_utils
+from core.utils import tensor_utils
+from utils import encoder_utils
 
 
 class BBox3DCoder(object):
@@ -114,43 +116,102 @@ class BBox3DCoder(object):
             dim=-1)
         return targets
 
-    def encode_batch_bbox(self, dims, proposal_bboxes, assigned_gt_labels):
+    def reorder_lines(self, lines):
+
+        # sort by x
+        _, order = torch.sort(lines[..., 0], dim=-1)
+
+        lines = tensor_utils.multidim_index(lines, order)
+        return lines
+
+    def find_nearest_between_two_lines(self, lines, lines_2d):
+        lines = lines.view(-1, 2, 2, 3)
+        lines_2d = lines_2d.view(-1, 2, 2, 2)
+        mid_points = lines.mean(dim=2)  # (N, 2, 3)
+        dist = mid_points.norm(dim=-1)
+
+        _, visible_index = torch.min(dist, dim=-1)
+        row = torch.arange(visible_index.numel()).type_as(visible_index)
+        # may be one of them or may be none of them
+        near_side = lines_2d[row, visible_index]
+
+        # import ipdb
+        # ipdb.set_trace()
+        # calc visible
+        left_slope = geometry_utils.torch_line_to_orientation(
+            lines_2d[:, 0, 0], lines_2d[:, 0, 1])
+        right_slope = geometry_utils.torch_line_to_orientation(
+            lines_2d[:, 1, 0], lines_2d[:, 1, 1])
+        visible_cond = left_slope * right_slope > 0
+
+        near_side = self.reorder_lines(near_side)
+
+        return near_side, visible_cond
+
+    def encode_batch_bbox(self, gt_boxes_3d, proposals, assigned_gt_labels,
+                          p2):
         """
         encoding dims may be better,here just encode dims_2d
         Args:
             dims: shape(N,6), (h,w,l) and their projection in 2d
         """
 
-        #  h_3d_mean = 1.67
-        #  w_3d_mean = 1.87
-        #  l_3d_mean = 3.7
-
-        #  h_3d_std = 1
-        #  w_3d_std = 1
-        #  l_3d_std = 1
-
-        #  target_h_3d = (dims[:, 0] - h_3d_mean) / h_3d_std
-        #  target_w_3d = (dims[:, 1] - w_3d_mean) / w_3d_std
-        #  target_l_3d = (dims[:, 2] - l_3d_mean) / l_3d_std
-        #  targets = torch.stack([target_h_3d, target_w_3d, target_l_3d], dim=-1)
-        #  import ipdb
-        #  ipdb.set_trace()
+        dims = gt_boxes_3d[:, :3]
         bg_mean_dims = torch.zeros_like(self.mean_dims[:, -1:, :])
         mean_dims = torch.cat([bg_mean_dims, self.mean_dims], dim=1)
         assigned_mean_dims = mean_dims[0][assigned_gt_labels].float()
         assigned_std_dims = torch.ones_like(assigned_mean_dims)
-        targets = (dims[:, :3] - assigned_mean_dims) / assigned_std_dims
+        dims_targets = (dims - assigned_mean_dims) / assigned_std_dims
 
-        #  keypoint_gt = self.encode_batch_keypoint(dims[:, 3:], num_intervals,
-        #  rois_batch)
-        # reg_orient = dims[:, 4:6]
-        # normalize it using rois_batch
-        # w = proposal_bboxes[:, 2] - proposal_bboxes[:, 0] + 1
-        # h = proposal_bboxes[:, 3] - proposal_bboxes[:, 1] + 1
-        #  reg_orient[:, 0] = reg_orient[:, 0] / w
-        #  reg_orient[:, 1] = reg_orient[:, 1] / h
+        location = gt_boxes_3d[:, 3:6]
+        ry = gt_boxes_3d[:, 6:]
 
-        targets = torch.cat([targets, dims[:, 3:]], dim=-1)
+        label_boxes_3d = torch.cat([location, dims, ry], dim=-1)
+
+        # corners_3d = geometry_utils.torch_boxes_3d_to_corners_3d(label_boxes_3d)
+        # corners_2d = geometry_utils.torch_points_3d_to_points_2d(corners_3d.view(-1, 3), p2)
+
+        corners_3d = geometry_utils.torch_boxes_3d_to_corners_3d(
+            label_boxes_3d)
+        corners_2d = geometry_utils.torch_points_3d_to_points_2d(
+            corners_3d.contiguous().view(-1, 3), p2).view(-1, 8, 2)
+        # find two nearest lines among eight lines
+        bottom_side_lines = corners_3d[:, [0, 3, 1, 2]]
+        bottom_face_lines = corners_3d[:, [0, 1, 2, 3]]
+        bottom_side_lines_2d = corners_2d[:, [0, 3, 1, 2]]
+        bottom_face_lines_2d = corners_2d[:, [0, 1, 2, 3]]
+
+        side_lines, side_visible = self.find_nearest_between_two_lines(
+            bottom_side_lines, bottom_side_lines_2d)
+        face_lines, face_visible = self.find_nearest_between_two_lines(
+            bottom_face_lines, bottom_face_lines_2d)
+        # import ipdb
+        # ipdb.set_trace()
+
+        ry_targets_face = encoder_utils.encode_lines(face_lines, proposals)
+        ry_targets_side = encoder_utils.encode_lines(side_lines, proposals)
+        ry_targets_face = torch.cat(
+            [ry_targets_face.view(-1, 4),
+             face_visible.float().unsqueeze(-1)],
+            dim=-1)
+        ry_targets_side = torch.cat(
+            [ry_targets_side.view(-1, 4),
+             side_visible.float().unsqueeze(-1)],
+            dim=-1)
+
+        # depth
+        depth_targets = location[:, -1:]
+
+        # encode proj_2d
+        proj_2d = geometry_utils.torch_points_3d_to_points_2d(location, p2)
+        proj_2d_targets = encoder_utils.encode_points(proj_2d, proposals)
+
+        targets = torch.cat(
+            [
+                dims_targets, depth_targets, proj_2d_targets, ry_targets_face,
+                ry_targets_side
+            ],
+            dim=-1)
         return targets
 
     def encode_batch_angle(self, dims, assigned_gt_labels):
@@ -276,63 +337,53 @@ class BBox3DCoder(object):
         # dim=-1)
         return torch.cat([bbox, orient, targets[:, 7:]], dim=-1)
 
-    def decode_batch_bbox(self, targets, rois, p2):
+    def decode_batch_bbox(self, targets, proposals, p2):
 
         p2 = p2.float()
-        # dims
-        #  h_3d_mean = 1.67
-        #  w_3d_mean = 1.87
-        #  l_3d_mean = 3.7
-
-        #  h_3d_std = 1
-        #  w_3d_std = 1
-        #  l_3d_std = 1
-
-        #  h_3d = targets[:, 0] * h_3d_std + h_3d_mean
-        #  w_3d = targets[:, 1] * w_3d_std + w_3d_mean
-        #  l_3d = targets[:, 2] * l_3d_std + l_3d_mean
         bg_mean_dims = torch.zeros_like(self.mean_dims[:, -1:, :])
         mean_dims = torch.cat([bg_mean_dims, self.mean_dims], dim=1).float()
-        # assigned_mean_dims = mean_dims[0][pred_labels].float()
         std_dims = torch.ones_like(mean_dims)
-        #  targets = (dims[:, :3] - assigned_mean_dims) / assigned_std_dims
-        bbox = targets[:, :3].view(targets.shape[0], -1,
+        dims = targets[:, :3].view(targets.shape[0], -1,
                                    3) * std_dims + mean_dims
-        bbox = bbox.view(targets.shape[0], -1)
-        #  bbox = torch.stack([h_3d, w_3d, l_3d], dim=-1)
+        dims = dims.view(targets.shape[0], -1)
 
-        # rois w and h
-        # w = rois[:, 2] - rois[:, 0] + 1
-        # h = rois[:, 3] - rois[:, 1] + 1
-        xy = (rois[:, :2] + rois[:, 2:]) / 2
-        wh = rois[:, 2:] - rois[:, :2] + 1
+        # dims_targets, depth_targets, proj_2d_targets, ry_targets_face,
+        # ry_targets_side
 
-        # cls orient
-        cls_orient = targets[:, 3:6]
-        cls_orient = F.softmax(cls_orient, dim=-1)
-        cls_orient, cls_orient_argmax = torch.max(cls_orient, dim=-1)
+        depth = targets[:, 3:4]
+        encoded_center_2d = targets[:, 4:6]
+        ry_face_pred = targets[:, 6:12]
+        ry_side_pred = targets[:, 12:18]
 
-        reg_orient = targets[:, 6:8]
-
-        #  reg_orient[:, 0] = reg_orient[:, 0] * w
-        #  reg_orient[:, 1] = reg_orient[:, 1] * h
-
-        orient = torch.stack(
-            [
-                cls_orient_argmax.type_as(reg_orient), reg_orient[:, 0],
-                reg_orient[:, 1]
-            ],
-            dim=-1)
-        # import ipdb
-        # ipdb.set_trace()
-
-        depth = targets[:, 8:9]
-        encoded_center_2d = targets[:, 9:11]
-        center_2d = encoded_center_2d * wh + rois[:, :2]
+        # center_2d = encoded_center_2d * wh + rois[:, :2]
+        center_2d = encoder_utils.decode_points(encoded_center_2d, proposals)
         location = geometry_utils.torch_points_2d_to_points_3d(
             center_2d, depth, p2)
 
-        return torch.cat([bbox, orient, location], dim=-1)
+        # import ipdb
+        # ipdb.set_trace()
+
+        ry_face_visible = ry_face_pred[:, 4:]
+        ry_face_pred = ry_face_pred[:, :4]
+        ry_face_visible = F.softmax(ry_face_visible, dim=-1)[:, 1]
+        ry_face = encoder_utils.decode_ry(ry_face_pred, proposals, p2)
+
+        ry_side_visible = ry_side_pred[:, 4:]
+        ry_side_pred = ry_side_pred[:, :4]
+        # 1 refers to visible
+        ry_side_visible = F.softmax(ry_side_visible, dim=-1)[:, 1]
+        ry_side = encoder_utils.decode_ry(ry_side_pred, proposals, p2)
+
+        # import ipdb
+        # ipdb.set_trace()
+        ry = ry_side.clone()
+        ry[ry_face_visible > 0.5] = ry_face[ry_face_visible > 0.5] + 0.5 * math.pi
+
+        # overwrite ry_face in some case
+        ry[ry_side_visible > 0.5] = ry_side[ry_side_visible > 0.5]
+        # ry = ry_side
+
+        return torch.cat([dims, location, ry], dim=-1)
 
     def decode_batch_angle(self, targets, bin_centers=None):
         """

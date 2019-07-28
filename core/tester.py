@@ -266,7 +266,7 @@ def mono_test(eval_config, data_loader, model):
                 #  anchors_boxes = anchors[inds, :]
                 # if not eval_config['class_agnostic_3d']:
                 rcnn_3d_dets = torch.cat(
-                    [rcnn_3d[inds, j * 3:j * 3 + 3], rcnn_3d[inds, -6:]],
+                    [rcnn_3d[inds, j * 3:j * 3 + 3], rcnn_3d[inds, -4:]],
                     dim=-1)
                 # else:
                 # rcnn_3d_dets = rcnn_3d[inds]
@@ -375,8 +375,8 @@ def mono_test(eval_config, data_loader, model):
                     # rcnn_3d = np.concatenate(
                     # [gt_boxes_3d[:, :3], global_angles_gt], axis=-1)
                     # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
-                    rcnn_3d_dets, location = mono_3d_postprocess_bbox(
-                        rcnn_3d_dets, cls_dets, p2)
+                    # rcnn_3d_dets, location = mono_3d_postprocess_bbox(
+                        # rcnn_3d_dets, cls_dets, p2)
 
                     post_time = time.time() - post_start_time
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)

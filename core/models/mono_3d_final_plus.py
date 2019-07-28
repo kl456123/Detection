@@ -24,6 +24,9 @@ from utils.visualizer import FeatVisualizer
 
 import functools
 
+from utils import geometry_utils
+from utils import encoder_utils
+
 
 class Mono3DFinalPlusFasterRCNN(Model):
     def forward(self, feed_dict):
@@ -73,13 +76,8 @@ class Mono3DFinalPlusFasterRCNN(Model):
         prediction_dict['rcnn_3d'] = rcnn_3d
 
         if not self.training:
-            # import ipdb
-            # ipdb.set_trace()
-            final_bbox = self.target_assigner.bbox_coder.decode_batch(
-                rcnn_bbox_preds.unsqueeze(0), rois_batch[:, :, 1:])
-            _, pred_labels = rcnn_cls_probs.max(dim=-1)
             rcnn_3d = self.target_assigner.bbox_coder_3d.decode_batch_bbox(
-                rcnn_3d, final_bbox[0], feed_dict['p2'][0])
+                rcnn_3d, rois_batch[0, :, 1:], feed_dict['p2'][0])
 
             prediction_dict['rcnn_3d'] = rcnn_3d
 
@@ -128,10 +126,10 @@ class Mono3DFinalPlusFasterRCNN(Model):
 
         # self.rcnn_3d_pred = nn.Linear(c, 3 + 4 + 11 + 2 + 1)
         if self.class_agnostic_3d:
-            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 + 5 + 2 + 1)
+            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 + 1 + 2 + 6 + 6)
         else:
-            self.rcnn_3d_pred = nn.Linear(self.in_channels,
-                                          3 * self.n_classes + 5 + 2 + 1)
+            self.rcnn_3d_pred = nn.Linear(
+                self.in_channels, 3 * self.n_classes + 3 + 1 + 2 + 6 + 6)
 
         self.rcnn_3d_loss = OrientationLoss(split_loss=True)
         self.l1_loss = nn.L1Loss(reduce=False)
@@ -194,15 +192,16 @@ class Mono3DFinalPlusFasterRCNN(Model):
         gt_boxes_3d = feed_dict['gt_boxes_3d']
 
         # orient
-        cls_orient = torch.unsqueeze(feed_dict['cls_orient'], dim=-1).float()
-        reg_orient = feed_dict['reg_orient']
-        orient = torch.cat([cls_orient, reg_orient], dim=-1)
+        # cls_orient = torch.unsqueeze(feed_dict['cls_orient'], dim=-1).float()
+        # reg_orient = feed_dict['reg_orient']
+        # orient = torch.cat([cls_orient, reg_orient], dim=-1)
 
-        depth = gt_boxes_3d[:, :, 5:6]
-        c_2ds = feed_dict['c_2d']
+        # depth = gt_boxes_3d[:, :, 5:6]
+        # c_2ds = feed_dict['c_2d']
+        p2 = feed_dict['p2']
 
-        gt_boxes_3d = torch.cat(
-            [gt_boxes_3d[:, :, :3], orient, depth, c_2ds], dim=-1)
+        # gt_boxes_3d = torch.cat(
+        # [gt_boxes_3d[:, :, :3], orient, depth, c_2ds], dim=-1)
 
         ##########################
         # assigner
@@ -210,7 +209,7 @@ class Mono3DFinalPlusFasterRCNN(Model):
         rcnn_cls_targets, rcnn_reg_targets,\
             rcnn_cls_weights, rcnn_reg_weights,\
             rcnn_reg_targets_3d, rcnn_reg_weights_3d = self.target_assigner.assign(
-            rois_batch[:, :, 1:], gt_boxes, gt_boxes_3d, gt_labels)
+            rois_batch[:, :, 1:], gt_boxes, gt_boxes_3d, gt_labels, p2)
 
         ##########################
         # subsampler
@@ -270,6 +269,41 @@ class Mono3DFinalPlusFasterRCNN(Model):
             -1, out_c)[rcnn_cls_targets]
         return rcnn_bbox_preds
 
+    def calc_ry_loss(self, ry_pred, ry_gt, image_shape, proposals):
+        """
+        Args:
+            ry_pred: shape(N, 6)
+            ry_gt: shape(N, 5)
+        """
+
+        # import ipdb
+        # ipdb.set_trace()
+        visible = ry_gt[:, 4:]
+
+        cls_loss = self.rcnn_cls_loss(ry_pred[:, 4:], visible.view(-1).long())
+
+        lines = encoder_utils.decode_lines(ry_gt[:, :4], proposals)
+        visibility = self.calc_points_visibility(
+            lines.view(-1, 2), image_shape).view(-1, 2)
+        visibility = torch.stack(
+            [
+                visibility[:, 0], visibility[:, 0], visibility[:, 1],
+                visibility[:, 1]
+            ],
+            dim=-1)
+        # image truncated and self-occlusion
+        reg_loss = self.l2_loss(ry_pred[:, :4], ry_gt[:, :4]) * visible.float(
+        ) * visibility.float()
+
+        return torch.cat([reg_loss, cls_loss.unsqueeze(-1)], dim=-1)
+
+    def calc_points_visibility(self, points, image_shape):
+        image_shape = torch.tensor([0, 0, image_shape[1], image_shape[0]])
+        image_shape = image_shape.type_as(points).view(1, 4)
+        image_filter = geometry_utils.torch_window_filter(
+            points.unsqueeze(0), image_shape, deltas=200)[0]
+        return image_filter
+
     def loss(self, prediction_dict, feed_dict):
         """
         assign proposals label and subsample from them
@@ -328,68 +362,54 @@ class Mono3DFinalPlusFasterRCNN(Model):
             ipdb.set_trace()
         else:
             dims_pred = rcnn_3d[:, :3]
-            orient_pred = rcnn_3d[:, 3:8]
-        # dims
-        rcnn_3d_loss_dims = self.rcnn_bbox_loss(
-            dims_pred, rcnn_reg_targets_3d[:, :3]).sum(dim=-1)
-
-        # angles
-        res = self.rcnn_3d_loss(orient_pred, rcnn_reg_targets_3d[:, 3:6])
-        for res_loss_key in res:
-            tmp = res[res_loss_key] * rcnn_reg_weights_3d
-            res[res_loss_key] = tmp.sum(dim=-1)
-        loss_dict.update(res)
-
-        rcnn_3d_loss = rcnn_3d_loss_dims * rcnn_reg_weights_3d
-        rcnn_3d_loss = rcnn_3d_loss.sum(dim=-1)
-
-        loss_dict['rcnn_3d_loss'] = rcnn_3d_loss
+            depth_pred = rcnn_3d[:, 3:4]
+            proj_2d_pred = rcnn_3d[:, 4:6]
+            ry_face_pred = rcnn_3d[:, 6:12]
+            ry_side_pred = rcnn_3d[:, 12:18]
 
         # import ipdb
         # ipdb.set_trace()
+        # gt
+        dims_gt = rcnn_reg_targets_3d[:, :3]
+        depth_gt = rcnn_reg_targets_3d[:, 3:4]
+        proj_2d_gt = rcnn_reg_targets_3d[:, 4:6]
+        ry_face_gt = rcnn_reg_targets_3d[:, 6:11]
+        ry_side_gt = rcnn_reg_targets_3d[:, 11:16]
+
+        proposals = prediction_dict['rois_batch'][0, :, 1:]
+        image_shape = feed_dict['img'].shape[-2:]
+
+        # dims
+        rcnn_3d_loss_dims = self.rcnn_bbox_loss(dims_pred, dims_gt).sum(dim=-1)
+        rcnn_3d_loss = rcnn_3d_loss_dims * rcnn_reg_weights_3d
+        rcnn_3d_loss = rcnn_3d_loss.sum(dim=-1)
+        loss_dict['dims_loss'] = rcnn_3d_loss
 
         # depth
-        depth_loss = self.l1_loss(
-            rcnn_3d[:, 8:9],
-            rcnn_reg_targets_3d[:, 6:7]).sum(dim=-1) * rcnn_reg_weights_3d
+        depth_loss = self.l1_loss(depth_pred,
+                                  depth_gt).sum(dim=-1) * rcnn_reg_weights_3d
 
+        # import ipdb
+        # ipdb.set_trace()
+        decoded_proj_2d_gt = encoder_utils.decode_points(proj_2d_gt, proposals)
+        proj_2d_visibility = self.calc_points_visibility(
+            decoded_proj_2d_gt, image_shape).float()
         # center_2d_loss
-        center_2d_loss = self.l2_loss(
-            rcnn_3d[:, 9:11],
-            rcnn_reg_targets_3d[:, 7:9]).sum(dim=-1) * rcnn_reg_weights_3d
+        center_2d_loss = self.l2_loss(proj_2d_pred, proj_2d_gt).sum(
+            dim=-1) * rcnn_reg_weights_3d * proj_2d_visibility
 
         loss_dict['depth_loss'] = depth_loss.sum(dim=-1)
         loss_dict['center_2d_loss'] = center_2d_loss.sum(dim=-1)
 
-        # stats of orients
-        cls_orient_preds = rcnn_3d[:, 3:5]
-        cls_orient = rcnn_reg_targets_3d[:, 3]
-        _, cls_orient_preds_argmax = torch.max(cls_orient_preds, dim=-1)
-        orient_tp_mask = cls_orient.type_as(
-            cls_orient_preds_argmax) == cls_orient_preds_argmax
-        mask = (rcnn_reg_weights_3d > 0) & (rcnn_reg_targets_3d[:, 3] > -1)
-        orient_tp_mask = orient_tp_mask[mask]
-        orient_tp_num = orient_tp_mask.int().sum().item()
-        orient_all_num = orient_tp_mask.numel()
+        # ry loss
+        ry_face_loss = self.calc_ry_loss(
+            ry_face_pred, ry_face_gt, image_shape,
+            proposals).sum(dim=-1) * rcnn_reg_weights_3d
+        ry_side_loss = self.calc_ry_loss(
+            ry_side_pred, ry_side_gt, image_shape,
+            proposals).sum(dim=-1) * rcnn_reg_weights_3d
 
-        # gt_boxes_proj = feed_dict['gt_boxes_proj']
-
-        self.target_assigner.stat.update({
-            # 'angle_num_tp': torch.tensor(0),
-            # 'angle_num_all': 1,
-
-            # stats of orient
-            'orient_tp_num': orient_tp_num,
-            # 'orient_tp_num2': orient_tp_num2,
-            #  'orient_tp_num3': orient_tp_num3,
-            # 'orient_all_num3': orient_all_num3,
-            # 'orient_pr': orient_pr,
-            'orient_all_num': orient_all_num,
-            #  'orient_all_num3': orient_all_num3,
-            # 'orient_tp_num4': orient_tp_num4,
-            # 'orient_all_num4': orient_all_num4,
-            #  'cls_orient_2s_all_num': depth_ind_all_num,
-            #  'cls_orient_2s_tp_num': depth_ind_tp_num
-        })
+        loss_dict['ry_face_loss'] = ry_face_loss.sum(dim=-1)
+        loss_dict['ry_side_loss'] = ry_side_loss.sum(dim=-1)
 
         return loss_dict

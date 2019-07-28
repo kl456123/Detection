@@ -43,6 +43,7 @@ class TargetAssigner(object):
                gt_boxes,
                gt_boxes_3d,
                gt_labels=None,
+               p2=None,
                cls_prob=None,
                match=None):
         """
@@ -83,7 +84,7 @@ class TargetAssigner(object):
 
         # assign regression targets
         reg_targets, reg_targets_3d = self._assign_regression_targets(
-            match, bboxes, gt_boxes, gt_boxes_3d, cls_targets)
+            match, bboxes, gt_boxes, gt_boxes_3d, cls_targets, p2)
 
         # create regression weights
         reg_weights, reg_weights_3d = self._create_regression_weights(
@@ -130,7 +131,7 @@ class TargetAssigner(object):
         return cls_weights
 
     def _assign_regression_targets(self, match, bboxes, gt_boxes, gt_boxes_3d,
-                                   assigned_gt_labels):
+                                   assigned_gt_labels, p2):
         """
         Args:
             match: Tensor(num_batch,num_boxes)
@@ -152,7 +153,7 @@ class TargetAssigner(object):
                                                          assigned_gt_boxes)
         reg_targets_batch_3d = self.bbox_coder_3d.encode_batch_bbox(
             assigned_gt_boxes_3d[0], bboxes[0],
-            assigned_gt_labels[0]).unsqueeze(0)
+            assigned_gt_labels[0], p2[0]).unsqueeze(0)
 
         reg_targets_batch_3d = torch.cat([reg_targets_batch_3d], dim=-1)
 
