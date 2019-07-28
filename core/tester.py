@@ -247,8 +247,8 @@ def mono_test(eval_config, data_loader, model):
         res_rois = []
         res_anchors = []
         dets_3d = []
-        #  import ipdb
-        #  ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
         # nms
         # new_scores = torch.zeros_like(scores)
         # _, scores_argmax = scores.max(dim=-1)
@@ -266,7 +266,7 @@ def mono_test(eval_config, data_loader, model):
                 #  anchors_boxes = anchors[inds, :]
                 # if not eval_config['class_agnostic_3d']:
                 rcnn_3d_dets = torch.cat(
-                    [rcnn_3d[inds, j * 3:j * 3 + 3], rcnn_3d[inds, -3:]],
+                    [rcnn_3d[inds, j * 3:j * 3 + 3], rcnn_3d[inds, -6:]],
                     dim=-1)
                 # else:
                 # rcnn_3d_dets = rcnn_3d[inds]

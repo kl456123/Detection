@@ -4,6 +4,8 @@ import math
 from core.ops import get_angle
 from torch.nn import functional as F
 
+from utils import geometry_utils
+
 
 class BBox3DCoder(object):
     def __init__(self, coder_config):
@@ -141,14 +143,14 @@ class BBox3DCoder(object):
 
         #  keypoint_gt = self.encode_batch_keypoint(dims[:, 3:], num_intervals,
         #  rois_batch)
-        reg_orient = dims[:, 4:6]
+        # reg_orient = dims[:, 4:6]
         # normalize it using rois_batch
-        w = proposal_bboxes[:, 2] - proposal_bboxes[:, 0] + 1
-        h = proposal_bboxes[:, 3] - proposal_bboxes[:, 1] + 1
+        # w = proposal_bboxes[:, 2] - proposal_bboxes[:, 0] + 1
+        # h = proposal_bboxes[:, 3] - proposal_bboxes[:, 1] + 1
         #  reg_orient[:, 0] = reg_orient[:, 0] / w
         #  reg_orient[:, 1] = reg_orient[:, 1] / h
 
-        targets = torch.cat([targets, dims[:, 3:4], reg_orient], dim=-1)
+        targets = torch.cat([targets, dims[:, 3:]], dim=-1)
         return targets
 
     def encode_batch_angle(self, dims, assigned_gt_labels):
@@ -274,8 +276,9 @@ class BBox3DCoder(object):
         # dim=-1)
         return torch.cat([bbox, orient, targets[:, 7:]], dim=-1)
 
-    def decode_batch_bbox(self, targets, rois):
+    def decode_batch_bbox(self, targets, rois, p2):
 
+        p2 = p2.float()
         # dims
         #  h_3d_mean = 1.67
         #  w_3d_mean = 1.87
@@ -293,14 +296,16 @@ class BBox3DCoder(object):
         # assigned_mean_dims = mean_dims[0][pred_labels].float()
         std_dims = torch.ones_like(mean_dims)
         #  targets = (dims[:, :3] - assigned_mean_dims) / assigned_std_dims
-        bbox = targets[:, :-5].view(targets.shape[0], -1,
-                                    3) * std_dims + mean_dims
+        bbox = targets[:, :3].view(targets.shape[0], -1,
+                                   3) * std_dims + mean_dims
         bbox = bbox.view(targets.shape[0], -1)
         #  bbox = torch.stack([h_3d, w_3d, l_3d], dim=-1)
 
         # rois w and h
-        w = rois[:, 2] - rois[:, 0] + 1
-        h = rois[:, 3] - rois[:, 1] + 1
+        # w = rois[:, 2] - rois[:, 0] + 1
+        # h = rois[:, 3] - rois[:, 1] + 1
+        xy = (rois[:, :2] + rois[:, 2:]) / 2
+        wh = rois[:, 2:] - rois[:, :2] + 1
 
         # cls orient
         cls_orient = targets[:, 3:6]
@@ -318,8 +323,16 @@ class BBox3DCoder(object):
                 reg_orient[:, 1]
             ],
             dim=-1)
+        # import ipdb
+        # ipdb.set_trace()
 
-        return torch.cat([bbox, orient], dim=-1)
+        depth = targets[:, 8:9]
+        encoded_center_2d = targets[:, 9:11]
+        center_2d = encoded_center_2d * wh + rois[:, :2]
+        location = geometry_utils.torch_points_2d_to_points_3d(
+            center_2d, depth, p2)
+
+        return torch.cat([bbox, orient, location], dim=-1)
 
     def decode_batch_angle(self, targets, bin_centers=None):
         """

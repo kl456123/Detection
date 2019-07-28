@@ -132,6 +132,8 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     idx = match(dets_2d, corners, results_x, R, p2)
     translation = results_x[np.arange(num), idx]
 
+    translation = dets_3d[:, -3:]
+
     return np.concatenate(
         [dets_3d[:, :3], translation, ry[..., None]], axis=-1), None
 
