@@ -106,8 +106,8 @@ def oft_test(eval_config, data_loader, model):
 
         save_dets(dets, img_file[0], 'kitti', eval_config['eval_out'])
 
-        sys.stdout.write(
-            '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
+        sys.stdout.write('\r{}/{},duration: {}'.format(i + 1, num_samples,
+                                                       duration_time))
         sys.stdout.flush()
 
 
@@ -211,8 +211,8 @@ def test_2d(eval_config, data_loader, model):
             eval_config['eval_out'],
             classes_name=eval_config['classes'])
 
-        sys.stdout.write(
-            '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
+        sys.stdout.write('\r{}/{},duration: {}'.format(i + 1, num_samples,
+                                                       duration_time))
         sys.stdout.flush()
 
 
@@ -266,7 +266,10 @@ def mono_test(eval_config, data_loader, model):
                 #  anchors_boxes = anchors[inds, :]
                 # if not eval_config['class_agnostic_3d']:
                 rcnn_3d_dets = torch.cat(
-                    [rcnn_3d[inds, j * 3:j * 3 + 3], rcnn_3d[inds, -4:]],
+                    [
+                        rcnn_3d[inds, j * 3:j * 3 + 3],
+                        rcnn_3d[inds, (len(classes) + 1) * 3:]
+                    ],
                     dim=-1)
                 # else:
                 # rcnn_3d_dets = rcnn_3d[inds]
@@ -298,15 +301,15 @@ def mono_test(eval_config, data_loader, model):
 
                 coords = data['coords'][0].detach().cpu().numpy()
                 gt_boxes = data['gt_boxes'][0].detach().cpu().numpy()
-                gt_boxes_2d_proj = data['gt_boxes_proj'][0].detach().cpu(
-                ).numpy()
+                gt_boxes_2d_proj = data['gt_boxes_proj'][
+                    0].detach().cpu().numpy()
                 gt_boxes_3d = data['gt_boxes_3d'][0].detach().cpu().numpy()
                 points_3d = data['points_3d'][0].detach().cpu().numpy()
                 local_angles_gt = data['local_angle'][0].detach().cpu().numpy()
                 local_angle_oritation_gt = data['local_angle_oritation'][
                     0].detach().cpu().numpy()
-                encoded_side_points = data['encoded_side_points'][0].detach(
-                ).cpu().numpy()
+                encoded_side_points = data['encoded_side_points'][
+                    0].detach().cpu().numpy()
                 points_3d = points_3d.T
 
                 p2 = data['orig_p2'][0].detach().cpu().numpy()
@@ -344,7 +347,8 @@ def mono_test(eval_config, data_loader, model):
                     # just for debug
                     if len(gt_boxes):
                         cls_dets_gt = np.concatenate(
-                            [gt_boxes, np.zeros_like(gt_boxes[:, -1:])],
+                            [gt_boxes,
+                             np.zeros_like(gt_boxes[:, -1:])],
                             axis=-1)
                         cls_dets_2d_proj_gt = np.concatenate(
                             [
@@ -375,8 +379,12 @@ def mono_test(eval_config, data_loader, model):
                     # rcnn_3d = np.concatenate(
                     # [gt_boxes_3d[:, :3], global_angles_gt], axis=-1)
                     # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
-                    # rcnn_3d_dets, location = mono_3d_postprocess_bbox(
-                        # rcnn_3d_dets, cls_dets, p2)
+                    if eval_config['use_postprocess']:
+                        rcnn_3d_dets, location = mono_3d_postprocess_bbox(
+                            rcnn_3d_dets,
+                            cls_dets,
+                            p2,
+                            calc_trans=eval_config['calc_trans'])
 
                     post_time = time.time() - post_start_time
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
@@ -384,8 +392,7 @@ def mono_test(eval_config, data_loader, model):
                     # rcnn_3d[:, 3:6] = location
                     # rcnn_3d = np.zeros((cls_dets.shape[0], 7))
                     dets.append(
-                        np.concatenate(
-                            [cls_dets, rcnn_3d_dets], axis=-1))
+                        np.concatenate([cls_dets, rcnn_3d_dets], axis=-1))
 
             else:
                 dets.append([])
@@ -393,7 +400,6 @@ def mono_test(eval_config, data_loader, model):
                 res_anchors.append([])
                 dets_3d.append([])
                 post_time = 0
-
 
         duration_time = time.time() - end_time
 
@@ -494,8 +500,8 @@ def mono_test_keypoint(eval_config, data_loader, model):
                 local_angles_gt = data['local_angle'][0].detach().cpu().numpy()
                 local_angle_oritation_gt = data['local_angle_oritation'][
                     0].detach().cpu().numpy()
-                encoded_side_points = data['encoded_side_points'][0].detach(
-                ).cpu().numpy()
+                encoded_side_points = data['encoded_side_points'][
+                    0].detach().cpu().numpy()
                 points_3d = points_3d.T
 
                 p2 = data['p2'][0].detach().cpu().numpy()
@@ -507,7 +513,8 @@ def mono_test_keypoint(eval_config, data_loader, model):
                 use_gt = False
 
                 if use_gt:
-                    keypoints_gt = data['keypoint_gt'][0].detach().cpu().numpy()
+                    keypoints_gt = data['keypoint_gt'][
+                        0].detach().cpu().numpy()
                     #  import ipdb
                     #  ipdb.set_trace()
 
@@ -528,14 +535,14 @@ def mono_test_keypoint(eval_config, data_loader, model):
                     # just for debug
                     if len(rcnn_3d_gt):
                         cls_dets_gt = np.concatenate(
-                            [gt_boxes, np.zeros_like(gt_boxes[:, -1:])],
+                            [gt_boxes,
+                             np.zeros_like(gt_boxes[:, -1:])],
                             axis=-1)
                         rcnn_3d_gt, _ = mono_3d_postprocess_bbox(
                             rcnn_3d_gt, cls_dets_gt, p2)
 
                         dets.append(
-                            np.concatenate(
-                                [cls_dets_gt, rcnn_3d_gt], axis=-1))
+                            np.concatenate([cls_dets_gt, rcnn_3d_gt], axis=-1))
                         keypoint_dets.append(keypoints_gt)
                     else:
                         dets.append([])
@@ -555,8 +562,8 @@ def mono_test_keypoint(eval_config, data_loader, model):
                     # rcnn_3d = np.concatenate(
                     # [gt_boxes_3d[:, :3], global_angles_gt], axis=-1)
                     # rcnn_3d[:,3] = 1-rcnn_3d[:,3]
-                    rcnn_3d, location = mono_3d_postprocess_bbox(rcnn_3d,
-                                                                 cls_dets, p2)
+                    rcnn_3d, location = mono_3d_postprocess_bbox(
+                        rcnn_3d, cls_dets, p2)
                     # rcnn_3d = mono_3d_postprocess_angle(rcnn_3d, cls_dets, p2)
                     # rcnn_3d = mono_3d_postprocess_depth(rcnn_3d, cls_dets, p2)
                     # rcnn_3d[:, 3:6] = location
@@ -581,8 +588,8 @@ def mono_test_keypoint(eval_config, data_loader, model):
         # save_dets(res_anchors[0], img_file[0], 'kitti',
         # eval_config['eval_out_anchors'])
 
-        sys.stdout.write(
-            '\r{}/{},duration: {}'.format(i + 1, num_samples, duration_time))
+        sys.stdout.write('\r{}/{},duration: {}'.format(i + 1, num_samples,
+                                                       duration_time))
         sys.stdout.flush()
 
 

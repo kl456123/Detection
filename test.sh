@@ -200,11 +200,7 @@ rm results/data/*
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
 
-CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
-    --net mono_3d_final_plus \
-    --load_dir /data/object/liangxiong/test \
-    --checkpoint 162 \
-    --checkepoch 12
+
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
     # --img_dir /data/pengwu/seq/keyframes \
@@ -256,3 +252,18 @@ CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     # --checkepoch 82 \
     # --net overlaps \
     # --load_dir /data/object/liangxiong/overlaps
+
+# NET=geometry_v2
+
+# CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    # --net ${NET} \
+    # --load_dir /data/object/liangxiong/test \
+    # --checkpoint 1 \
+    # --checkepoch 500
+
+CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
+    --net geometry_v1 \
+    --config configs/geometry_v1.json\
+    --model /data/object/liangxiong/mono_3d_final_plus/mono_3d_final_plus/kitti/faster_rcnn_30_1518.pth
+    # --checkpoint 1518 \
+    # --checkepoch 30

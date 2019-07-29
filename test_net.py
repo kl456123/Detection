@@ -31,6 +31,8 @@ def parse_args():
         default='cfgs/vgg16.yml',
         type=str)
     parser.add_argument(
+        '--model', dest='model', help='path to pretrained model', type=str)
+    parser.add_argument(
         '--set',
         dest='set_cfgs',
         help='set config keys',
@@ -54,7 +56,8 @@ def parse_args():
     parser.add_argument(
         '--parallel_type',
         dest='parallel_type',
-        help='which part of model to parallel, 0: all, 1: model before roi pooling',
+        help=
+        'which part of model to parallel, 0: all, 1: model before roi pooling',
         default=0,
         type=int)
     parser.add_argument(
@@ -180,21 +183,23 @@ if __name__ == '__main__':
         'eval_config': eval_config
     })
 
-    input_dir = eval_config['load_dir'] + "/" + model_config[
-        'net'] + "/" + data_config['name']
-    if not os.path.exists(input_dir):
-        raise Exception(
-            'There is no input directory for loading network from {}'.format(
-                input_dir))
+    if args.model is not None:
+        checkpoint_name = args.model
+        input_dir = os.path.dirname(args.model)
+    else:
+        input_dir = eval_config['load_dir'] + "/" + model_config['net'] + "/" + data_config['name']
+        if not os.path.exists(input_dir):
+            raise Exception(
+                'There is no input directory for loading network from {}'.
+                format(input_dir))
+        checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(
+            args.checkepoch, args.checkpoint)
 
     eval_out = eval_config['eval_out']
     if not os.path.exists(eval_out):
         os.makedirs(eval_out)
     else:
         print('dir {} exist already!'.format(eval_out))
-
-    checkpoint_name = 'faster_rcnn_{}_{}.pth'.format(args.checkepoch,
-                                                     args.checkpoint)
 
     # model
     # fasterRCNN = resnet(model_config)

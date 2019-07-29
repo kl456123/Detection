@@ -25,7 +25,7 @@
 # from core.models.three_iou_faster_rcnn_model_org_ohem_second import OrgOHEMThreeIoUSecondStageFasterRCNN
 # from core.models.fpn_faster_rcnn_model import FPNFasterRCNN
 # from core.models.mono_3d import Mono3DFasterRCNN
-from core.models.mono_3d_angle import Mono3DAngleFasterRCNN
+#  from core.models.mono_3d_angle import Mono3DAngleFasterRCNN
 # from core.models.mono_3d_angle_simpler import Mono3DAngleSimplerFasterRCNN
 # from core.models.mono_3d_simpler import Mono3DSimplerFasterRCNN
 # from core.models.mono_3d_angle_new import Mono3DAngleNewFasterRCNN
@@ -35,104 +35,20 @@ from core.models.mono_3d_angle import Mono3DAngleFasterRCNN
 # from core.models.refine_oft_model import RefineOFTModel
 # from core.models.oft_4c_model import OFT4CModel
 # from core.models.mono_3d_final import Mono3DFinalFasterRCNN
-from core.models.mono_3d_final_plus import Mono3DFinalPlusFasterRCNN
-from core.models.mono_3d_final_angle import Mono3DFinalAngleFasterRCNN
-
-# class ModelBuilder(object):
-# def __init__(self, model_config):
-# self.model_config = model_config
-
-# def build(self):
-# pass
-
-# choose class or function
+#  from core.models.mono_3d_final_plus import Mono3DFinalPlusFasterRCNN
+from core.models.geometry_v3 import GeometryV3FasterRCNN
+from core.models.geometry_v2 import GeometryV2FasterRCNN
+from core.models.geometry_v1 import GeometryV1FasterRCNN
 
 
 def build(model_config, training=True):
     net_arch = model_config['net']
-    if net_arch == 'vgg16':
-        fasterRCNN = vgg16(model_config)
-    elif net_arch == 'resnet50':
-        fasterRCNN = resnet(
-            model_config,
-            training, )
-    elif net_arch == 'faster_rcnn':
-        fasterRCNN = FasterRCNN(model_config)
-    elif net_arch == 'fpn':
-        fasterRCNN = FPNFasterRCNN(model_config)
-    elif net_arch == 'two_rpn':
-        fasterRCNN = TwoRPNModel(model_config)
-    elif net_arch == 'new_faster_rcnn':
-        fasterRCNN = NewFasterRCNN(model_config)
-    elif net_arch == 'distance_faster_rcnn':
-        fasterRCNN = DistanceFasterRCNN(model_config)
-    elif net_arch == 'refine_faster_rcnn':
-        fasterRCNN = RefineFasterRCNN(model_config)
-    elif net_arch == 'gate_faster_rcnn':
-        fasterRCNN = GateFasterRCNN(model_config)
-    elif net_arch == 'iou_faster_rcnn':
-        fasterRCNN = IoUFasterRCNN(model_config)
-    elif net_arch == 'rfcn':
-        fasterRCNN = RFCNModel(model_config)
-    elif net_arch == 'semantic':
-        fasterRCNN = SemanticFasterRCNN(model_config)
-    elif net_arch == 'overlaps':
-        fasterRCNN = OverlapsFasterRCNN(model_config)
-    elif net_arch == 'semantic_both':
-        fasterRCNN = SemanticBothFasterRCNN(model_config)
-    elif net_arch == 'new_semantic':
-        fasterRCNN = NewSemanticFasterRCNN(model_config)
-    elif net_arch == 'LED':
-        fasterRCNN = LEDFasterRCNN(model_config)
-    elif net_arch == 'loss':
-        fasterRCNN = LossFasterRCNN(model_config)
-    elif net_arch == 'single_iou':
-        fasterRCNN = SingleIoUFasterRCNN(model_config)
-    elif net_arch == 'double_iou':
-        fasterRCNN = DoubleIoUFasterRCNN(model_config)
-    elif net_arch == 'double_iou_slow':
-        fasterRCNN = SlowDoubleIoUFasterRCNN(model_config)
-    elif net_arch == 'three_iou':
-        fasterRCNN = ThreeIoUFasterRCNN(model_config)
-    elif net_arch == 'three_iou_org':
-        fasterRCNN = OrgThreeIoUFasterRCNN(model_config)
-    elif net_arch == 'three_iou_org_ohem':
-        fasterRCNN = OrgOHEMThreeIoUFasterRCNN(model_config)
-    elif net_arch == 'cascade':
-        fasterRCNN = CascadeFasterRCNN(model_config)
-    elif net_arch == 'double_iou_second':
-        fasterRCNN = DoubleIoUSecondStageFasterRCNN(model_config)
-    elif net_arch == 'three_iou_org_ohem_second':
-        fasterRCNN = OrgOHEMThreeIoUSecondStageFasterRCNN(model_config)
-    elif net_arch == 'mono_3d':
-        fasterRCNN = Mono3DFasterRCNN(model_config)
-    elif net_arch == 'multibin':
-        fasterRCNN = Mono3DAngleFasterRCNN(model_config)
-    elif net_arch == 'multibin_simpler':
-        fasterRCNN = Mono3DAngleSimplerFasterRCNN(model_config)
-    elif net_arch == 'mono_3d_simpler':
-        fasterRCNN = Mono3DSimplerFasterRCNN(model_config)
-    elif net_arch == 'multibin_new':
-        fasterRCNN = Mono3DAngleNewFasterRCNN(model_config)
-    elif net_arch == 'ssd':
-        fasterRCNN = SSDModel(model_config)
-    elif net_arch == 'oft':
-        fasterRCNN = OFTModel(model_config)
-    elif net_arch == 'mono_3d_better':
-        fasterRCNN = Mono3DBetterFasterRCNN(model_config)
-    elif net_arch == 'refine_oft':
-        fasterRCNN = RefineOFTModel(model_config)
-    elif net_arch == 'oft_4c':
-        fasterRCNN = OFT4CModel(model_config)
-    elif net_arch == 'mono_3d_final':
-        fasterRCNN = Mono3DFinalFasterRCNN(model_config)
-    elif net_arch == 'mono_3d_final_plus':
-        fasterRCNN = Mono3DFinalPlusFasterRCNN(model_config)
-    elif net_arch == 'pr_net':
-        from core.models.pr_model import PRModel
-        fasterRCNN = PRModel(model_config)
-    elif net_arch == 'mono_3d_final_angle':
-        fasterRCNN = Mono3DFinalAngleFasterRCNN(model_config)
+    if net_arch == 'geometry_v1':
+        fasterRCNN = GeometryV1FasterRCNN(model_config)
+    elif net_arch == 'geometry_v2':
+        fasterRCNN = GeometryV2FasterRCNN(model_config)
+    elif net_arch == 'geometry_v3':
+        fasterRCNN = GeometryV3FasterRCNN(model_config)
     else:
         raise ValueError('net arch {} is not supported'.format(net_arch))
 

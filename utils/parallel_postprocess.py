@@ -13,7 +13,7 @@ def bmm(a, b):
     return (a[:, :, None, :] * b_T[:, None, :, :]).sum(axis=-1)
 
 
-def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
+def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2, calc_trans=False):
     """
     May be we can improve performance angle prediction by enumerating
     Args:
@@ -132,7 +132,8 @@ def mono_3d_postprocess_bbox(dets_3d, dets_2d, p2):
     idx = match(dets_2d, corners, results_x, R, p2)
     translation = results_x[np.arange(num), idx]
 
-    translation = dets_3d[:, -3:]
+    if not calc_trans:
+        translation = dets_3d[:, -3:]
 
     return np.concatenate(
         [dets_3d[:, :3], translation, ry[..., None]], axis=-1), None

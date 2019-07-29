@@ -2,10 +2,6 @@
 # Geometry method
 
 
-## results
-
-
-
 ## environments
 * pytorch1.0
 * python3.5

@@ -24,7 +24,8 @@ class TargetAssigner(object):
         self.bbox_coder = bbox_coder_builder.build(
             assigner_config['coder_config'])
 
-        self.bbox_coder_3d = bbox_coder_builder.build({'type': 'bbox_3d'})
+        self.bbox_coder_3d = bbox_coder_builder.build(
+            assigner_config['coder_3d_config'])
         self.matcher = matcher_builder.build(assigner_config['matcher_config'])
         self.analyzer = Analyzer()
 
@@ -58,8 +59,8 @@ class TargetAssigner(object):
 
         # usually IoU overlaps is used as metric
         bboxes = bboxes.detach()
-        match_quality_matrix = self.similarity_calc.compare_batch(bboxes,
-                                                                  gt_boxes)
+        match_quality_matrix = self.similarity_calc.compare_batch(
+            bboxes, gt_boxes)
         # match 0.7 for truly recall calculation
         # if self.fg_thresh < 0.7:
         fake_match = self.matcher.match_batch(match_quality_matrix, 0.7)
@@ -105,8 +106,8 @@ class TargetAssigner(object):
 
         # as for cls weights, ignore according to bg_thresh
         if self.bg_thresh > 0:
-            ignored_bg = (assigned_overlaps_batch > self.bg_thresh) & (
-                match == -1)
+            ignored_bg = (assigned_overlaps_batch >
+                          self.bg_thresh) & (match == -1)
             cls_weights[ignored_bg] = 0
 
         return cls_targets, reg_targets, cls_weights, reg_weights, reg_targets_3d, reg_weights_3d
@@ -147,13 +148,17 @@ class TargetAssigner(object):
             batch_size, -1, 4)
 
         num_cols = gt_boxes_3d.shape[-1]
-        assigned_gt_boxes_3d = gt_boxes_3d.view(
-            -1, num_cols)[match.view(-1)].view(batch_size, -1, num_cols)
-        reg_targets_batch = self.bbox_coder.encode_batch(bboxes,
-                                                         assigned_gt_boxes)
+        assigned_gt_boxes_3d = gt_boxes_3d.view(-1,
+                                                num_cols)[match.view(-1)].view(
+                                                    batch_size, -1, num_cols)
+        reg_targets_batch = self.bbox_coder.encode_batch(
+            bboxes, assigned_gt_boxes)
+
+        args = [assigned_gt_boxes_3d[0], bboxes[0], assigned_gt_labels[0]]
+        if p2 is not None:
+            args.append(p2[0])
         reg_targets_batch_3d = self.bbox_coder_3d.encode_batch_bbox(
-            assigned_gt_boxes_3d[0], bboxes[0],
-            assigned_gt_labels[0], p2[0]).unsqueeze(0)
+            *args).unsqueeze(0)
 
         reg_targets_batch_3d = torch.cat([reg_targets_batch_3d], dim=-1)
 
