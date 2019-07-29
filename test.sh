@@ -203,8 +203,8 @@ rm results/data/*
 CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     --net mono_3d_final_plus \
     --load_dir /data/object/liangxiong/test \
-    --checkpoint 3130 \
-    --checkepoch 16
+    --checkpoint 162 \
+    --checkepoch 12
     # --img_dir /data/dm202_3w/left_img \
     # --calib_file ./000004.txt
     # --img_dir /data/pengwu/seq/keyframes \

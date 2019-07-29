@@ -72,21 +72,21 @@ def test_bbox_coder():
         label_classes = sample['gt_labels']
         p2 = torch.from_numpy(sample['p2'])
         bbox_coder.mean_dims = mean_dims
-        # import ipdb
-        # ipdb.set_trace()
+        import ipdb
+        ipdb.set_trace()
 
         encoded_corners_2d = bbox_coder.encode_batch_bbox(
             label_boxes_3d, label_boxes_2d, label_classes, p2)
 
-        side_lines = encoded_corners_2d[:, 16:20]
+        # side_lines = encoded_corners_2d[:, 16:20]
 
-        encoded_corners_2d = torch.cat(
-            [
-                encoded_corners_2d[:, :6], encoded_corners_2d[:, 6:11],
-                encoded_corners_2d[:, 10:11], encoded_corners_2d[:, 11:16],
-                encoded_corners_2d[:, 15:16]
-            ],
-            dim=-1)
+        # encoded_corners_2d = torch.cat(
+            # [
+                # encoded_corners_2d[:, :6], encoded_corners_2d[:, 6:11],
+                # encoded_corners_2d[:, 10:11], encoded_corners_2d[:, 11:16],
+                # encoded_corners_2d[:, 15:16]
+            # ],
+            # dim=-1)
 
         decoded_corners_2d = bbox_coder.decode_batch_bbox(
             encoded_corners_2d, label_boxes_2d, p2)
@@ -98,6 +98,7 @@ def test_bbox_coder():
                 decoded_corners_2d[:, -1:]
             ],
             dim=-1)
+        # boxes_3d = decoded_corners_2d
         corners_3d = geometry_utils.torch_boxes_3d_to_corners_3d(boxes_3d)
 
         corners_3d = corners_3d.cpu().detach().numpy()
@@ -110,14 +111,14 @@ def test_bbox_coder():
         image = image.copy()
         image = image * normal_van + normal_mean
         # image = None
-        corners_2d = torch.cat([side_lines] * 4, dim=-1).view(-1, 8, 2)
-        corners_2d = corners_2d.cpu().detach().numpy()
+        # corners_2d = torch.cat([side_lines] * 4, dim=-1).view(-1, 8, 2)
+        # corners_2d = corners_2d.cpu().detach().numpy()
         visualizer.render_image_corners_2d(
             image_path,
             image,
             corners_3d=corners_3d,
-            p2=p2,
-            corners_2d=corners_2d)
+            p2=p2
+            )
 
 
 if __name__ == '__main__':

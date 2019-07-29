@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from utils import geometry_utils
+import torch
 
 
 def encode_lines(lines, proposals):
@@ -40,6 +41,33 @@ def decode_lines(encoded_lines, proposals):
     lines = encoded_lines.view(
         -1, 2, 2) * proposals_xywh[:, None, 2:] + proposals_xywh[:, None, :2]
     return lines.view(-1, 4)
+
+
+def encode_ray(lines, proposals):
+    encoded_points = encode_points(lines[:, 0], proposals)
+
+    direction = lines[:, 0] - lines[:, 1]
+    proposals_xywh = geometry_utils.torch_xyxy_to_xywh(
+        proposals.unsqueeze(0))[0]
+    # pooling_size should be the same in x and y direction
+    normalized_direction = direction / proposals_xywh[:, 2:]
+    theta = torch.atan2(normalized_direction[:, 1], normalized_direction[:, 0])
+    encoded_lines = torch.cat([encoded_points, theta.unsqueeze(-1)], dim=-1)
+    return encoded_lines
+
+
+def decode_ray(encoded_lines, proposals, p2):
+    encoded_points = encoded_lines[:, :2]
+    theta = encoded_lines[:, 2:]
+    proposals_xywh = geometry_utils.torch_xyxy_to_xywh(proposals.unsqueeze(0))[0]
+    deltas = torch.cat([torch.cos(theta), torch.sin(theta)], dim=-1) * proposals_xywh[:, 2:]
+    points1 = decode_points(encoded_points, proposals)
+    points2 = points1 - deltas
+
+    lines = torch.cat([points1, points2], dim=-1)
+    ry = geometry_utils.torch_pts_2d_to_dir_3d(
+        lines.unsqueeze(0), p2.unsqueeze(0))[0].unsqueeze(-1)
+    return ry
 
 
 def decode_ry(encoded_lines, proposals, p2):

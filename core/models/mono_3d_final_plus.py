@@ -126,10 +126,10 @@ class Mono3DFinalPlusFasterRCNN(Model):
 
         # self.rcnn_3d_pred = nn.Linear(c, 3 + 4 + 11 + 2 + 1)
         if self.class_agnostic_3d:
-            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 + 1 + 2 + 6 + 6)
+            self.rcnn_3d_pred = nn.Linear(self.in_channels, 3 + 1 + 2 + 3 + 3)
         else:
             self.rcnn_3d_pred = nn.Linear(
-                self.in_channels, 3 * self.n_classes + 3 + 1 + 2 + 6 + 6)
+                self.in_channels, 3 * self.n_classes + 3 + 1 + 2 + 6 + 3 + 3)
 
         self.rcnn_3d_loss = OrientationLoss(split_loss=True)
         self.l1_loss = nn.L1Loss(reduce=False)
@@ -278,24 +278,22 @@ class Mono3DFinalPlusFasterRCNN(Model):
 
         # import ipdb
         # ipdb.set_trace()
-        visible = ry_gt[:, 4:]
+        # visible = ry_gt[:, 4:]
 
-        cls_loss = self.rcnn_cls_loss(ry_pred[:, 4:], visible.view(-1).long())
+        # cls_loss = self.rcnn_cls_loss(ry_pred[:, 4:], visible.view(-1).long())
+        encoded_points_gt = ry_gt[:, :2]
 
-        lines = encoder_utils.decode_lines(ry_gt[:, :4], proposals)
+        lines = encoder_utils.decode_points(encoded_points_gt, proposals)
         visibility = self.calc_points_visibility(
-            lines.view(-1, 2), image_shape).view(-1, 2)
-        visibility = torch.stack(
-            [
-                visibility[:, 0], visibility[:, 0], visibility[:, 1],
-                visibility[:, 1]
-            ],
-            dim=-1)
+            lines.view(-1, 2), image_shape).unsqueeze(-1)
         # image truncated and self-occlusion
-        reg_loss = self.l2_loss(ry_pred[:, :4], ry_gt[:, :4]) * visible.float(
-        ) * visibility.float()
+        reg_loss = self.l2_loss(ry_pred[:, :2],
+                                encoded_points_gt) * visibility.float()
 
-        return torch.cat([reg_loss, cls_loss.unsqueeze(-1)], dim=-1)
+        theta_loss = -torch.cos(ry_pred[:, 2:] - ry_gt[:, 2:])
+        return torch.cat([reg_loss, theta_loss], dim=-1)
+
+        # return torch.cat([reg_loss, cls_loss.unsqueeze(-1)], dim=-1)
 
     def calc_points_visibility(self, points, image_shape):
         image_shape = torch.tensor([0, 0, image_shape[1], image_shape[0]])
@@ -364,8 +362,8 @@ class Mono3DFinalPlusFasterRCNN(Model):
             dims_pred = rcnn_3d[:, :3]
             depth_pred = rcnn_3d[:, 3:4]
             proj_2d_pred = rcnn_3d[:, 4:6]
-            ry_face_pred = rcnn_3d[:, 6:12]
-            ry_side_pred = rcnn_3d[:, 12:18]
+            ry_face_pred = rcnn_3d[:, 6:9]
+            ry_side_pred = rcnn_3d[:, 9:12]
 
         # import ipdb
         # ipdb.set_trace()
@@ -373,8 +371,8 @@ class Mono3DFinalPlusFasterRCNN(Model):
         dims_gt = rcnn_reg_targets_3d[:, :3]
         depth_gt = rcnn_reg_targets_3d[:, 3:4]
         proj_2d_gt = rcnn_reg_targets_3d[:, 4:6]
-        ry_face_gt = rcnn_reg_targets_3d[:, 6:11]
-        ry_side_gt = rcnn_reg_targets_3d[:, 11:16]
+        ry_face_gt = rcnn_reg_targets_3d[:, 6:9]
+        ry_side_gt = rcnn_reg_targets_3d[:, 9:12]
 
         proposals = prediction_dict['rois_batch'][0, :, 1:]
         image_shape = feed_dict['img'].shape[-2:]

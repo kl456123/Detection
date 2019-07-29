@@ -188,16 +188,18 @@ class BBox3DCoder(object):
         # import ipdb
         # ipdb.set_trace()
 
-        ry_targets_face = encoder_utils.encode_lines(face_lines, proposals)
-        ry_targets_side = encoder_utils.encode_lines(side_lines, proposals)
-        ry_targets_face = torch.cat(
-            [ry_targets_face.view(-1, 4),
-             face_visible.float().unsqueeze(-1)],
-            dim=-1)
-        ry_targets_side = torch.cat(
-            [ry_targets_side.view(-1, 4),
-             side_visible.float().unsqueeze(-1)],
-            dim=-1)
+        # ry_targets_face = encoder_utils.encode_lines(face_lines, proposals)
+        # ry_targets_side = encoder_utils.encode_lines(side_lines, proposals)
+        ry_targets_face = encoder_utils.encode_ray(face_lines, proposals)
+        ry_targets_side = encoder_utils.encode_ray(side_lines, proposals)
+        # ry_targets_face = torch.cat(
+        # [ry_targets_face.view(-1, 4),
+        # face_visible.float().unsqueeze(-1)],
+        # dim=-1)
+        # ry_targets_side = torch.cat(
+        # [ry_targets_side.view(-1, 4),
+        # side_visible.float().unsqueeze(-1)],
+        # dim=-1)
 
         # depth
         depth_targets = location[:, -1:]
@@ -352,8 +354,8 @@ class BBox3DCoder(object):
 
         depth = targets[:, 3:4]
         encoded_center_2d = targets[:, 4:6]
-        ry_face_pred = targets[:, 6:12]
-        ry_side_pred = targets[:, 12:18]
+        ry_face_pred = targets[:, 6:9]
+        ry_side_pred = targets[:, 9:12]
 
         # center_2d = encoded_center_2d * wh + rois[:, :2]
         center_2d = encoder_utils.decode_points(encoded_center_2d, proposals)
@@ -363,24 +365,27 @@ class BBox3DCoder(object):
         # import ipdb
         # ipdb.set_trace()
 
-        ry_face_visible = ry_face_pred[:, 4:]
-        ry_face_pred = ry_face_pred[:, :4]
-        ry_face_visible = F.softmax(ry_face_visible, dim=-1)[:, 1]
-        ry_face = encoder_utils.decode_ry(ry_face_pred, proposals, p2)
+        # ry_face_visible = ry_face_pred[:, 4:]
+        # ry_face_pred = ry_face_pred[:, :4]
+        # ry_face_visible = F.softmax(ry_face_visible, dim=-1)[:, 1]
+        ry_face = encoder_utils.decode_ray(ry_face_pred, proposals, p2)
 
-        ry_side_visible = ry_side_pred[:, 4:]
-        ry_side_pred = ry_side_pred[:, :4]
+        # ry_side_visible = ry_side_pred[:, 4:]
+        # ry_side_pred = ry_side_pred[:, :4]
         # 1 refers to visible
-        ry_side_visible = F.softmax(ry_side_visible, dim=-1)[:, 1]
-        ry_side = encoder_utils.decode_ry(ry_side_pred, proposals, p2)
+        # ry_side_visible = F.softmax(ry_side_visible, dim=-1)[:, 1]
+        ry_side = encoder_utils.decode_ray(ry_side_pred, proposals, p2)
 
         # import ipdb
         # ipdb.set_trace()
         ry = ry_side.clone()
-        ry[ry_face_visible > 0.5] = ry_face[ry_face_visible > 0.5] + 0.5 * math.pi
+        # ry = ry_face.clone() + 0.5 * math.pi
+        # ry[ry_face_visible > 0.5] = ry_face[ry_face_visible > 0.5] + 0.5 * math.pi
 
         # overwrite ry_face in some case
-        ry[ry_side_visible > 0.5] = ry_side[ry_side_visible > 0.5]
+        # ry[ry_side_visible > 0.5] = ry_side[ry_side_visible > 0.5]
+        # ray_angle = -torch.atan2(location[:, 2], location[:, 0]).unsqueeze(-1)
+        # ry[ry_side_visible < 0.5] = ray_angle[ry_side_visible < 0.5]
         # ry = ry_side
 
         return torch.cat([dims, location, ry], dim=-1)
