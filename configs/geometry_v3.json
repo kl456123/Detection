@@ -11,7 +11,7 @@
                 "Car"
             ],
             "cache_bev": false,
-            "dataset_file": "train.txt",
+            "dataset_file": "data/dataset_files/train.txt",
             "root_path": "/data",
             "use_proj_2d": false,
             "use_rect_v2":false
@@ -81,7 +81,7 @@
             "classes": [
                 "Car"
             ],
-            "dataset_file": "val.txt",
+            "dataset_file": "data/dataset_files/val.txt",
             "root_path": "/data",
             "use_proj_2d": false,
             "use_rect_v2":false
