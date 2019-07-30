@@ -11,3 +11,4 @@ results
 data/pretrained_model
 lib/build/
 lib/faster_rcnn.egg-info/
+log.txt
