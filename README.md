@@ -51,8 +51,8 @@ download kitti, list all files as following
     - scheduler_config, lr_step, exp or others
 
 **Note**
-you should modify root_path before running scripts, if you want to use new data split file, you should also modify dataset_file.
-Dont forget to do the same thing in eval_data_config
+you should modify `root_path` before running scripts, if you want to use new data split file, you should also modify `dataset_file`.
+Dont forget to do the same thing in `eval_data_config`.
 
 
 
@@ -71,6 +71,17 @@ CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
 ```
 you need to check run.sh first then run `sh run.sh` after you uncomment the NET.
 Of course you can use `--model` option to load your trained model to refine
+
+* if you need to resume model, just append resume option `--r`
+```bash
+CUDA_VISIBLE_DEVICES=0 python trainval_net.py --cuda \
+    --net ${NET} \
+    --out_path /data/object/liangxiong/test \
+    --config configs/${NET}.json \
+    --r True \
+    --checkepoch 100 \
+    --checkpoint 12
+```
 
 
 ## Testing

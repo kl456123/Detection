@@ -264,6 +264,8 @@ rm results/data/*
 CUDA_VISIBLE_DEVICES=0 python test_net.py --cuda \
     --net geometry_v1 \
     --config configs/geometry_v1.json\
-    --model /data/object/liangxiong/mono_3d_final_plus/mono_3d_final_plus/kitti/faster_rcnn_30_1518.pth
+    --model /data/object/liangxiong/mono_3d_final_plus/mono_3d_final_plus/kitti/faster_rcnn_30_1518.pth \
+    --img_dir /data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/ \
+    --calib_file ./000000.txt
     # --checkpoint 1518 \
     # --checkepoch 30

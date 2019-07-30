@@ -163,7 +163,6 @@ class RPNModel(Model):
     def forward(self, bottom_blobs):
         base_feat = bottom_blobs['base_feat']
         batch_size = base_feat.shape[0]
-        gt_boxes = bottom_blobs['gt_boxes']
         im_info = bottom_blobs['im_info']
 
         # rpn conv
@@ -214,6 +213,7 @@ class RPNModel(Model):
                                dim=2)
 
         if self.training:
+            gt_boxes = bottom_blobs['gt_boxes']
             gt_boxes_cliped = box_ops.clip_boxes(gt_boxes, im_info)
             rois_batch = self.append_gt(rois_batch, gt_boxes_cliped)
 
