@@ -3,7 +3,7 @@
 
 # uncomment the one as you want
 # (stable)
-NET=geometry_v2
+NET=geometry_v1
 # NET=geometry_v1
 # NET=geometry_v3
 

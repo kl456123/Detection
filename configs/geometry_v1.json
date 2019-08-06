@@ -8,7 +8,9 @@
         },
         "dataset_config": {
             "classes": [
-                "Car"
+                "Car",
+                "Cyclist",
+                "Pedestrian"
             ],
             "cache_bev": false,
             "dataset_file": "data/dataset_files/train.txt",
@@ -61,8 +63,10 @@
         "bbox_reg": true,
         "class_agnostic": true,
         "classes": [
-            "Car"
-        ],
+                "Car",
+                "Cyclist",
+                "Pedestrian"
+            ],
         "eval_out": "./results/data",
         "eval_out_anchors":"./results/anchors",
         "eval_out_rois":"./results/rois",
@@ -80,7 +84,9 @@
         },
         "dataset_config": {
             "classes": [
-                "Car"
+                "Car",
+                "Cyclist",
+                "Pedestrian"
             ],
             "dataset_file": "data/dataset_files/val.txt",
             "root_path": "/data",
@@ -111,15 +117,19 @@
         "use_self_attention":false,
         "class_agnostic": true,
         "classes": [
-            "Car"
-        ],
+                "Car",
+                "Cyclist",
+                "Pedestrian"
+            ],
         "crop_resize_with_max_pool": false,
         "feature_extractor_config": {
             "net_arch":"res50",
             "pooling_size":7,
             "class_agnostic": true,
             "classes": [
-                "Car"
+                "Car",
+                "Cyclist",
+                "Pedestrian"
             ],
             "img_channels": 3,
             "pretrained_path":"data/pretrained_model",
